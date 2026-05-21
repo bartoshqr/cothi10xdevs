@@ -150,7 +150,7 @@ Route protection is handled in `src/middleware.ts`. Add paths to the `PROTECTED_
 
 ## Deployment
 
-This project deploys to [Cloudflare Workers](https://workers.cloudflare.com/).
+This project deploys to [Cloudflare Pages](https://pages.cloudflare.com/).
 
 1. Build the project:
 
@@ -161,7 +161,7 @@ npm run build
 2. Deploy with Wrangler:
 
 ```bash
-npx wrangler deploy
+npx wrangler pages deploy
 ```
 
 Set `SUPABASE_URL` and `SUPABASE_KEY` as secrets in your Cloudflare dashboard or via `npx wrangler secret put`.

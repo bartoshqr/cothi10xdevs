@@ -1,4 +1,7 @@
 ___*
+.claude/
+context/
+
 model_analyses/
 ans.md
 # from 10x-astro-starter

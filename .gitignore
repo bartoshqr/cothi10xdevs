@@ -1,6 +1,7 @@
 ___*
 .claude/
 context/
+skill-lock.json
 
 model_analyses/
 ans.md

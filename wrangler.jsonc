@@ -1,10 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "10x-astro-starter",
+  "name": "cothi10xdevs",
   "compatibility_date": "2026-05-08",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "./dist",
-  "observability": {
-    "enabled": true,
-  },
+  "observability": { "enabled": true, "logs": { "enabled": true } }
 }

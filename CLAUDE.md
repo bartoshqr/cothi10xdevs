@@ -8,6 +8,7 @@ See @README.md for stack overview, all npm scripts, env setup, Supabase local de
 - Never expose `SUPABASE_URL` or `SUPABASE_KEY` to the client — they are server-only secrets declared via `astro:env`.
 - Never add routes that require auth without also adding them to `PROTECTED_ROUTES` in `src/middleware.ts`.
 - Cloudflare Workers runtime: no Node.js built-ins (`fs`, `path`, `crypto`, etc.) — use Web APIs only.
+- Never delete the `develop` branch when merging PRs — keep it as a persistent integration branch.
 
 ## Code style
 

@@ -32,6 +32,9 @@ pnpm-debug.log*
 .dev.vars
 .wrangler/
 
+# supabase local snippets (Studio-saved SQL)
+supabase/snippets/**
+
 # macOS-specific files
 .DS_Store
 

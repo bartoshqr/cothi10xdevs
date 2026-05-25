@@ -1,7 +1,10 @@
 ___*
 .claude/
+.agents/
 context/
 skills-lock.json
+CLAUDE.md
+continue.sh
 
 model_analyses/
 ans.md

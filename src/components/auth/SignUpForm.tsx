@@ -1,9 +1,10 @@
-import React, { useState } from "react";
-import { Mail, Lock, UserPlus } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Mail, Lock, UserPlus, AtSign, Check, LoaderCircle } from "lucide-react";
 import { FormField } from "@/components/auth/FormField";
 import { PasswordToggle } from "@/components/auth/PasswordToggle";
 import { SubmitButton } from "@/components/auth/SubmitButton";
 import { ServerError } from "@/components/auth/ServerError";
+import { USERNAME_PATTERN, normalizeUsername } from "@/lib/username";
 
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -12,15 +13,63 @@ interface Props {
 }
 
 export default function SignUpForm({ serverError }: Props) {
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
+  // Result keyed by the exact username it was fetched for; availability is derived
+  // during render by comparing against the current input (avoids stale state and
+  // synchronous setState in the effect).
+  const [checkResult, setCheckResult] = useState<{ username: string; available: boolean } | null>(null);
+  const [errors, setErrors] = useState<{
+    username?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
+
+  // Users may type capitals; everything downstream works on the lowercase form.
+  const normalizedUsername = normalizeUsername(username);
+  const usernameValid = USERNAME_PATTERN.test(normalizedUsername);
+  const availability: "idle" | "checking" | "available" | "taken" = !usernameValid
+    ? "idle"
+    : checkResult?.username === normalizedUsername
+      ? checkResult.available
+        ? "available"
+        : "taken"
+      : "checking";
+
+  useEffect(() => {
+    if (!USERNAME_PATTERN.test(normalizedUsername)) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/auth/username-available?u=${encodeURIComponent(normalizedUsername)}`, { signal: controller.signal })
+        .then((res) => res.json() as Promise<{ available: boolean }>)
+        .then((body) => {
+          setCheckResult({ username: normalizedUsername, available: body.available });
+        })
+        .catch(() => {
+          // network/abort — leave the form usable; the server re-checks on submit
+        });
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [normalizedUsername]);
 
   function validate() {
     const next: typeof errors = {};
+
+    if (!normalizedUsername) {
+      next.username = "Username is required";
+    } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
+      next.username = "3-30 characters: letters, numbers, underscore";
+    } else if (availability === "taken") {
+      next.username = "That username is taken";
+    }
 
     if (!email.trim()) {
       next.email = "Email is required";
@@ -64,6 +113,30 @@ export default function SignUpForm({ serverError }: Props) {
 
   return (
     <form method="POST" action="/api/auth/signup" className="space-y-4" onSubmit={handleSubmit} noValidate>
+      <FormField
+        id="username"
+        label="Username"
+        value={username}
+        onChange={(v) => {
+          setUsername(v);
+          clearError("username");
+        }}
+        placeholder="your_handle"
+        error={errors.username ?? (availability === "taken" ? "That username is taken" : undefined)}
+        icon={<AtSign className="size-4" />}
+        endContent={
+          availability === "checking" ? (
+            <span className="absolute top-1/2 right-3 -translate-y-1/2 text-white/40">
+              <LoaderCircle className="size-4 animate-spin" />
+            </span>
+          ) : availability === "available" ? (
+            <span className="absolute top-1/2 right-3 -translate-y-1/2 text-green-400">
+              <Check className="size-4" />
+            </span>
+          ) : undefined
+        }
+      />
+
       <FormField
         id="email"
         type="email"

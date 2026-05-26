@@ -1,7 +1,10 @@
 ___*
 .claude/
+.agents/
 context/
 skills-lock.json
+CLAUDE.md
+continue.sh
 
 model_analyses/
 ans.md
@@ -28,6 +31,9 @@ pnpm-debug.log*
 # cloudflare
 .dev.vars
 .wrangler/
+
+# supabase local snippets (Studio-saved SQL)
+supabase/snippets/**
 
 # macOS-specific files
 .DS_Store

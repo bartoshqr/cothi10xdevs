@@ -64,29 +64,29 @@ export default function SignUpForm({ serverError }: Props) {
     const next: typeof errors = {};
 
     if (!normalizedUsername) {
-      next.username = "Username is required";
+      next.username = "Nazwa użytkownika jest wymagana";
     } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
-      next.username = "3-30 characters: letters, numbers, underscore";
+      next.username = "3-30 znaków: litery, cyfry, podkreślnik";
     } else if (availability === "taken") {
-      next.username = "That username is taken";
+      next.username = "Ta nazwa użytkownika jest zajęta";
     }
 
     if (!email.trim()) {
-      next.email = "Email is required";
+      next.email = "Adres e-mail jest wymagany";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      next.email = "Enter a valid email address";
+      next.email = "Podaj poprawny adres e-mail";
     }
 
     if (!password) {
-      next.password = "Password is required";
+      next.password = "Hasło jest wymagane";
     } else if (password.length < MIN_PASSWORD_LENGTH) {
-      next.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+      next.password = `Hasło musi mieć co najmniej ${MIN_PASSWORD_LENGTH} znaków`;
     }
 
     if (!confirmPassword) {
-      next.confirmPassword = "Please confirm your password";
+      next.confirmPassword = "Potwierdź hasło";
     } else if (password !== confirmPassword) {
-      next.confirmPassword = "Passwords do not match";
+      next.confirmPassword = "Hasła nie są identyczne";
     }
 
     setErrors(next);
@@ -105,9 +105,9 @@ export default function SignUpForm({ serverError }: Props) {
 
   const passwordHint =
     !errors.password && password.length > 0 && password.length < MIN_PASSWORD_LENGTH ? (
-      <p className="mt-1 text-xs text-blue-100/50">
-        {MIN_PASSWORD_LENGTH - password.length} more character
-        {MIN_PASSWORD_LENGTH - password.length !== 1 ? "s" : ""} needed
+      <p className="text-muted-foreground mt-1 text-xs">
+        Jeszcze {MIN_PASSWORD_LENGTH - password.length}{" "}
+        {MIN_PASSWORD_LENGTH - password.length === 1 ? "znak" : "znaki/znaków"}
       </p>
     ) : undefined;
 
@@ -115,18 +115,18 @@ export default function SignUpForm({ serverError }: Props) {
     <form method="POST" action="/api/auth/signup" className="space-y-4" onSubmit={handleSubmit} noValidate>
       <FormField
         id="username"
-        label="Username"
+        label="Nazwa użytkownika"
         value={username}
         onChange={(v) => {
           setUsername(v);
           clearError("username");
         }}
-        placeholder="your_handle"
-        error={errors.username ?? (availability === "taken" ? "That username is taken" : undefined)}
+        placeholder="twoj_nick"
+        error={errors.username ?? (availability === "taken" ? "Ta nazwa użytkownika jest zajęta" : undefined)}
         icon={<AtSign className="size-4" />}
         endContent={
           availability === "checking" ? (
-            <span className="absolute top-1/2 right-3 -translate-y-1/2 text-white/40">
+            <span className="text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2">
               <LoaderCircle className="size-4 animate-spin" />
             </span>
           ) : availability === "available" ? (
@@ -140,27 +140,27 @@ export default function SignUpForm({ serverError }: Props) {
       <FormField
         id="email"
         type="email"
-        label="Email"
+        label="Adres e-mail"
         value={email}
         onChange={(v) => {
           setEmail(v);
           clearError("email");
         }}
-        placeholder="you@example.com"
+        placeholder="nazwa@example.com"
         error={errors.email}
         icon={<Mail className="size-4" />}
       />
 
       <FormField
         id="password"
-        label="Password"
+        label="Hasło"
         type={showPassword ? "text" : "password"}
         value={password}
         onChange={(v) => {
           setPassword(v);
           clearError("password");
         }}
-        placeholder="Min. 6 characters"
+        placeholder="Min. 6 znaków"
         error={errors.password}
         hint={passwordHint}
         icon={<Lock className="size-4" />}
@@ -177,14 +177,14 @@ export default function SignUpForm({ serverError }: Props) {
       <FormField
         id="confirmPassword"
         name="confirmPassword"
-        label="Confirm password"
+        label="Powtórz hasło"
         type={showConfirmPassword ? "text" : "password"}
         value={confirmPassword}
         onChange={(v) => {
           setConfirmPassword(v);
           clearError("confirmPassword");
         }}
-        placeholder="Re-enter your password"
+        placeholder="Wpisz hasło ponownie"
         error={errors.confirmPassword}
         icon={<Lock className="size-4" />}
         endContent={
@@ -199,8 +199,8 @@ export default function SignUpForm({ serverError }: Props) {
 
       <ServerError message={serverError} />
 
-      <SubmitButton pendingText="Creating account..." icon={<UserPlus className="size-4" />}>
-        Create account
+      <SubmitButton pendingText="Tworzenie konta..." icon={<UserPlus className="size-4" />}>
+        Utwórz konto
       </SubmitButton>
     </form>
   );

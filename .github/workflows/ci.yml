@@ -24,6 +24,6 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       - name: Push database migrations
         if: github.event_name == 'push'
-        run: npx supabase db push --yes
+        run: npx supabase db push --yes --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

@@ -1,8 +1,24 @@
 ---
-import Welcome from "@/components/Welcome.astro";
 import Layout from "@/layouts/Layout.astro";
+import LandingHeader from "@/components/landing/LandingHeader.astro";
+import HeroSection from "@/components/landing/HeroSection.astro";
+import ProblemSolutionSection from "@/components/landing/ProblemSolutionSection.astro";
+import HowItWorksSection from "@/components/landing/HowItWorksSection.astro";
+import FeaturesSection from "@/components/landing/FeaturesSection.astro";
+import CtaSection from "@/components/landing/CtaSection.astro";
+import LandingFooter from "@/components/landing/LandingFooter.astro";
 ---
 
-<Layout>
-  <Welcome />
+<Layout title="WVMap">
+  <div class="flex min-h-screen flex-col">
+    <LandingHeader />
+    <main class="flex-1">
+      <HeroSection />
+      <ProblemSolutionSection />
+      <HowItWorksSection />
+      <FeaturesSection />
+      <CtaSection />
+    </main>
+    <LandingFooter />
+  </div>
 </Layout>

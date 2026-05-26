@@ -1,0 +1,79 @@
+<div class="border-border bg-card rounded-xl border p-6 shadow-sm">
+  <!-- Header -->
+  <div class="border-border mb-6 flex items-center justify-between border-b pb-4">
+    <span class="text-muted-foreground text-sm font-medium">Mapa argumentacji</span>
+    <div class="flex gap-2">
+      <span class="bg-primary/10 text-primary rounded-full px-3 py-1 text-xs font-medium"> Tura 2/5 </span>
+    </div>
+  </div>
+
+  <!-- Thesis Node -->
+  <div class="relative">
+    <div class="border-primary bg-primary/5 rounded-lg border-2 p-4">
+      <div class="text-primary mb-2 text-xs font-semibold tracking-wide uppercase">Teza</div>
+      <p class="text-foreground text-sm font-medium">Energia jądrowa jest niezbędna do walki ze zmianami klimatu.</p>
+    </div>
+
+    <!-- Connection Line -->
+    <div class="bg-border absolute top-full left-8 h-6 w-px"></div>
+
+    <!-- Child Nodes Container -->
+    <div class="mt-6 grid gap-4 pl-4 sm:grid-cols-2">
+      <!-- Data Node -->
+      <div class="relative">
+        <div class="bg-border absolute top-4 -left-4 h-px w-4"></div>
+        <div class="border-border bg-card rounded-lg border p-4">
+          <div class="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">Dane</div>
+          <p class="text-foreground text-sm">Atom dostarcza 10% światowej energii bez emisji CO₂.</p>
+          <!-- Status Toggle -->
+          <div class="mt-3 flex flex-wrap gap-1">
+            <button
+              class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-200"
+            >
+              Zgadzam się
+            </button>
+            <button
+              class="border-border text-muted-foreground hover:bg-muted rounded-full border px-2.5 py-1 text-xs font-medium transition-colors"
+            >
+              Kwestionuję
+            </button>
+            <button
+              class="border-border text-muted-foreground hover:bg-muted rounded-full border px-2.5 py-1 text-xs font-medium transition-colors"
+            >
+              Wstrzymuję się
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Warrant Node -->
+      <div class="relative">
+        <div class="bg-border absolute top-4 -left-4 hidden h-px w-4 sm:block"></div>
+        <div class="border-border bg-card rounded-lg border p-4">
+          <div class="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">Uzasadnienie</div>
+          <p class="text-foreground text-sm">
+            Źródła odnawialne nie są w stanie zapewnić stabilnej bazy energetycznej.
+          </p>
+          <!-- Status Toggle -->
+          <div class="mt-3 flex flex-wrap gap-1">
+            <button
+              class="border-border text-muted-foreground hover:bg-muted rounded-full border px-2.5 py-1 text-xs font-medium transition-colors"
+            >
+              Zgadzam się
+            </button>
+            <button
+              class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-200"
+            >
+              Kwestionuję
+            </button>
+            <button
+              class="border-border text-muted-foreground hover:bg-muted rounded-full border px-2.5 py-1 text-xs font-medium transition-colors"
+            >
+              Wstrzymuję się
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

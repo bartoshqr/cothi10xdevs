@@ -1,0 +1,37 @@
+---
+import ArgumentMapMockup from "@/components/landing/ArgumentMapMockup.astro";
+---
+
+<section id="hero" class="relative overflow-hidden py-16 sm:py-24 lg:py-32">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+    <div class="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <!-- Text Content -->
+      <div class="max-w-xl">
+        <h1
+          class="text-foreground text-4xl leading-tight font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl"
+        >
+          Przestańcie mówić obok siebie.{" "}
+          <span class="text-primary">Zmapuj punkt sporny.</span>
+        </h1>
+        <p class="text-muted-foreground mt-6 text-lg leading-relaxed text-pretty sm:text-xl">
+          Światopoglądowe debaty w mediach społecznościowych to chaos. WVMap wymusza ustrukturyzowaną argumentację —
+          oddzielając celowe uniki od rzeczywistych różnic. Zbuduj swoją sprawę, zaproś oponenta i znajdź dokładny
+          punkt, w którym wasze poglądy się rozchodzą.
+        </p>
+        <div class="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
+          <a
+            href="/auth/signup"
+            class="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-10 items-center justify-center rounded-md px-6 text-sm font-medium shadow-xs transition-colors"
+          >
+            Zacznij budować swoją mapę
+          </a>
+        </div>
+      </div>
+
+      <!-- Mockup -->
+      <div class="relative" id="mapa">
+        <ArgumentMapMockup />
+      </div>
+    </div>
+  </div>
+</section>

@@ -115,6 +115,21 @@ No database tables or migrations are required — this project uses Supabase Aut
 
 ### Using a cloud Supabase project instead
 
+#### Link the repo to your cloud project
+
+```bash
+# Authenticate (generate a token at supabase.com/dashboard/account/tokens)
+export SUPABASE_ACCESS_TOKEN=<your-token>
+
+# Link to your project (find the ref in Supabase dashboard → Settings → General)
+npx supabase link --project-ref <project-ref>
+
+# Push local migrations to the remote database
+npx supabase db push
+```
+
+Re-run `npx supabase db push` after every merge that adds new migrations.
+
 If you prefer to use a hosted Supabase project, add these variables to your `.env` and `.dev.vars` files:
 
 | Variable       | Description                                                |

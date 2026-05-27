@@ -1,0 +1,10 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import MapSpikeCanvas from "@/components/spike/MapSpikeCanvas";
+---
+
+<Layout title="Map Visual Spike">
+  <div style="width: 100vw; height: 100vh;">
+    <MapSpikeCanvas client:only="react" />
+  </div>
+</Layout>

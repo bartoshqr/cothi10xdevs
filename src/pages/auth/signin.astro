@@ -5,17 +5,17 @@ import SignInForm from "@/components/auth/SignInForm";
 const error = Astro.url.searchParams.get("error");
 ---
 
-<Layout title="Zaloguj się — WVMap">
+<Layout title="Sign in — WVMap">
   <div class="bg-background flex min-h-screen items-center justify-center p-4">
     <div class="border-border bg-card w-full max-w-sm rounded-2xl border p-8 shadow-sm">
-      <h1 class="text-foreground mb-6 text-center text-2xl font-bold">Zaloguj się</h1>
+      <h1 class="text-foreground mb-6 text-center text-2xl font-bold">Sign in</h1>
       <SignInForm serverError={error} client:load />
       <p class="text-muted-foreground mt-4 text-center text-sm">
-        Nie masz konta?{" "}
-        <a href="/auth/signup" class="text-primary underline-offset-4 hover:underline">Zarejestruj się</a>
+        Don't have an account?{" "}
+        <a href="/auth/signup" class="text-primary underline-offset-4 hover:underline">Sign up</a>
       </p>
       <p class="text-muted-foreground mt-2 text-center text-sm">
-        <a href="/" class="text-primary underline-offset-4 hover:underline">Wróć na stronę główną</a>
+        <a href="/" class="text-primary underline-offset-4 hover:underline">Back to home</a>
       </p>
     </div>
   </div>

@@ -30,7 +30,7 @@ export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
     <>
       <Handle type="source" position={Position.Top} style={hiddenHandle} />
       <div
-        className="flex max-w-[260px] min-w-[180px] overflow-hidden rounded-lg shadow-sm"
+        className="flex max-w-[300px] min-w-[280px] overflow-hidden rounded-lg shadow-sm"
         style={{
           border: "1px solid var(--border)",
           backgroundColor: "var(--card)",

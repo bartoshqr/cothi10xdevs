@@ -12,7 +12,8 @@ import "@xyflow/react/dist/style.css";
 import StatementNode from "./StatementNode";
 import ConnectiveNode from "./ConnectiveNode";
 import RelationEdge from "./RelationEdge";
-import { initialNodes, initialEdges } from "./demoData";
+import MapLegend from "./MapLegend";
+import { nodes as exampleNodes, edges as exampleEdges } from "./exampleMap";
 
 const nodeTypes: NodeTypes = {
   statement: StatementNode,
@@ -29,8 +30,8 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
 };
 
 function MapSpikeCanvasInner() {
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, , onNodesChange] = useNodesState(exampleNodes);
+  const [edges, , onEdgesChange] = useEdgesState(exampleEdges);
 
   return (
     <div style={{ width: "100%", height: "100%" }}>
@@ -47,6 +48,7 @@ function MapSpikeCanvasInner() {
       >
         <Background />
         <Controls />
+        <MapLegend />
       </ReactFlow>
     </div>
   );

@@ -7,11 +7,23 @@ import HowItWorksSection from "@/components/landing/HowItWorksSection.astro";
 import FeaturesSection from "@/components/landing/FeaturesSection.astro";
 import CtaSection from "@/components/landing/CtaSection.astro";
 import LandingFooter from "@/components/landing/LandingFooter.astro";
+import { createClient } from "@/lib/supabase";
+
+const { user } = Astro.locals;
+
+let username: string | null = null;
+if (user) {
+  const supabase = createClient(Astro.request.headers, Astro.cookies);
+  if (supabase) {
+    const { data } = await supabase.from("profiles").select("username").eq("id", user.id).single();
+    username = data?.username ?? null;
+  }
+}
 ---
 
 <Layout title="WVMap">
   <div class="flex min-h-screen flex-col">
-    <LandingHeader />
+    <LandingHeader user={user} username={username} />
     <main class="flex-1">
       <HeroSection />
       <ProblemSolutionSection />

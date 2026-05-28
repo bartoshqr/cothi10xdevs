@@ -1,4 +1,4 @@
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { connectiveDescriptors } from "../mapVisualLanguage";
 import type { ConnectiveOp } from "../mapVisualLanguage";
@@ -11,6 +11,7 @@ export interface ConnectiveNodeData extends Record<string, unknown> {
 export type ConnectiveNodeType = Node<ConnectiveNodeData, "connective">;
 
 export default function ConnectiveNode({ data }: NodeProps<ConnectiveNodeType>) {
+  const { inProgress } = useConnection();
   const descriptor = connectiveDescriptors[data.op];
 
   return (
@@ -28,7 +29,7 @@ export default function ConnectiveNode({ data }: NodeProps<ConnectiveNodeType>) 
         }}
       />
       <div
-        className="flex items-center justify-center rounded-full border-2 text-xs font-bold"
+        className="relative flex items-center justify-center rounded-full border-2 text-xs font-bold"
         style={{
           width: "64px",
           height: "36px",
@@ -40,7 +41,22 @@ export default function ConnectiveNode({ data }: NodeProps<ConnectiveNodeType>) 
       >
         {descriptor.label}
       </div>
-      <Handle type="target" position={Position.Bottom} id="in" style={{ opacity: 0 }} />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="in"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          transform: "none",
+          opacity: 0,
+          borderRadius: "50%",
+          pointerEvents: inProgress ? "auto" : "none",
+        }}
+      />
     </>
   );
 }

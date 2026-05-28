@@ -1,5 +1,14 @@
 import { useState, useCallback, useEffect } from "react";
-import { ReactFlow, ReactFlowProvider, Background, Controls, MarkerType } from "@xyflow/react";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  Controls,
+  MarkerType,
+  getBezierPath,
+  Position,
+  useReactFlow,
+} from "@xyflow/react";
 import type {
   DefaultEdgeOptions,
   EdgeTypes,
@@ -8,6 +17,7 @@ import type {
   NodeMouseHandler,
   EdgeMouseHandler,
   OnConnectEnd,
+  ConnectionLineComponentProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import StatementNode from "./nodes/StatementNode";
@@ -21,6 +31,32 @@ import ConnectKindPicker from "./ConnectKindPicker";
 import DetailPanel from "./DetailPanel";
 import { useStore, useShallow } from "./store";
 import type { DebateNode } from "./store";
+
+let liveFlowCursor = { x: 0, y: 0 };
+
+function FloatingConnectionLine({ fromX, fromY, fromPosition }: ConnectionLineComponentProps) {
+  const dx = liveFlowCursor.x - fromX;
+  const dy = liveFlowCursor.y - fromY;
+  let targetPosition: Position;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    targetPosition = dx > 0 ? Position.Left : Position.Right;
+  } else {
+    targetPosition = dy > 0 ? Position.Top : Position.Bottom;
+  }
+  const [path] = getBezierPath({
+    sourceX: fromX,
+    sourceY: fromY,
+    sourcePosition: fromPosition,
+    targetX: liveFlowCursor.x,
+    targetY: liveFlowCursor.y,
+    targetPosition,
+  });
+  return (
+    <g>
+      <path fill="none" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 3" d={path} />
+    </g>
+  );
+}
 
 const nodeTypes: NodeTypes = {
   statement: StatementNode,
@@ -61,6 +97,7 @@ function MapEditorInner() {
     selectEdge,
     createStatementNode,
     setRootNode,
+    addPendingPreview,
   } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
@@ -75,7 +112,17 @@ function MapEditorInner() {
       selectEdge: s.selectEdge,
       createStatementNode: s.createStatementNode,
       setRootNode: s.setRootNode,
+      addPendingPreview: s.addPendingPreview,
     })),
+  );
+
+  const { screenToFlowPosition } = useReactFlow();
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      liveFlowCursor = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    },
+    [screenToFlowPosition],
   );
 
   useEffect(() => {
@@ -100,10 +147,16 @@ function MapEditorInner() {
     [closeAllMenus],
   );
 
-  const handleConnectEnd: OnConnectEnd = useCallback((e) => {
-    const point = "changedTouches" in e ? e.changedTouches[0] : e;
-    setKindPickerPosition({ x: point.clientX, y: point.clientY });
-  }, []);
+  const handleConnectEnd: OnConnectEnd = useCallback(
+    (e) => {
+      const point = "changedTouches" in e ? e.changedTouches[0] : e;
+      const screenPos = { x: point.clientX, y: point.clientY };
+      setKindPickerPosition(screenPos);
+      const flowPos = screenToFlowPosition(screenPos);
+      addPendingPreview(flowPos.x, flowPos.y);
+    },
+    [screenToFlowPosition, addPendingPreview],
+  );
 
   const handlePaneClick = useCallback(() => {
     console.log("Pane clicked");
@@ -188,6 +241,8 @@ function MapEditorInner() {
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         isValidConnection={isValidConnection}
+        connectionLineComponent={FloatingConnectionLine}
+        onMouseMove={handleMouseMove}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         deleteKeyCode="Delete"

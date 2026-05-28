@@ -35,6 +35,7 @@ export interface RFState {
   onConnect: OnConnect;
   commitConnection: (kind: RelationKind) => void;
   cancelConnection: () => void;
+  addPendingPreview: (dropX: number, dropY: number) => void;
 
   setGraph: (debate: DebateRow, nodes: NodeRow[], relations: RelationRow[]) => void;
   createStatementNode: (statementType: StatementRole, position: XYPosition) => string;
@@ -108,9 +109,19 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   onConnect: (connection) => {
-    console.log(connection);
-    console.log("hi");
     set({ pendingConnection: connection });
+  },
+
+  addPendingPreview: (dropX, dropY) => {
+    const pending = get().pendingConnection;
+    if (!pending) return;
+    const previewEdge: DebateEdge = {
+      ...pending,
+      id: "__pending__",
+      type: "relation" as const,
+      data: { kind: "supports", pending: true, dropX, dropY },
+    };
+    set((state) => ({ edges: addEdge(previewEdge, state.edges) }));
   },
 
   commitConnection: (kind) => {
@@ -123,13 +134,16 @@ export const useStore = create<RFState>()((set, get) => ({
       data: { kind },
     };
     set((state) => ({
-      edges: addEdge(newEdge, state.edges),
+      edges: addEdge(
+        newEdge,
+        state.edges.filter((e) => e.id !== "__pending__"),
+      ),
       pendingConnection: null,
     }));
   },
 
   cancelConnection: () => {
-    set({ pendingConnection: null });
+    set((state) => ({ pendingConnection: null, edges: state.edges.filter((e) => e.id !== "__pending__") }));
   },
 
   setGraph: (debate, nodeRows, relationRows) => {

@@ -1,4 +1,4 @@
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { roleDescriptors } from "../mapVisualLanguage";
 import type { StatementRole } from "../mapVisualLanguage";
@@ -15,6 +15,7 @@ export interface StatementNodeData extends Record<string, unknown> {
 export type StatementNodeType = Node<StatementNodeData, "statement">;
 
 export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
+  const { inProgress } = useConnection();
   const role = data.isRoot ? "claim" : (data.role ?? "claim");
   const descriptor = roleDescriptors[role];
   const badge = data.isRoot ? "ROOT" : descriptor.badge;
@@ -35,7 +36,7 @@ export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
         />
       )}
       <div
-        className="flex max-w-[300px] min-w-[280px] overflow-hidden rounded-lg shadow-sm"
+        className="relative flex max-w-[300px] min-w-[280px] overflow-hidden rounded-lg shadow-sm"
         style={{
           border: "1px solid var(--border)",
           backgroundColor: "var(--card)",
@@ -73,7 +74,21 @@ export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
           </div>
         </div>
       </div>
-      <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          transform: "none",
+          opacity: 0,
+          borderRadius: "inherit",
+          pointerEvents: inProgress ? "auto" : "none",
+        }}
+      />
     </>
   );
 }

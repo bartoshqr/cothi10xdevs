@@ -93,3 +93,58 @@ export function getHorizontalFloatingTargetParams(sourceX: number, _sourceY: num
 
   return { targetX, targetY, targetPosition };
 }
+
+export function getRectIntersection(
+  fromX: number,
+  fromY: number,
+  dropX: number,
+  dropY: number,
+  target: InternalNode<Node>,
+): { targetX: number; targetY: number; targetPosition: Position } {
+  const pos = target.internals.positionAbsolute;
+  const left = pos.x;
+  const right = pos.x + (target.measured.width ?? 0);
+  const top = pos.y;
+  const bottom = pos.y + (target.measured.height ?? 0);
+
+  const dx = dropX - fromX;
+  const dy = dropY - fromY;
+
+  const candidates: { t: number; x: number; y: number; position: Position }[] = [];
+
+  if (dx !== 0) {
+    for (const [edgeX, position] of [
+      [left, Position.Left],
+      [right, Position.Right],
+    ] as const) {
+      const t = (edgeX - fromX) / dx;
+      if (t > 0) {
+        const iy = fromY + t * dy;
+        if (iy >= top && iy <= bottom) candidates.push({ t, x: edgeX, y: iy, position });
+      }
+    }
+  }
+
+  if (dy !== 0) {
+    for (const [edgeY, position] of [
+      [top, Position.Top],
+      [bottom, Position.Bottom],
+    ] as const) {
+      const t = (edgeY - fromY) / dy;
+      if (t > 0) {
+        const ix = fromX + t * dx;
+        if (ix >= left && ix <= right) candidates.push({ t, x: ix, y: edgeY, position });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => a.t - b.t);
+
+  if (candidates.length > 0) {
+    const best = candidates[0];
+    return { targetX: best.x, targetY: best.y, targetPosition: best.position };
+  }
+
+  // fallback: top-center
+  return { targetX: (left + right) / 2, targetY: top, targetPosition: Position.Top };
+}

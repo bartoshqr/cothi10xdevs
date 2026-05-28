@@ -1,6 +1,7 @@
+import { useRef, useLayoutEffect, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useStore } from "./store";
-import { roleDescriptors, connectiveDescriptors } from "./mapVisualLanguage";
+import { roleDescriptors, connectiveDescriptors, MENU_VIEWPORT_MARGIN } from "./mapVisualLanguage";
 import type { StatementRole, ConnectiveOp } from "./mapVisualLanguage";
 
 const STATEMENT_ROLES: StatementRole[] = ["claim", "source", "data", "warrant", "backing", "rebuttal"];
@@ -12,6 +13,15 @@ interface Props {
 }
 
 export default function AddNodeMenu({ screenX, screenY, onClose }: Props) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [flipped, setFlipped] = useState(false);
+
+  useLayoutEffect(() => {
+    if (menuRef.current) {
+      setFlipped(screenY + menuRef.current.offsetHeight + MENU_VIEWPORT_MARGIN > window.innerHeight);
+    }
+  }, [screenY]);
+
   const { screenToFlowPosition } = useReactFlow();
   const createStatementNode = useStore((s) => s.createStatementNode);
   const createConnectiveNode = useStore((s) => s.createConnectiveNode);
@@ -40,10 +50,12 @@ export default function AddNodeMenu({ screenX, screenY, onClose }: Props) {
         }}
       />
       <div
+        ref={menuRef}
         className="nodrag nopan fixed z-50 overflow-hidden rounded-lg shadow-lg"
         style={{
           left: screenX,
           top: screenY,
+          transform: flipped ? "translateY(-100%)" : undefined,
           minWidth: 180,
           backgroundColor: "var(--card)",
           border: "1px solid var(--border)",

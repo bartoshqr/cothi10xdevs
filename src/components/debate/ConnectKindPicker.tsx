@@ -1,6 +1,7 @@
+import { useRef, useLayoutEffect, useState } from "react";
 import { Panel } from "@xyflow/react";
 import { useStore } from "./store";
-import { relationDescriptors } from "./mapVisualLanguage";
+import { relationDescriptors, MENU_VIEWPORT_MARGIN } from "./mapVisualLanguage";
 import type { RelationKind } from "./mapVisualLanguage";
 
 const KINDS: RelationKind[] = ["supports", "link", "rephrases", "rebuts"];
@@ -14,6 +15,15 @@ interface Props {
 }
 
 export default function ConnectKindPicker({ edgeId, onClose, position }: Props) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [flipped, setFlipped] = useState(false);
+
+  useLayoutEffect(() => {
+    if (position && menuRef.current) {
+      setFlipped(position.y + menuRef.current.offsetHeight + MENU_VIEWPORT_MARGIN > window.innerHeight);
+    }
+  }, [position]);
+
   const commitConnection = useStore((s) => s.commitConnection);
   const cancelConnection = useStore((s) => s.cancelConnection);
   const updateRelationKind = useStore((s) => s.updateRelationKind);
@@ -91,7 +101,15 @@ export default function ConnectKindPicker({ edgeId, onClose, position }: Props) 
 
   if (position) {
     return (
-      <div className="nodrag nopan fixed z-50" style={{ left: position.x, top: position.y }}>
+      <div
+        ref={menuRef}
+        className="nodrag nopan fixed z-50"
+        style={{
+          left: position.x,
+          top: position.y,
+          transform: flipped ? "translateY(-100%)" : undefined,
+        }}
+      >
         {inner}
       </div>
     );

@@ -1,3 +1,5 @@
+export const MENU_VIEWPORT_MARGIN = 16;
+
 export type StatementRole = "claim" | "source" | "data" | "warrant" | "backing" | "rebuttal";
 
 export type ConnectiveOp = "and" | "or";

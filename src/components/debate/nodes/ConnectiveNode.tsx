@@ -1,5 +1,4 @@
 import { Handle, Position } from "@xyflow/react";
-import type { CSSProperties } from "react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { connectiveDescriptors } from "../mapVisualLanguage";
 import type { ConnectiveOp } from "../mapVisualLanguage";
@@ -11,19 +10,23 @@ export interface ConnectiveNodeData extends Record<string, unknown> {
 
 export type ConnectiveNodeType = Node<ConnectiveNodeData, "connective">;
 
-const hiddenHandle: CSSProperties = {
-  background: "transparent",
-  border: "none",
-  width: 6,
-  height: 6,
-};
-
 export default function ConnectiveNode({ data }: NodeProps<ConnectiveNodeType>) {
   const descriptor = connectiveDescriptors[data.op];
 
   return (
     <>
-      <Handle type="source" position={Position.Top} id="out" style={hiddenHandle} />
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="out"
+        style={{
+          background: descriptor.border,
+          border: "2px solid white",
+          width: 10,
+          height: 10,
+          boxShadow: `0 0 0 2px ${descriptor.border}44`,
+        }}
+      />
       <div
         className="flex items-center justify-center rounded-full border-2 text-xs font-bold"
         style={{
@@ -37,7 +40,7 @@ export default function ConnectiveNode({ data }: NodeProps<ConnectiveNodeType>) 
       >
         {descriptor.label}
       </div>
-      <Handle type="target" position={Position.Bottom} id="in" style={hiddenHandle} />
+      <Handle type="target" position={Position.Bottom} id="in" style={{ opacity: 0 }} />
     </>
   );
 }

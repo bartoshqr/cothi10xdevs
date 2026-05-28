@@ -1,5 +1,4 @@
 import { Handle, Position } from "@xyflow/react";
-import type { CSSProperties } from "react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { roleDescriptors } from "../mapVisualLanguage";
 import type { StatementRole } from "../mapVisualLanguage";
@@ -15,21 +14,26 @@ export interface StatementNodeData extends Record<string, unknown> {
 
 export type StatementNodeType = Node<StatementNodeData, "statement">;
 
-const hiddenHandle: CSSProperties = {
-  background: "transparent",
-  border: "none",
-  width: 8,
-  height: 8,
-};
-
 export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
-  const role = data.role ?? "claim";
+  const role = data.isRoot ? "claim" : (data.role ?? "claim");
   const descriptor = roleDescriptors[role];
   const badge = data.isRoot ? "ROOT" : descriptor.badge;
 
   return (
     <>
-      <Handle type="source" position={Position.Top} style={hiddenHandle} />
+      {!data.isRoot && (
+        <Handle
+          type="source"
+          position={Position.Top}
+          style={{
+            background: descriptor.accent,
+            border: "2px solid white",
+            width: 12,
+            height: 12,
+            boxShadow: `0 0 0 2px ${descriptor.accent}44`,
+          }}
+        />
+      )}
       <div
         className="flex max-w-[300px] min-w-[280px] overflow-hidden rounded-lg shadow-sm"
         style={{
@@ -69,7 +73,7 @@ export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
           </div>
         </div>
       </div>
-      <Handle type="target" position={Position.Bottom} style={hiddenHandle} />
+      <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
     </>
   );
 }

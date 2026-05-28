@@ -41,9 +41,11 @@ export interface RFState {
   createConnectiveNode: (op: ConnectiveOp, position: XYPosition) => string;
   updateNodeFields: (id: string, patch: NodeFieldPatch) => void;
   deleteNodes: (ids: string[]) => void;
+  deleteEdge: (id: string) => void;
   selectNode: (id: string | null) => void;
   selectEdge: (id: string | null) => void;
   updateRelationKind: (id: string, kind: RelationKind) => void;
+  setRootNode: (id: string) => void;
 }
 
 function rowsToGraph(
@@ -106,6 +108,8 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   onConnect: (connection) => {
+    console.log(connection);
+    console.log("hi");
     set({ pendingConnection: connection });
   },
 
@@ -190,6 +194,13 @@ export const useStore = create<RFState>()((set, get) => ({
     }));
   },
 
+  deleteEdge: (id) => {
+    set((state) => ({
+      edges: state.edges.filter((e) => e.id !== id),
+      selectedEdgeId: state.selectedEdgeId === id ? null : state.selectedEdgeId,
+    }));
+  },
+
   selectNode: (id) => {
     set({ selectedNodeId: id, selectedEdgeId: null });
   },
@@ -201,6 +212,12 @@ export const useStore = create<RFState>()((set, get) => ({
   updateRelationKind: (id, kind) => {
     set((state) => ({
       edges: state.edges.map((e) => (e.id === id ? { ...e, data: { kind } } : e)),
+    }));
+  },
+
+  setRootNode: (id) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) => (n.type === "statement" ? { ...n, data: { ...n.data, isRoot: n.id === id } } : n)),
     }));
   },
 }));

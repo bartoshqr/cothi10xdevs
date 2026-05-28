@@ -6,13 +6,33 @@ import type { ConnectiveNodeType } from "./nodes/ConnectiveNode";
 
 const STATEMENT_ROLES: StatementRole[] = ["claim", "source", "data", "warrant", "backing", "rebuttal"];
 
-export default function DetailPanel() {
-  const { nodes, selectedNodeId, selectNode, updateNodeFields } = useStore(
+interface Props {
+  position?: { x: number; y: number };
+}
+
+function Wrapper({ position, children }: { position?: { x: number; y: number }; children: React.ReactNode }) {
+  if (position) {
+    return (
+      <div className="nodrag nopan fixed z-50" style={{ left: position.x, top: position.y }}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <Panel position="top-right" style={{ padding: 0, margin: "8px 8px 0 0" }}>
+      {children}
+    </Panel>
+  );
+}
+
+export default function DetailPanel({ position }: Props) {
+  const { nodes, selectedNodeId, selectNode, updateNodeFields, setRootNode } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
       selectedNodeId: s.selectedNodeId,
       selectNode: s.selectNode,
       updateNodeFields: s.updateNodeFields,
+      setRootNode: s.setRootNode,
     })),
   );
 
@@ -31,7 +51,7 @@ export default function DetailPanel() {
     const badge = sNode.data.isRoot ? "ROOT" : descriptor.badge;
 
     return (
-      <Panel position="top-right" style={{ padding: 0, margin: "8px 8px 0 0" }}>
+      <Wrapper position={position}>
         <div
           className="nodrag nopan flex flex-col gap-0 overflow-hidden rounded-lg shadow-lg"
           style={{
@@ -83,6 +103,19 @@ export default function DetailPanel() {
 
           {/* Accent bar */}
           <div className="h-0.5 w-full" style={{ backgroundColor: descriptor.accent }} />
+
+          {/* Set as Root button */}
+          {!sNode.data.isRoot && (
+            <button
+              className="nodrag nopan w-full border-b px-3 py-1.5 text-[10px] font-bold tracking-wider text-blue-600 transition-colors hover:bg-blue-50"
+              style={{ borderColor: "var(--border)" }}
+              onClick={() => {
+                setRootNode(node.id);
+              }}
+            >
+              Set as Root Claim
+            </button>
+          )}
 
           {/* Title */}
           <div className="flex flex-col gap-1 px-3 pt-3 pb-1">
@@ -195,7 +228,7 @@ export default function DetailPanel() {
             </span>
           </div>
         </div>
-      </Panel>
+      </Wrapper>
     );
   }
 
@@ -204,7 +237,7 @@ export default function DetailPanel() {
     const ops: ConnectiveOp[] = ["and", "or"];
 
     return (
-      <Panel position="top-right" style={{ padding: 0, margin: "8px 8px 0 0" }}>
+      <Wrapper position={position}>
         <div
           className="nodrag nopan overflow-hidden rounded-lg shadow-lg"
           style={{
@@ -259,7 +292,7 @@ export default function DetailPanel() {
             })}
           </div>
         </div>
-      </Panel>
+      </Wrapper>
     );
   }
 

@@ -30,6 +30,7 @@ export interface RFState {
   selectedEdgeId: string | null;
   pendingConnection: Connection | null;
   editingNodeId: string | null;
+  editingEdgeId: string | null;
 
   onNodesChange: OnNodesChange<DebateNode>;
   onEdgesChange: OnEdgesChange<DebateEdge>;
@@ -50,8 +51,9 @@ export interface RFState {
   setRootNode: (id: string) => void;
   addEdgeDirect: (connection: Connection, kind: RelationKind) => void;
   setEditingNode: (id: string | null) => void;
+  setEditingEdgeId: (id: string | null) => void;
   isEditingBlocked: () => boolean;
-  tryExitEditing: () => void;
+  tryExitNodeEditing: () => void;
 }
 
 function rowsToGraph(
@@ -105,6 +107,7 @@ export const useStore = create<RFState>()((set, get) => ({
   selectedEdgeId: null,
   pendingConnection: null,
   editingNodeId: null,
+  editingEdgeId: null,
 
   onNodesChange: (changes) => {
     set({ nodes: applyNodeChanges(changes, get().nodes) });
@@ -264,6 +267,10 @@ export const useStore = create<RFState>()((set, get) => ({
     set({ editingNodeId: id });
   },
 
+  setEditingEdgeId: (id) => {
+    set({ editingEdgeId: id });
+  },
+
   addEdgeDirect: (connection, kind) => {
     const edge: DebateEdge = {
       ...connection,
@@ -284,7 +291,7 @@ export const useStore = create<RFState>()((set, get) => ({
     return false;
   },
 
-  tryExitEditing: () => {
+  tryExitNodeEditing: () => {
     if (get().isEditingBlocked()) return;
     set({ editingNodeId: null });
   },

@@ -80,7 +80,6 @@ function MapEditorInner() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [nodeContextMenu, setNodeContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [edgeContextMenu, setEdgeContextMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null);
-  const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
   const [kindPickerPosition, setKindPickerPosition] = useState<{ x: number; y: number } | undefined>(undefined);
 
   const closeAllMenus = useCallback(() => {
@@ -105,8 +104,10 @@ function MapEditorInner() {
     addPendingPreview,
     addEdgeDirect,
     editingNodeId,
+    editingEdgeId,
+    setEditingEdgeId,
     isEditingBlocked,
-    tryExitEditing,
+    tryExitNodeEditing,
   } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
@@ -124,10 +125,18 @@ function MapEditorInner() {
       addPendingPreview: s.addPendingPreview,
       addEdgeDirect: s.addEdgeDirect,
       editingNodeId: s.editingNodeId,
+      editingEdgeId: s.editingEdgeId,
+      setEditingEdgeId: s.setEditingEdgeId,
       isEditingBlocked: s.isEditingBlocked,
-      tryExitEditing: s.tryExitEditing,
+      tryExitNodeEditing: s.tryExitNodeEditing,
     })),
   );
+
+  const closeConnectionPicker = useCallback(() => {
+    setEditingEdgeId(null);
+    cancelConnection();
+    setKindPickerPosition(undefined);
+  }, [setEditingEdgeId, cancelConnection]);
 
   useEffect(() => {
     if (nodes.length === 0) {
@@ -180,13 +189,13 @@ function MapEditorInner() {
       e.preventDefault();
       if (isEditingBlocked()) return;
       closeAllMenus();
-      tryExitEditing();
-      setEditingEdgeId(null);
+      tryExitNodeEditing();
+      closeConnectionPicker();
       selectNode(null);
       selectEdge(null);
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectNode, selectEdge, tryExitEditing, isEditingBlocked],
+    [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing, isEditingBlocked],
   );
 
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
@@ -194,13 +203,13 @@ function MapEditorInner() {
       e.preventDefault();
       if (isEditingBlocked()) return;
       closeAllMenus();
-      tryExitEditing();
-      setEditingEdgeId(null);
+      tryExitNodeEditing();
+      closeConnectionPicker();
       selectNode(null);
       selectEdge(null);
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectNode, selectEdge, tryExitEditing, isEditingBlocked],
+    [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing, isEditingBlocked],
   );
 
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
@@ -208,46 +217,44 @@ function MapEditorInner() {
       e.preventDefault();
       if (isEditingBlocked()) return;
       closeAllMenus();
-      tryExitEditing();
-      setEditingEdgeId(null);
+      tryExitNodeEditing();
+      closeConnectionPicker();
       selectNode(null);
       selectEdge(edge.id);
       setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectEdge, selectNode, tryExitEditing, isEditingBlocked],
+    [closeAllMenus, selectEdge, selectNode, closeConnectionPicker, tryExitNodeEditing, isEditingBlocked],
   );
 
   // click
   const handlePaneClick = useCallback(() => {
+    // if (isEditingBlocked()) return;
     closeAllMenus();
-    setEditingEdgeId(null);
-    cancelConnection();
-    setKindPickerPosition(undefined);
+    tryExitNodeEditing();
+    closeConnectionPicker();
     selectNode(null);
     selectEdge(null);
-    tryExitEditing();
-  }, [closeAllMenus, selectNode, selectEdge, cancelConnection, tryExitEditing]);
+  }, [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing]);
 
   const handleNodeClick: NodeMouseHandler<DebateNode> = useCallback(
     (_e, _node) => {
       closeAllMenus();
-      setEditingEdgeId(null);
-      cancelConnection();
-      tryExitEditing();
+      closeConnectionPicker();
+      tryExitNodeEditing();
       selectNode(null);
     },
-    [closeAllMenus, selectNode, cancelConnection, tryExitEditing],
+    [closeAllMenus, selectNode, closeConnectionPicker, tryExitNodeEditing],
   );
 
   const handleEdgeClick: EdgeMouseHandler = useCallback(
     (_e, edge) => {
       closeAllMenus();
-      setEditingEdgeId(null);
+      closeConnectionPicker();
       selectNode(null);
       selectEdge(edge.id);
-      tryExitEditing();
+      tryExitNodeEditing();
     },
-    [closeAllMenus, selectNode, selectEdge, tryExitEditing],
+    [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing],
   );
 
   const handleNodesDelete = useCallback(

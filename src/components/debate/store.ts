@@ -29,6 +29,7 @@ export interface RFState {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   pendingConnection: Connection | null;
+  editingNodeId: string | null;
 
   onNodesChange: OnNodesChange<DebateNode>;
   onEdgesChange: OnEdgesChange<DebateEdge>;
@@ -48,6 +49,7 @@ export interface RFState {
   updateRelationKind: (id: string, kind: RelationKind) => void;
   setRootNode: (id: string) => void;
   addEdgeDirect: (connection: Connection, kind: RelationKind) => void;
+  setEditingNode: (id: string | null) => void;
 }
 
 function rowsToGraph(
@@ -100,6 +102,7 @@ export const useStore = create<RFState>()((set, get) => ({
   selectedNodeId: null,
   selectedEdgeId: null,
   pendingConnection: null,
+  editingNodeId: null,
 
   onNodesChange: (changes) => {
     set({ nodes: applyNodeChanges(changes, get().nodes) });
@@ -206,6 +209,7 @@ export const useStore = create<RFState>()((set, get) => ({
       nodes: state.nodes.filter((n) => !idSet.has(n.id)),
       edges: state.edges.filter((e) => !idSet.has(e.source) && !idSet.has(e.target)),
       selectedNodeId: state.selectedNodeId && idSet.has(state.selectedNodeId) ? null : state.selectedNodeId,
+      editingNodeId: state.editingNodeId && idSet.has(state.editingNodeId) ? null : state.editingNodeId,
     }));
   },
 
@@ -234,6 +238,10 @@ export const useStore = create<RFState>()((set, get) => ({
     set((state) => ({
       nodes: state.nodes.map((n) => (n.type === "statement" ? { ...n, data: { ...n.data, isRoot: n.id === id } } : n)),
     }));
+  },
+
+  setEditingNode: (id) => {
+    set({ editingNodeId: id });
   },
 
   addEdgeDirect: (connection, kind) => {

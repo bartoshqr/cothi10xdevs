@@ -29,7 +29,6 @@ import AddNodeMenu from "./AddNodeMenu";
 import NodeContextMenu from "./NodeContextMenu";
 import EdgeContextMenu from "./EdgeContextMenu";
 import ConnectKindPicker from "./ConnectKindPicker";
-import DetailPanel from "./DetailPanel";
 import { useStore, useShallow } from "./store";
 import type { DebateNode } from "./store";
 
@@ -82,7 +81,6 @@ function MapEditorInner() {
   const [nodeContextMenu, setNodeContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [edgeContextMenu, setEdgeContextMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null);
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
-  const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | undefined>(undefined);
   const [kindPickerPosition, setKindPickerPosition] = useState<{ x: number; y: number } | undefined>(undefined);
 
   const {
@@ -100,6 +98,8 @@ function MapEditorInner() {
     setRootNode,
     addPendingPreview,
     addEdgeDirect,
+    editingNodeId,
+    setEditingNode,
   } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
@@ -116,6 +116,8 @@ function MapEditorInner() {
       setRootNode: s.setRootNode,
       addPendingPreview: s.addPendingPreview,
       addEdgeDirect: s.addEdgeDirect,
+      editingNodeId: s.editingNodeId,
+      setEditingNode: s.setEditingNode,
     })),
   );
 
@@ -157,9 +159,10 @@ function MapEditorInner() {
     (e: MouseEvent | React.MouseEvent) => {
       e.preventDefault();
       closeAllMenus();
+      setEditingNode(null);
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus],
+    [closeAllMenus, setEditingNode],
   );
 
   const handleConnectEnd: OnConnectEnd = useCallback(
@@ -174,25 +177,24 @@ function MapEditorInner() {
   );
 
   const handlePaneClick = useCallback(() => {
-    console.log("Pane clicked");
     closeAllMenus();
     setEditingEdgeId(null);
     cancelConnection();
-    setPanelPosition(undefined);
     setKindPickerPosition(undefined);
     selectNode(null);
     selectEdge(null);
-  }, [closeAllMenus, selectNode, selectEdge, cancelConnection]);
+    setEditingNode(null);
+  }, [closeAllMenus, selectNode, selectEdge, cancelConnection, setEditingNode]);
 
   const handleNodeClick: NodeMouseHandler<DebateNode> = useCallback(
     (_e, _node) => {
-      console.log("node clicked");
       closeAllMenus();
       setEditingEdgeId(null);
       cancelConnection();
+      setEditingNode(null);
       selectNode(null);
     },
-    [closeAllMenus, selectNode, cancelConnection],
+    [closeAllMenus, selectNode, cancelConnection, setEditingNode],
   );
 
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
@@ -200,10 +202,11 @@ function MapEditorInner() {
       e.preventDefault();
       closeAllMenus();
       setEditingEdgeId(null);
+      setEditingNode(null);
       selectNode(null);
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectNode],
+    [closeAllMenus, selectNode, setEditingNode],
   );
 
   const handleEdgeClick: EdgeMouseHandler = useCallback(
@@ -212,8 +215,9 @@ function MapEditorInner() {
       setEditingEdgeId(null);
       selectNode(null);
       selectEdge(edge.id);
+      setEditingNode(null);
     },
-    [closeAllMenus, selectNode, selectEdge],
+    [closeAllMenus, selectNode, selectEdge, setEditingNode],
   );
 
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
@@ -271,14 +275,12 @@ function MapEditorInner() {
         onMouseMove={handleMouseMove}
         fitView
         fitViewOptions={{ padding: 0.2 }}
-        deleteKeyCode="Delete"
+        deleteKeyCode={editingNodeId ? null : "Delete"}
       >
         <Background />
         <Controls />
         <MapLegend />
       </ReactFlow>
-
-      <DetailPanel position={panelPosition} />
 
       {showKindPicker && (
         <ConnectKindPicker
@@ -310,10 +312,6 @@ function MapEditorInner() {
           screenY={nodeContextMenu.y}
           onClose={() => {
             setNodeContextMenu(null);
-          }}
-          onEdit={() => {
-            setPanelPosition({ x: nodeContextMenu.x, y: nodeContextMenu.y });
-            selectNode(nodeContextMenu.nodeId);
           }}
         />
       )}

@@ -1,7 +1,10 @@
 import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { roleDescriptors } from "../mapVisualLanguage";
 import type { StatementRole } from "../mapVisualLanguage";
+import { useStore, useShallow } from "../store";
 
 export interface StatementNodeData extends Record<string, unknown> {
   role?: StatementRole;
@@ -14,11 +17,107 @@ export interface StatementNodeData extends Record<string, unknown> {
 
 export type StatementNodeType = Node<StatementNodeData, "statement">;
 
-export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
+const STATEMENT_ROLES: StatementRole[] = ["claim", "source", "data", "warrant", "backing", "rebuttal"];
+
+export default function StatementNode({ id, data }: NodeProps<StatementNodeType>) {
   const { inProgress } = useConnection();
+  const { editingNodeId, setEditingNode, updateNodeFields, setRootNode } = useStore(
+    useShallow((s) => ({
+      editingNodeId: s.editingNodeId,
+      setEditingNode: s.setEditingNode,
+      updateNodeFields: s.updateNodeFields,
+      setRootNode: s.setRootNode,
+    })),
+  );
+
+  const isEditing = editingNodeId === id;
+  const [badgeAnchor, setBadgeAnchor] = useState<{ x: number; y: number } | null>(null);
+  const badgeRef = useRef<HTMLSpanElement>(null);
+
   const role = data.isRoot ? "claim" : (data.role ?? "claim");
   const descriptor = roleDescriptors[role];
   const badge = data.isRoot ? "ROOT" : descriptor.badge;
+
+  function handleNodeDoubleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingNode(id);
+  }
+
+  function handleBadgeDoubleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    const rect = badgeRef.current?.getBoundingClientRect();
+    if (rect) setBadgeAnchor({ x: rect.left, y: rect.bottom + 4 });
+  }
+
+  const badgeDropdown =
+    badgeAnchor !== null
+      ? createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => {
+                setBadgeAnchor(null);
+              }}
+            />
+            <div
+              className="fixed z-50 overflow-hidden rounded-lg shadow-lg"
+              style={{
+                left: badgeAnchor.x,
+                top: badgeAnchor.y,
+                minWidth: 150,
+                backgroundColor: "var(--card)",
+                border: "1px solid var(--border)",
+                color: "var(--card-foreground)",
+              }}
+            >
+              <div
+                className="px-3 py-1 text-[10px] font-bold tracking-wider uppercase"
+                style={{ color: "var(--muted-foreground)", borderBottom: "1px solid var(--border)" }}
+              >
+                Role
+              </div>
+              {STATEMENT_ROLES.map((r) => {
+                const d = roleDescriptors[r];
+                const isActive = r === role;
+                const displayBadge = data.isRoot && r === "claim" ? "ROOT" : (d.badge ?? r.toUpperCase());
+                return (
+                  <button
+                    key={r}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-[var(--muted)]"
+                    onClick={() => {
+                      updateNodeFields(id, { statementType: r });
+                      setBadgeAnchor(null);
+                    }}
+                  >
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase"
+                      style={{ backgroundColor: d.accent, opacity: isActive ? 1 : 0.45 }}
+                    >
+                      {displayBadge}
+                    </span>
+                  </button>
+                );
+              })}
+              {!data.isRoot && (
+                <>
+                  <div style={{ borderTop: "1px solid var(--border)" }} />
+                  <button
+                    className="flex w-full items-center px-3 py-1.5 text-left text-xs font-semibold transition-colors hover:bg-[var(--muted)]"
+                    style={{ color: "var(--primary)" }}
+                    onClick={() => {
+                      setRootNode(id);
+                      setBadgeAnchor(null);
+                    }}
+                  >
+                    Set as Root Claim
+                  </button>
+                </>
+              )}
+            </div>
+          </>,
+          document.body,
+        )
+      : null;
 
   return (
     <>
@@ -38,39 +137,129 @@ export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
       <div
         className="relative flex max-w-[300px] min-w-[280px] overflow-hidden rounded-lg shadow-sm"
         style={{
-          border: "1px solid var(--border)",
+          border: `1px solid ${isEditing ? descriptor.accent : "var(--border)"}`,
           backgroundColor: "var(--card)",
           color: "var(--card-foreground)",
           opacity: data.pending ? 0.6 : 1,
         }}
+        onDoubleClick={handleNodeDoubleClick}
       >
         <div className="w-1 shrink-0" style={{ backgroundColor: descriptor.accent }} />
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
+          {/* Header: badge + title */}
           <div className="flex items-center gap-2 border-b px-3 py-1.5" style={{ borderColor: "var(--border)" }}>
             {badge && (
               <span
-                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-white uppercase"
+                ref={badgeRef}
+                className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-white uppercase select-none"
                 style={{ backgroundColor: descriptor.accent }}
+                title="Double-click to change role"
+                onDoubleClick={handleBadgeDoubleClick}
               >
                 {badge}
               </span>
             )}
-            {data.url ? (
+            {isEditing ? (
+              <div className="nodrag nopan min-w-0 flex-1">
+                <input
+                  autoFocus
+                  className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-sm font-semibold outline-none"
+                  style={{
+                    borderColor: "var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                  }}
+                  value={data.title}
+                  maxLength={60}
+                  onChange={(e) => {
+                    updateNodeFields(id, { title: e.target.value });
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                />
+                <span
+                  className="float-right text-[9px]"
+                  style={{ color: data.title.length > 50 ? "var(--destructive)" : "var(--muted-foreground)" }}
+                >
+                  {data.title.length}/60
+                </span>
+              </div>
+            ) : data.url ? (
               <a
                 href={data.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="nodrag nopan text-sm leading-tight font-semibold underline"
+                className="nodrag nopan truncate text-sm leading-tight font-semibold underline"
                 style={{ color: descriptor.accent }}
               >
                 {data.title}
               </a>
             ) : (
-              <span className="text-sm leading-tight font-semibold">{data.title}</span>
+              <span className="truncate text-sm leading-tight font-semibold">{data.title}</span>
             )}
           </div>
-          <div className="px-3 py-2 text-xs leading-relaxed" style={{ color: "var(--muted-foreground)" }}>
-            {data.body}
+
+          {/* URL — source nodes in edit mode only, above a divider */}
+          {isEditing && role === "source" && (
+            <>
+              <div className="nodrag nopan px-3 pt-2 pb-1">
+                <input
+                  className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-xs outline-none"
+                  style={{
+                    borderColor: "var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                  }}
+                  value={data.url ?? ""}
+                  placeholder="https://..."
+                  onChange={(e) => {
+                    updateNodeFields(id, { url: e.target.value || undefined });
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                />
+              </div>
+              <div className="mx-3 mb-1" style={{ height: 1, backgroundColor: "var(--border)" }} />
+            </>
+          )}
+
+          {/* Body */}
+          <div className="px-3 py-2">
+            {isEditing ? (
+              <div className="nodrag nopan flex flex-col gap-0.5">
+                <textarea
+                  className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-xs leading-relaxed outline-none"
+                  style={{
+                    borderColor: "var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                    resize: "vertical",
+                    minHeight: 48,
+                  }}
+                  value={data.body}
+                  maxLength={250}
+                  rows={3}
+                  onChange={(e) => {
+                    updateNodeFields(id, { body: e.target.value });
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                />
+                <span
+                  className="self-end text-[9px]"
+                  style={{ color: data.body.length > 220 ? "var(--destructive)" : "var(--muted-foreground)" }}
+                >
+                  {data.body.length}/250
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs leading-relaxed" style={{ color: "var(--muted-foreground)" }}>
+                {data.body}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -89,6 +278,7 @@ export default function StatementNode({ data }: NodeProps<StatementNodeType>) {
           pointerEvents: inProgress ? "auto" : "none",
         }}
       />
+      {badgeDropdown}
     </>
   );
 }

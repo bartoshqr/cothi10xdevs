@@ -4,7 +4,7 @@ export type StatementRole = "claim" | "source" | "data" | "warrant" | "backing" 
 
 export type ConnectiveOp = "and" | "or";
 
-export type RelationKind = "supports" | "link" | "rephrases" | "rebuts";
+export type RelationKind = "supports" | "link" | "rephrases" | "rebuts" | "pending";
 
 export interface RoleDescriptor {
   accent: string;
@@ -68,5 +68,9 @@ export const relationDescriptors: Record<RelationKind, RelationDescriptor> = {
     label: "rebuts",
     color: "var(--destructive)",
     strokeWidth: 3,
+  },
+  pending: {
+    label: "",
+    color: "var(--muted-foreground)",
   },
 };

@@ -123,8 +123,7 @@ export const useStore = create<RFState>()((set, get) => ({
       ...pendingConnection,
       id: "__pending__",
       type: "relation" as const,
-      // here instead of support as default we could create a new connection, nearly transparent or sth
-      data: { kind: "supports", pending: true, dropX, dropY },
+      data: { kind: "pending", pending: true, dropX, dropY },
     };
     set((state) => ({ edges: addEdge(previewEdge, state.edges) }));
   },

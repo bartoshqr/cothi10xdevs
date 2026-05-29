@@ -33,6 +33,7 @@ import { useStore, useShallow } from "./store";
 import type { DebateNode } from "./store";
 
 let liveFlowCursor = { x: 0, y: 0 };
+let liveScreenCursor = { x: 0, y: 0 };
 
 function FloatingConnectionLine({ fromX, fromY, fromPosition }: ConnectionLineComponentProps) {
   const dx = liveFlowCursor.x - fromX;
@@ -160,6 +161,7 @@ function MapEditorInner() {
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      liveScreenCursor = { x: e.clientX, y: e.clientY };
       liveFlowCursor = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     },
     [screenToFlowPosition],
@@ -172,11 +174,17 @@ function MapEditorInner() {
       const targetNode = nodes.find((n) => n.id === connection.target);
       if (targetNode?.type === "connective") {
         addEdgeDirect(connection, "link");
-      } else {
-        stagePendingConnection(connection);
+        return;
       }
+      const existingEdge = edges.find((e) => e.source === connection.source && e.target === connection.target);
+      if (existingEdge) {
+        setKindPickerPosition(liveScreenCursor);
+        setEditingEdgeId(existingEdge.id);
+        return;
+      }
+      stagePendingConnection(connection);
     },
-    [nodes, stagePendingConnection, addEdgeDirect, isEditingBlocked],
+    [nodes, edges, stagePendingConnection, addEdgeDirect, isEditingBlocked, setEditingEdgeId],
   );
 
   const handleConnectEnd: OnConnectEnd = useCallback(

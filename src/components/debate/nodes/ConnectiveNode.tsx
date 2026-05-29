@@ -10,8 +10,9 @@ export interface ConnectiveNodeData extends Record<string, unknown> {
 
 export type ConnectiveNodeType = Node<ConnectiveNodeData, "connective">;
 
-export default function ConnectiveNode({ data }: NodeProps<ConnectiveNodeType>) {
-  const { inProgress } = useConnection();
+export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeType>) {
+  const { inProgress, toNode } = useConnection();
+  const isActiveTarget = inProgress && toNode?.id === id;
   const descriptor = connectiveDescriptors[data.op];
 
   return (
@@ -34,7 +35,8 @@ export default function ConnectiveNode({ data }: NodeProps<ConnectiveNodeType>) 
           width: "64px",
           height: "36px",
           backgroundColor: descriptor.bg,
-          borderColor: descriptor.border,
+          borderColor: isActiveTarget ? "var(--primary)" : descriptor.border,
+          boxShadow: isActiveTarget ? "0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent)" : undefined,
           color: descriptor.text,
           opacity: data.pending ? 0.6 : 1,
         }}

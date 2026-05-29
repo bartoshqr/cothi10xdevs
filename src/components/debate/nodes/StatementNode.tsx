@@ -21,7 +21,8 @@ export type StatementNodeType = Node<StatementNodeData, "statement">;
 const STATEMENT_ROLES: StatementRole[] = ["claim", "data", "source", "warrant", "backing", "rebuttal"];
 
 export default function StatementNode({ id, data }: NodeProps<StatementNodeType>) {
-  const { inProgress } = useConnection();
+  const { inProgress, toNode } = useConnection();
+  const isActiveTarget = inProgress && toNode?.id === id;
   const { editingNodeId, setEditingNode, updateNodeFields, setRootNode, deleteNodes, tryExitNodeEditing } = useStore(
     useShallow((s) => ({
       editingNodeId: s.editingNodeId,
@@ -235,7 +236,8 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
       <div
         className="relative flex max-w-[300px] min-w-[180px] overflow-hidden rounded-lg shadow-sm"
         style={{
-          border: `1px solid ${isEditing ? descriptor.accent : "var(--border)"}`,
+          border: `1px solid ${isEditing ? descriptor.accent : isActiveTarget ? "var(--primary)" : "var(--border)"}`,
+          boxShadow: isActiveTarget ? "0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent)" : undefined,
           backgroundColor: "var(--card)",
           color: "var(--card-foreground)",
           opacity: data.pending ? 0.6 : 1,

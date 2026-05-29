@@ -188,7 +188,7 @@ function MapEditorInner() {
     [screenToFlowPosition, addPendingPreview, cancelConnection, isEditingBlocked],
   );
 
-  const showKindPicker = pendingConnection !== null || editingEdgeId !== null;
+  const showKindPicker = kindPickerPosition !== undefined && (pendingConnection !== null || editingEdgeId !== null);
 
   // context menus
   const handlePaneContextMenu = useCallback(

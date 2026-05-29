@@ -50,6 +50,7 @@ export interface RFState {
   setEditingEdgeId: (id: string | null) => void;
   isEditingBlocked: () => boolean;
   tryExitNodeEditing: () => void;
+  getPickerTargetNodeType: () => string | undefined;
 }
 
 function rowsToGraph(
@@ -278,6 +279,18 @@ export const useStore = create<RFState>()((set, get) => ({
   tryExitNodeEditing: () => {
     if (get().isEditingBlocked()) return;
     set({ editingNodeId: null });
+  },
+
+  getPickerTargetNodeType: () => {
+    const { editingEdgeId, pendingConnection, edges, nodes } = get();
+    if (editingEdgeId) {
+      const edge = edges.find((e) => e.id === editingEdgeId);
+      return edge ? nodes.find((n) => n.id === edge.target)?.type : undefined;
+    }
+    if (pendingConnection) {
+      return nodes.find((n) => n.id === pendingConnection.target)?.type;
+    }
+    return undefined;
   },
 }));
 

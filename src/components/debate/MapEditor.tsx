@@ -185,6 +185,8 @@ function MapEditorInner() {
     [screenToFlowPosition, addPendingPreview, cancelConnection, isEditingBlocked],
   );
 
+  const showKindPicker = pendingConnection !== null || editingEdgeId !== null;
+
   // context menus
   const handlePaneContextMenu = useCallback(
     (e: MouseEvent | React.MouseEvent) => {
@@ -223,19 +225,6 @@ function MapEditorInner() {
     [deleteNodes],
   );
 
-  const showKindPicker = pendingConnection !== null || editingEdgeId !== null;
-
-  const pickerTargetNodeType = (() => {
-    if (editingEdgeId) {
-      const edge = edges.find((e) => e.id === editingEdgeId);
-      return edge ? nodes.find((n) => n.id === edge.target)?.type : undefined;
-    }
-    if (pendingConnection) {
-      return nodes.find((n) => n.id === pendingConnection.target)?.type;
-    }
-    return undefined;
-  })();
-
   return (
     <div style={{ width: "100%", height: "100%" }}>
       <ReactFlow
@@ -271,7 +260,6 @@ function MapEditorInner() {
         <ConnectKindPicker
           edgeId={editingEdgeId ?? undefined}
           position={kindPickerPosition}
-          targetNodeType={pickerTargetNodeType}
           onClose={() => {
             setEditingEdgeId(null);
             setKindPickerPosition(undefined);

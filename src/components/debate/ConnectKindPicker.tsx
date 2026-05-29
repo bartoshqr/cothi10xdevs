@@ -12,9 +12,11 @@ interface Props {
   onClose: () => void;
   /** When provided, render as a fixed overlay at this viewport position instead of a Panel. */
   position?: { x: number; y: number };
+  /** The React Flow node type ("statement" | "connective") of the edge's target node. */
+  targetNodeType?: string;
 }
 
-export default function ConnectKindPicker({ edgeId, onClose, position }: Props) {
+export default function ConnectKindPicker({ edgeId, onClose, position, targetNodeType }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [flipped, setFlipped] = useState(false);
 
@@ -27,6 +29,8 @@ export default function ConnectKindPicker({ edgeId, onClose, position }: Props) 
   const commitConnection = useStore((s) => s.commitConnection);
   const cancelConnection = useStore((s) => s.cancelConnection);
   const updateRelationKind = useStore((s) => s.updateRelationKind);
+
+  const availableKinds = targetNodeType === "statement" ? KINDS.filter((k) => k !== "link") : KINDS;
 
   function handleKind(kind: RelationKind) {
     if (edgeId) {
@@ -58,7 +62,7 @@ export default function ConnectKindPicker({ edgeId, onClose, position }: Props) 
       >
         {edgeId ? "Change relation kind" : "Choose relation kind"}
       </div>
-      {KINDS.map((kind) => {
+      {availableKinds.map((kind) => {
         const d = relationDescriptors[kind];
         return (
           <button

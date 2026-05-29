@@ -32,7 +32,7 @@ export interface RFState {
 
   onNodesChange: OnNodesChange<DebateNode>;
   onEdgesChange: OnEdgesChange<DebateEdge>;
-  onConnect: OnConnect;
+  stagePendingConnection: OnConnect;
   commitConnection: (kind: RelationKind) => void;
   cancelConnection: () => void;
   addPendingPreview: (dropX: number, dropY: number) => void;
@@ -47,6 +47,7 @@ export interface RFState {
   selectEdge: (id: string | null) => void;
   updateRelationKind: (id: string, kind: RelationKind) => void;
   setRootNode: (id: string) => void;
+  addEdgeDirect: (connection: Connection, kind: RelationKind) => void;
 }
 
 function rowsToGraph(
@@ -108,7 +109,7 @@ export const useStore = create<RFState>()((set, get) => ({
     set({ edges: applyEdgeChanges(changes, get().edges) });
   },
 
-  onConnect: (connection) => {
+  stagePendingConnection: (connection) => {
     set({ pendingConnection: connection });
   },
 
@@ -233,6 +234,16 @@ export const useStore = create<RFState>()((set, get) => ({
     set((state) => ({
       nodes: state.nodes.map((n) => (n.type === "statement" ? { ...n, data: { ...n.data, isRoot: n.id === id } } : n)),
     }));
+  },
+
+  addEdgeDirect: (connection, kind) => {
+    const edge: DebateEdge = {
+      ...connection,
+      id: crypto.randomUUID(),
+      type: "relation" as const,
+      data: { kind },
+    };
+    set((state) => ({ edges: addEdge(edge, state.edges) }));
   },
 }));
 

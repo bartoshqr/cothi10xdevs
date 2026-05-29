@@ -17,6 +17,7 @@ import type {
   NodeMouseHandler,
   EdgeMouseHandler,
   OnConnectEnd,
+  OnConnect,
   ConnectionLineComponentProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -89,7 +90,7 @@ function MapEditorInner() {
     edges,
     onNodesChange,
     onEdgesChange,
-    onConnect,
+    stagePendingConnection,
     pendingConnection,
     cancelConnection,
     deleteNodes,
@@ -98,13 +99,14 @@ function MapEditorInner() {
     createStatementNode,
     setRootNode,
     addPendingPreview,
+    addEdgeDirect,
   } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
       edges: s.edges,
       onNodesChange: s.onNodesChange,
       onEdgesChange: s.onEdgesChange,
-      onConnect: s.onConnect,
+      stagePendingConnection: s.stagePendingConnection,
       pendingConnection: s.pendingConnection,
       cancelConnection: s.cancelConnection,
       deleteNodes: s.deleteNodes,
@@ -113,10 +115,23 @@ function MapEditorInner() {
       createStatementNode: s.createStatementNode,
       setRootNode: s.setRootNode,
       addPendingPreview: s.addPendingPreview,
+      addEdgeDirect: s.addEdgeDirect,
     })),
   );
 
   const { screenToFlowPosition } = useReactFlow();
+
+  const handleConnect: OnConnect = useCallback(
+    (connection) => {
+      const targetNode = nodes.find((n) => n.id === connection.target);
+      if (targetNode?.type === "connective") {
+        addEdgeDirect(connection, "link");
+      } else {
+        stagePendingConnection(connection);
+      }
+    },
+    [nodes, stagePendingConnection, addEdgeDirect],
+  );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -221,6 +236,17 @@ function MapEditorInner() {
 
   const showKindPicker = pendingConnection !== null || editingEdgeId !== null;
 
+  const pickerTargetNodeType = (() => {
+    if (editingEdgeId) {
+      const edge = edges.find((e) => e.id === editingEdgeId);
+      return edge ? nodes.find((n) => n.id === edge.target)?.type : undefined;
+    }
+    if (pendingConnection) {
+      return nodes.find((n) => n.id === pendingConnection.target)?.type;
+    }
+    return undefined;
+  })();
+
   return (
     <div style={{ width: "100%", height: "100%" }}>
       <ReactFlow
@@ -228,7 +254,7 @@ function MapEditorInner() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        onConnect={handleConnect}
         onConnectEnd={handleConnectEnd}
         onNodeClick={handleNodeClick}
         onNodeContextMenu={handleNodeContextMenu}
@@ -258,6 +284,7 @@ function MapEditorInner() {
         <ConnectKindPicker
           edgeId={editingEdgeId ?? undefined}
           position={kindPickerPosition}
+          targetNodeType={pickerTargetNodeType}
           onClose={() => {
             setEditingEdgeId(null);
             setKindPickerPosition(undefined);

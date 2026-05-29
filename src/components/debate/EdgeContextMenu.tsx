@@ -21,6 +21,7 @@ export default function EdgeContextMenu({ edgeId, screenX, screenY, onClose, onE
   }, [screenY]);
 
   const deleteEdge = useStore((s) => s.deleteEdge);
+  const edgeKind = useStore((s) => s.edges.find((e) => e.id === edgeId)?.data?.kind);
 
   return (
     <>
@@ -45,15 +46,17 @@ export default function EdgeContextMenu({ edgeId, screenX, screenY, onClose, onE
           color: "var(--card-foreground)",
         }}
       >
-        <button
-          className="nodrag nopan w-full px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--muted)]"
-          onClick={() => {
-            onEdit();
-            onClose();
-          }}
-        >
-          Edit
-        </button>
+        {edgeKind !== "link" && (
+          <button
+            className="nodrag nopan w-full px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--muted)]"
+            onClick={() => {
+              onEdit();
+              onClose();
+            }}
+          >
+            Edit
+          </button>
+        )}
         <button
           className="nodrag nopan w-full border-t px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--muted)]"
           style={{ borderColor: "var(--border)", color: "var(--destructive)" }}

@@ -176,6 +176,9 @@ function MapEditorInner() {
         cancelConnection();
         return;
       }
+
+      // Read the CURRENT state from the store, not the closure
+      if (!useStore.getState().pendingConnection) return;
       const point = "changedTouches" in e ? e.changedTouches[0] : e;
       const screenPos = { x: point.clientX, y: point.clientY };
       setKindPickerPosition(screenPos);

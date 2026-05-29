@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Constants } from "@/db/database.types";
+import { NODE_CONSTRAINTS } from "./nodeConstraints";
 
 const { statement_type, connective_op, relation_kind } = Constants.public.Enums;
 
@@ -9,8 +10,8 @@ export const relationKindEnum = z.enum(relation_kind);
 
 export const createDebateSchema = z.object({
   title: z.string().min(1).max(120),
-  rootTitle: z.string().min(1).max(60),
-  rootBody: z.string().max(250).optional(),
+  rootTitle: z.string().min(1).max(NODE_CONSTRAINTS.title.max),
+  rootBody: z.string().max(NODE_CONSTRAINTS.body.max).optional(),
 });
 
 export const createNodeSchema = z.discriminatedUnion("nodeKind", [
@@ -18,9 +19,9 @@ export const createNodeSchema = z.discriminatedUnion("nodeKind", [
     nodeKind: z.literal("statement"),
     debateId: z.uuid(),
     statementType: statementTypeEnum,
-    title: z.string().min(1).max(60),
-    body: z.string().max(250).optional(),
-    url: z.string().optional(),
+    title: z.string().min(1).max(NODE_CONSTRAINTS.title.max),
+    body: z.string().max(NODE_CONSTRAINTS.body.max).optional(),
+    url: z.url().optional(),
     positionX: z.number(),
     positionY: z.number(),
   }),
@@ -34,9 +35,9 @@ export const createNodeSchema = z.discriminatedUnion("nodeKind", [
 ]);
 
 export const updateNodeSchema = z.object({
-  title: z.string().min(1).max(60).optional(),
-  body: z.string().max(250).optional(),
-  url: z.string().optional(),
+  title: z.string().min(1).max(NODE_CONSTRAINTS.title.max).optional(),
+  body: z.string().max(NODE_CONSTRAINTS.body.max).optional(),
+  url: z.url().optional(),
   statementType: statementTypeEnum.optional(),
   connectiveOp: connectiveOpEnum.optional(),
   positionX: z.number().optional(),

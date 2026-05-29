@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { roleDescriptors } from "../mapVisualLanguage";
 import type { StatementRole } from "../mapVisualLanguage";
 import { useStore, useShallow } from "../store";
+import { NODE_CONSTRAINTS } from "@/lib/debate/nodeConstraints";
 
 export interface StatementNodeData extends Record<string, unknown> {
   role?: StatementRole;
@@ -230,7 +231,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                     color: "var(--foreground)",
                   }}
                   value={localTitle}
-                  maxLength={60}
+                  maxLength={NODE_CONSTRAINTS.title.max}
                   onChange={(e) => {
                     const val = e.target.value;
                     setLocalTitle(val);
@@ -266,9 +267,14 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 )}
                 <span
                   className="text-[9px]"
-                  style={{ color: localTitle.length > 50 ? "var(--destructive)" : "var(--muted-foreground)" }}
+                  style={{
+                    color:
+                      localTitle.length > NODE_CONSTRAINTS.title.warnAt
+                        ? "var(--destructive)"
+                        : "var(--muted-foreground)",
+                  }}
                 >
-                  {localTitle.length}/60
+                  {localTitle.length}/{NODE_CONSTRAINTS.title.max}
                 </span>
               </div>
             )}
@@ -322,7 +328,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                     minHeight: 48,
                   }}
                   value={localBody}
-                  maxLength={250}
+                  maxLength={NODE_CONSTRAINTS.body.max}
                   rows={3}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -336,9 +342,14 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 />
                 <span
                   className="self-end text-[9px]"
-                  style={{ color: localBody.length > 220 ? "var(--destructive)" : "var(--muted-foreground)" }}
+                  style={{
+                    color:
+                      localBody.length > NODE_CONSTRAINTS.body.warnAt
+                        ? "var(--destructive)"
+                        : "var(--muted-foreground)",
+                  }}
                 >
-                  {localBody.length}/250
+                  {localBody.length}/{NODE_CONSTRAINTS.body.max}
                 </span>
               </div>
             ) : (

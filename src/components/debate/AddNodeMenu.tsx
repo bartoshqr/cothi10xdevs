@@ -25,10 +25,12 @@ export default function AddNodeMenu({ screenX, screenY, onClose }: Props) {
   const { screenToFlowPosition } = useReactFlow();
   const createStatementNode = useStore((s) => s.createStatementNode);
   const createConnectiveNode = useStore((s) => s.createConnectiveNode);
+  const setEditingNode = useStore((s) => s.setEditingNode);
 
   function handleStatement(role: StatementRole) {
     const position = screenToFlowPosition({ x: screenX, y: screenY });
-    createStatementNode(role, position);
+    const id = createStatementNode(role, position);
+    setEditingNode(id);
     onClose();
   }
 

@@ -155,14 +155,22 @@ function MapEditorInner() {
     setEdgeContextMenu(null);
   }, []);
 
+  const tryExitEditing = useCallback(() => {
+    if (editingNodeId) {
+      const editingNode = nodes.find((n) => n.id === editingNodeId);
+      if (editingNode?.type === "statement" && editingNode.data.role === "source" && !editingNode.data.url) return;
+    }
+    setEditingNode(null);
+  }, [editingNodeId, nodes, setEditingNode]);
+
   const handlePaneContextMenu = useCallback(
     (e: MouseEvent | React.MouseEvent) => {
       e.preventDefault();
       closeAllMenus();
-      setEditingNode(null);
+      tryExitEditing();
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, setEditingNode],
+    [closeAllMenus, tryExitEditing],
   );
 
   const handleConnectEnd: OnConnectEnd = useCallback(
@@ -183,18 +191,18 @@ function MapEditorInner() {
     setKindPickerPosition(undefined);
     selectNode(null);
     selectEdge(null);
-    setEditingNode(null);
-  }, [closeAllMenus, selectNode, selectEdge, cancelConnection, setEditingNode]);
+    tryExitEditing();
+  }, [closeAllMenus, selectNode, selectEdge, cancelConnection, tryExitEditing]);
 
   const handleNodeClick: NodeMouseHandler<DebateNode> = useCallback(
     (_e, _node) => {
       closeAllMenus();
       setEditingEdgeId(null);
       cancelConnection();
-      setEditingNode(null);
+      tryExitEditing();
       selectNode(null);
     },
-    [closeAllMenus, selectNode, cancelConnection, setEditingNode],
+    [closeAllMenus, selectNode, cancelConnection, tryExitEditing],
   );
 
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
@@ -202,11 +210,11 @@ function MapEditorInner() {
       e.preventDefault();
       closeAllMenus();
       setEditingEdgeId(null);
-      setEditingNode(null);
+      tryExitEditing();
       selectNode(null);
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectNode, setEditingNode],
+    [closeAllMenus, selectNode, tryExitEditing],
   );
 
   const handleEdgeClick: EdgeMouseHandler = useCallback(
@@ -215,9 +223,9 @@ function MapEditorInner() {
       setEditingEdgeId(null);
       selectNode(null);
       selectEdge(edge.id);
-      setEditingNode(null);
+      tryExitEditing();
     },
-    [closeAllMenus, selectNode, selectEdge, setEditingNode],
+    [closeAllMenus, selectNode, selectEdge, tryExitEditing],
   );
 
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(

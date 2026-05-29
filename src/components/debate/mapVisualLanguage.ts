@@ -26,7 +26,7 @@ export interface RelationDescriptor {
 }
 
 export const roleDescriptors: Record<StatementRole, RoleDescriptor> = {
-  claim: { accent: "var(--muted-foreground)", badge: null },
+  claim: { accent: "var(--muted-foreground)", badge: "CLAIM" },
   source: { accent: "var(--primary)", badge: "SOURCE" },
   data: { accent: "var(--chart-3)", badge: "DATA" },
   warrant: { accent: "var(--chart-5)", badge: "WARRANT" },

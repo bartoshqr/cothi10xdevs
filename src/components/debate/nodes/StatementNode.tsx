@@ -32,22 +32,47 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   );
 
   const isEditing = editingNodeId === id;
+  const role = data.isRoot ? "claim" : (data.role ?? "claim");
+  const descriptor = roleDescriptors[role];
+  const badge = data.isRoot ? "ROOT" : descriptor.badge;
+
+  // Local state keeps cursor stable — store is write-through only.
+  const [localTitle, setLocalTitle] = useState(data.title);
+  const [localBody, setLocalBody] = useState(data.body);
+  const [localUrl, setLocalUrl] = useState(data.url ?? "");
+
+  // Refs to read latest values without adding them to effect deps.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const prevRoleRef = useRef(role);
+
   const [badgeAnchor, setBadgeAnchor] = useState<{ x: number; y: number } | null>(null);
   const badgeRef = useRef<HTMLSpanElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
+  // Sync local state from store and focus title when entering edit mode.
   useEffect(() => {
-    if (isEditing && titleRef.current) {
-      const el = titleRef.current;
-      resizeEl(el);
-      el.focus();
-      el.selectionStart = el.selectionEnd = el.value.length;
+    if (isEditing) {
+      const d = dataRef.current;
+      setLocalTitle(d.title);
+      setLocalBody(d.body);
+      setLocalUrl(d.url ?? "");
+      if (titleRef.current) {
+        const el = titleRef.current;
+        resizeEl(el);
+        el.focus();
+        el.selectionStart = el.selectionEnd = el.value.length;
+      }
     }
   }, [isEditing]);
 
-  const role = data.isRoot ? "claim" : (data.role ?? "claim");
-  const descriptor = roleDescriptors[role];
-  const badge = data.isRoot ? "ROOT" : descriptor.badge;
+  // When the role switches to "source" mid-edit, sync the URL field from the store.
+  useEffect(() => {
+    if (isEditing && role === "source" && prevRoleRef.current !== "source") {
+      setLocalUrl(dataRef.current.url ?? "");
+    }
+    prevRoleRef.current = role;
+  }, [isEditing, role]);
 
   function handleNodeDoubleClick(e: React.MouseEvent) {
     e.stopPropagation();
@@ -200,15 +225,17 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   rows={1}
                   className="nodrag nopan min-w-0 flex-1 resize-none overflow-hidden rounded border px-1.5 py-0.5 text-sm font-semibold outline-none"
                   style={{
-                    borderColor: !data.title ? "var(--destructive)" : "var(--border)",
+                    borderColor: !localTitle ? "var(--destructive)" : "var(--border)",
                     backgroundColor: "var(--background)",
                     color: "var(--foreground)",
                   }}
-                  value={data.title}
+                  value={localTitle}
                   maxLength={60}
                   onChange={(e) => {
+                    const val = e.target.value;
+                    setLocalTitle(val);
                     resizeEl(e.target);
-                    updateNodeFields(id, { title: e.target.value });
+                    updateNodeFields(id, { title: val });
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -229,12 +256,19 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
               )}
             </div>
             {isEditing && (
-              <div className="mt-0.5 flex justify-end">
+              <div className="mt-0.5 flex items-center justify-between">
+                {!localTitle ? (
+                  <span className="text-[9px]" style={{ color: "var(--destructive)" }}>
+                    Title is required
+                  </span>
+                ) : (
+                  <span />
+                )}
                 <span
                   className="text-[9px]"
-                  style={{ color: data.title.length > 50 ? "var(--destructive)" : "var(--muted-foreground)" }}
+                  style={{ color: localTitle.length > 50 ? "var(--destructive)" : "var(--muted-foreground)" }}
                 >
-                  {data.title.length}/60
+                  {localTitle.length}/60
                 </span>
               </div>
             )}
@@ -247,20 +281,22 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 <input
                   className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-xs outline-none"
                   style={{
-                    borderColor: !data.url ? "var(--destructive)" : "var(--border)",
+                    borderColor: !localUrl ? "var(--destructive)" : "var(--border)",
                     backgroundColor: "var(--background)",
                     color: "var(--foreground)",
                   }}
-                  value={data.url ?? ""}
+                  value={localUrl}
                   placeholder="https://... (required)"
                   onChange={(e) => {
-                    updateNodeFields(id, { url: e.target.value || undefined });
+                    const val = e.target.value;
+                    setLocalUrl(val);
+                    updateNodeFields(id, { url: val || undefined });
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
                 />
-                {!data.url && (
+                {!localUrl && (
                   <span className="mt-1 block text-[9px]" style={{ color: "var(--destructive)" }}>
                     URL is required for source nodes
                   </span>
@@ -285,12 +321,14 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                     color: "var(--foreground)",
                     minHeight: 48,
                   }}
-                  value={data.body}
+                  value={localBody}
                   maxLength={250}
                   rows={3}
                   onChange={(e) => {
+                    const val = e.target.value;
+                    setLocalBody(val);
                     resizeEl(e.target);
-                    updateNodeFields(id, { body: e.target.value });
+                    updateNodeFields(id, { body: val });
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -298,9 +336,9 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 />
                 <span
                   className="self-end text-[9px]"
-                  style={{ color: data.body.length > 220 ? "var(--destructive)" : "var(--muted-foreground)" }}
+                  style={{ color: localBody.length > 220 ? "var(--destructive)" : "var(--muted-foreground)" }}
                 >
-                  {data.body.length}/250
+                  {localBody.length}/250
                 </span>
               </div>
             ) : (

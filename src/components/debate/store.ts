@@ -50,6 +50,8 @@ export interface RFState {
   setRootNode: (id: string) => void;
   addEdgeDirect: (connection: Connection, kind: RelationKind) => void;
   setEditingNode: (id: string | null) => void;
+  isEditingBlocked: () => boolean;
+  tryExitEditing: () => void;
 }
 
 function rowsToGraph(
@@ -270,6 +272,21 @@ export const useStore = create<RFState>()((set, get) => ({
       data: { kind },
     };
     set((state) => ({ edges: addEdge(edge, state.edges) }));
+  },
+
+  isEditingBlocked: () => {
+    const { editingNodeId, nodes } = get();
+    if (!editingNodeId) return false;
+    const node = nodes.find((n) => n.id === editingNodeId);
+    if (node?.type !== "statement") return false;
+    if (!node.data.title) return true;
+    if (node.data.role === "source" && !node.data.url) return true;
+    return false;
+  },
+
+  tryExitEditing: () => {
+    if (get().isEditingBlocked()) return;
+    set({ editingNodeId: null });
   },
 }));
 

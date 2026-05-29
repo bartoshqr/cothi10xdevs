@@ -83,6 +83,12 @@ function MapEditorInner() {
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
   const [kindPickerPosition, setKindPickerPosition] = useState<{ x: number; y: number } | undefined>(undefined);
 
+  const closeAllMenus = useCallback(() => {
+    setContextMenu(null);
+    setNodeContextMenu(null);
+    setEdgeContextMenu(null);
+  }, []);
+
   const {
     nodes,
     edges,
@@ -99,7 +105,8 @@ function MapEditorInner() {
     addPendingPreview,
     addEdgeDirect,
     editingNodeId,
-    setEditingNode,
+    isEditingBlocked,
+    tryExitEditing,
   } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
@@ -117,21 +124,28 @@ function MapEditorInner() {
       addPendingPreview: s.addPendingPreview,
       addEdgeDirect: s.addEdgeDirect,
       editingNodeId: s.editingNodeId,
-      setEditingNode: s.setEditingNode,
+      isEditingBlocked: s.isEditingBlocked,
+      tryExitEditing: s.tryExitEditing,
     })),
   );
 
+  useEffect(() => {
+    if (nodes.length === 0) {
+      const id = createStatementNode("claim", { x: 0, y: 0 });
+      setRootNode(id);
+    }
+  }, [nodes.length, createStatementNode, setRootNode]);
+
   const { screenToFlowPosition } = useReactFlow();
 
-  const isEditingBlocked = useCallback(() => {
-    if (!editingNodeId) return false;
-    const node = nodes.find((n) => n.id === editingNodeId);
-    if (node?.type !== "statement") return false;
-    if (!node.data.title) return true;
-    if (node.data.role === "source" && !node.data.url) return true;
-    return false;
-  }, [editingNodeId, nodes]);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      liveFlowCursor = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    },
+    [screenToFlowPosition],
+  );
 
+  // connection
   const handleConnect: OnConnect = useCallback(
     (connection) => {
       if (isEditingBlocked()) return;
@@ -143,42 +157,6 @@ function MapEditorInner() {
       }
     },
     [nodes, stagePendingConnection, addEdgeDirect, isEditingBlocked],
-  );
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      liveFlowCursor = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    },
-    [screenToFlowPosition],
-  );
-
-  useEffect(() => {
-    if (nodes.length === 0) {
-      const id = createStatementNode("claim", { x: 0, y: 0 });
-      setRootNode(id);
-    }
-  }, [nodes.length, createStatementNode, setRootNode]);
-
-  const closeAllMenus = useCallback(() => {
-    setContextMenu(null);
-    setNodeContextMenu(null);
-    setEdgeContextMenu(null);
-  }, []);
-
-  const tryExitEditing = useCallback(() => {
-    if (isEditingBlocked()) return;
-    setEditingNode(null);
-  }, [isEditingBlocked, setEditingNode]);
-
-  const handlePaneContextMenu = useCallback(
-    (e: MouseEvent | React.MouseEvent) => {
-      e.preventDefault();
-      if (isEditingBlocked()) return;
-      closeAllMenus();
-      tryExitEditing();
-      setContextMenu({ x: e.clientX, y: e.clientY });
-    },
-    [closeAllMenus, tryExitEditing, isEditingBlocked],
   );
 
   const handleConnectEnd: OnConnectEnd = useCallback(
@@ -196,6 +174,50 @@ function MapEditorInner() {
     [screenToFlowPosition, addPendingPreview, cancelConnection, isEditingBlocked],
   );
 
+  // context menus
+  const handlePaneContextMenu = useCallback(
+    (e: MouseEvent | React.MouseEvent) => {
+      e.preventDefault();
+      if (isEditingBlocked()) return;
+      closeAllMenus();
+      tryExitEditing();
+      setEditingEdgeId(null);
+      selectNode(null);
+      selectEdge(null);
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    },
+    [closeAllMenus, selectNode, selectEdge, tryExitEditing, isEditingBlocked],
+  );
+
+  const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
+    (e, node) => {
+      e.preventDefault();
+      if (isEditingBlocked()) return;
+      closeAllMenus();
+      tryExitEditing();
+      setEditingEdgeId(null);
+      selectNode(null);
+      selectEdge(null);
+      setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
+    },
+    [closeAllMenus, selectNode, selectEdge, tryExitEditing, isEditingBlocked],
+  );
+
+  const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
+    (e, edge) => {
+      e.preventDefault();
+      if (isEditingBlocked()) return;
+      closeAllMenus();
+      tryExitEditing();
+      setEditingEdgeId(null);
+      selectNode(null);
+      selectEdge(edge.id);
+      setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
+    },
+    [closeAllMenus, selectEdge, selectNode, tryExitEditing, isEditingBlocked],
+  );
+
+  // click
   const handlePaneClick = useCallback(() => {
     closeAllMenus();
     setEditingEdgeId(null);
@@ -217,19 +239,6 @@ function MapEditorInner() {
     [closeAllMenus, selectNode, cancelConnection, tryExitEditing],
   );
 
-  const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
-    (e, node) => {
-      e.preventDefault();
-      if (isEditingBlocked()) return;
-      closeAllMenus();
-      setEditingEdgeId(null);
-      tryExitEditing();
-      selectNode(null);
-      setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
-    },
-    [closeAllMenus, selectNode, tryExitEditing, isEditingBlocked],
-  );
-
   const handleEdgeClick: EdgeMouseHandler = useCallback(
     (_e, edge) => {
       closeAllMenus();
@@ -239,18 +248,6 @@ function MapEditorInner() {
       tryExitEditing();
     },
     [closeAllMenus, selectNode, selectEdge, tryExitEditing],
-  );
-
-  const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
-    (e, edge) => {
-      e.preventDefault();
-      if (isEditingBlocked()) return;
-      closeAllMenus();
-      setEditingEdgeId(null);
-      selectEdge(edge.id);
-      setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
-    },
-    [closeAllMenus, selectEdge, isEditingBlocked],
   );
 
   const handleNodesDelete = useCallback(
@@ -284,11 +281,11 @@ function MapEditorInner() {
         onConnectEnd={handleConnectEnd}
         onNodeClick={handleNodeClick}
         onNodeContextMenu={handleNodeContextMenu}
+        onNodesDelete={handleNodesDelete}
         onEdgeClick={handleEdgeClick}
         onEdgeContextMenu={handleEdgeContextMenu}
         onPaneClick={handlePaneClick}
         onPaneContextMenu={handlePaneContextMenu}
-        onNodesDelete={handleNodesDelete}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}

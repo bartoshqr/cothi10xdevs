@@ -22,13 +22,14 @@ const STATEMENT_ROLES: StatementRole[] = ["claim", "data", "source", "warrant", 
 
 export default function StatementNode({ id, data }: NodeProps<StatementNodeType>) {
   const { inProgress } = useConnection();
-  const { editingNodeId, setEditingNode, updateNodeFields, setRootNode, deleteNodes } = useStore(
+  const { editingNodeId, setEditingNode, updateNodeFields, setRootNode, deleteNodes, tryExitNodeEditing } = useStore(
     useShallow((s) => ({
       editingNodeId: s.editingNodeId,
       setEditingNode: s.setEditingNode,
       updateNodeFields: s.updateNodeFields,
       setRootNode: s.setRootNode,
       deleteNodes: s.deleteNodes,
+      tryExitNodeEditing: s.tryExitNodeEditing,
     })),
   );
 
@@ -47,14 +48,20 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   dataRef.current = data;
   const prevRoleRef = useRef(role);
 
+  // Snapshot of data at the moment edit mode opens — used to revert on Escape.
+  const originalDataRef = useRef({ title: data.title, body: data.body, url: data.url, role: data.role });
+
   const [badgeAnchor, setBadgeAnchor] = useState<{ x: number; y: number } | null>(null);
   const badgeRef = useRef<HTMLSpanElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const urlRef = useRef<HTMLInputElement | null>(null);
 
   // Sync local state from store and focus title when entering edit mode.
   useEffect(() => {
     if (isEditing) {
       const d = dataRef.current;
+      originalDataRef.current = { title: d.title, body: d.body, url: d.url, role: d.role };
       setLocalTitle(d.title);
       setLocalBody(d.body);
       setLocalUrl(d.url ?? "");
@@ -83,6 +90,55 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   function resizeEl(el: HTMLElement) {
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
+  }
+
+  function handleRevertAndExit() {
+    const orig = originalDataRef.current;
+    updateNodeFields(id, { title: orig.title, body: orig.body, url: orig.url, statementType: orig.role });
+    setLocalTitle(orig.title);
+    setLocalBody(orig.body);
+    setLocalUrl(orig.url ?? "");
+    setEditingNode(null);
+  }
+
+  function handleTitleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      if (role === "source") {
+        urlRef.current?.focus();
+      } else {
+        bodyRef.current?.focus();
+      }
+    } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      tryExitNodeEditing();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleRevertAndExit();
+    }
+  }
+
+  function handleBodyKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      tryExitNodeEditing();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleRevertAndExit();
+    }
+  }
+
+  function handleUrlKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && localUrl) {
+      e.preventDefault();
+      bodyRef.current?.focus();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      tryExitNodeEditing();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleRevertAndExit();
+    }
   }
 
   function handleBadgeClick(e: React.MouseEvent) {
@@ -177,7 +233,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
         />
       )}
       <div
-        className="relative flex max-w-[300px] min-w-[140px] overflow-hidden rounded-lg shadow-sm"
+        className="relative flex max-w-[300px] min-w-[180px] overflow-hidden rounded-lg shadow-sm"
         style={{
           border: `1px solid ${isEditing ? descriptor.accent : "var(--border)"}`,
           backgroundColor: "var(--card)",
@@ -238,6 +294,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
+                  onKeyDown={handleTitleKeyDown}
                 />
               ) : data.url ? (
                 <a
@@ -282,6 +339,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
             <>
               <div className="nodrag nopan px-3 pt-2 pb-1">
                 <input
+                  ref={urlRef}
                   className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-xs outline-none"
                   style={{
                     borderColor: !localUrl ? "var(--destructive)" : "var(--border)",
@@ -298,6 +356,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
+                  onKeyDown={handleUrlKeyDown}
                 />
                 {!localUrl && (
                   <span className="mt-1 block text-[9px]" style={{ color: "var(--destructive)" }}>
@@ -315,6 +374,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
               <div className="nodrag nopan flex flex-col gap-0.5">
                 <textarea
                   ref={(el) => {
+                    bodyRef.current = el;
                     if (el) resizeEl(el);
                   }}
                   className="nodrag nopan w-full resize-none overflow-hidden rounded border px-1.5 py-0.5 text-xs leading-relaxed outline-none"
@@ -336,6 +396,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
+                  onKeyDown={handleBodyKeyDown}
                 />
                 <span
                   className="self-end text-[9px]"

@@ -43,6 +43,11 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
     setEditingNode(id);
   }
 
+  function resizeEl(el: HTMLElement) {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
   function handleBadgeDoubleClick(e: React.MouseEvent) {
     e.stopPropagation();
     const rect = badgeRef.current?.getBoundingClientRect();
@@ -161,9 +166,13 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
             )}
             {isEditing ? (
               <div className="nodrag nopan min-w-0 flex-1">
-                <input
+                <textarea
                   autoFocus
-                  className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-sm font-semibold outline-none"
+                  ref={(el) => {
+                    if (el) resizeEl(el);
+                  }}
+                  rows={1}
+                  className="nodrag nopan w-full resize-none overflow-hidden rounded border px-1.5 py-0.5 text-sm font-semibold outline-none"
                   style={{
                     borderColor: "var(--border)",
                     backgroundColor: "var(--background)",
@@ -172,6 +181,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   value={data.title}
                   maxLength={60}
                   onChange={(e) => {
+                    resizeEl(e.target);
                     updateNodeFields(id, { title: e.target.value });
                   }}
                   onClick={(e) => {
@@ -190,13 +200,13 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 href={data.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="nodrag nopan truncate text-sm leading-tight font-semibold underline"
+                className="nodrag nopan text-sm leading-tight font-semibold break-words underline"
                 style={{ color: descriptor.accent }}
               >
                 {data.title}
               </a>
             ) : (
-              <span className="truncate text-sm leading-tight font-semibold">{data.title}</span>
+              <span className="text-sm leading-tight font-semibold break-words">{data.title}</span>
             )}
           </div>
 
@@ -230,18 +240,21 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
             {isEditing ? (
               <div className="nodrag nopan flex flex-col gap-0.5">
                 <textarea
-                  className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-xs leading-relaxed outline-none"
+                  ref={(el) => {
+                    if (el) resizeEl(el);
+                  }}
+                  className="nodrag nopan w-full resize-none overflow-hidden rounded border px-1.5 py-0.5 text-xs leading-relaxed outline-none"
                   style={{
                     borderColor: "var(--border)",
                     backgroundColor: "var(--background)",
                     color: "var(--foreground)",
-                    resize: "vertical",
                     minHeight: 48,
                   }}
                   value={data.body}
                   maxLength={250}
                   rows={3}
                   onChange={(e) => {
+                    resizeEl(e.target);
                     updateNodeFields(id, { body: e.target.value });
                   }}
                   onClick={(e) => {

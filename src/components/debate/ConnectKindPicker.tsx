@@ -4,7 +4,7 @@ import { useStore } from "./store";
 import { relationDescriptors, MENU_VIEWPORT_MARGIN } from "./mapVisualLanguage";
 import type { RelationKind } from "./mapVisualLanguage";
 
-const KINDS: RelationKind[] = ["supports", "link", "rephrases", "rebuts"];
+const KINDS: RelationKind[] = ["supports", "rephrases", "rebuts"];
 
 interface Props {
   /** When set, we're changing an existing edge's kind. When null, we're committing a new connection. */
@@ -27,9 +27,6 @@ export default function ConnectKindPicker({ edgeId, onClose, position }: Props) 
   const commitConnection = useStore((s) => s.commitConnection);
   const cancelConnection = useStore((s) => s.cancelConnection);
   const updateRelationKind = useStore((s) => s.updateRelationKind);
-  const targetNodeType = useStore((s) => s.getPickerTargetNodeType());
-
-  const availableKinds = targetNodeType === "statement" ? KINDS.filter((k) => k !== "link") : KINDS;
 
   function handleKind(kind: RelationKind) {
     if (edgeId) {
@@ -61,7 +58,7 @@ export default function ConnectKindPicker({ edgeId, onClose, position }: Props) 
       >
         {edgeId ? "Change relation kind" : "Choose relation kind"}
       </div>
-      {availableKinds.map((kind) => {
+      {KINDS.map((kind) => {
         const d = relationDescriptors[kind];
         return (
           <button

@@ -140,6 +140,15 @@ function MapEditorInner() {
     tryExitNodeEditing();
   }, [closeAllMenus, tryExitNodeEditing, closeConnectionPicker]);
 
+  const handleNodeClick: NodeMouseHandler<DebateNode> = useCallback(
+    (_e, node) => {
+      closeAllMenus();
+      closeConnectionPicker();
+      if (node.id !== editingNodeId) tryExitNodeEditing();
+    },
+    [closeAllMenus, closeConnectionPicker, tryExitNodeEditing, editingNodeId],
+  );
+
   useEffect(() => {
     if (nodes.length === 0) {
       const id = createStatementNode("claim", { x: 0, y: 0 });
@@ -237,7 +246,7 @@ function MapEditorInner() {
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
         onConnectEnd={handleConnectEnd}
-        onNodeClick={cleanupFlow}
+        onNodeClick={handleNodeClick}
         onNodeContextMenu={handleNodeContextMenu}
         onNodesDelete={handleNodesDelete}
         onEdgeClick={cleanupFlow}

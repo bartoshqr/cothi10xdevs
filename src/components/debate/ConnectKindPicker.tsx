@@ -14,6 +14,7 @@ interface Props {
   position?: { x: number; y: number };
 }
 
+// TOTHINK: this picker makes sense only for connections to Statements, not Connectives, SHOULD I write this condition better in the code?
 export default function ConnectKindPicker({ edgeId, onClose, position }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [flipped, setFlipped] = useState(false);

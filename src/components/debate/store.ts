@@ -191,8 +191,11 @@ export const useStore = create<RFState>()((set, get) => ({
           const updated: StatementNodeData = { ...n.data };
           if (patch.title !== undefined) updated.title = patch.title;
           if (patch.body !== undefined) updated.body = patch.body;
-          if (patch.url !== undefined) updated.url = patch.url;
-          if (patch.statementType !== undefined) updated.role = patch.statementType;
+          if ("url" in patch) updated.url = patch.url;
+          if (patch.statementType !== undefined) {
+            updated.role = patch.statementType;
+            if (patch.statementType !== "source") updated.url = undefined;
+          }
           return { ...n, data: updated };
         }
         if (patch.connectiveOp !== undefined) {
@@ -236,11 +239,25 @@ export const useStore = create<RFState>()((set, get) => ({
 
   setRootNode: (id) => {
     set((state) => ({
-      nodes: state.nodes.map((n) => (n.type === "statement" ? { ...n, data: { ...n.data, isRoot: n.id === id } } : n)),
+      nodes: state.nodes.map((n) => {
+        if (n.type !== "statement") return n;
+        if (n.id === id) return { ...n, data: { ...n.data, isRoot: true, url: undefined } };
+        return { ...n, data: { ...n.data, isRoot: false } };
+      }),
     }));
   },
 
   setEditingNode: (id) => {
+    if (id !== null) {
+      const { editingNodeId, nodes } = get();
+      if (editingNodeId !== null && editingNodeId !== id) {
+        const current = nodes.find((n) => n.id === editingNodeId);
+        if (current?.type === "statement") {
+          if (!current.data.title) return;
+          if (current.data.role === "source" && !current.data.url) return;
+        }
+      }
+    }
     set({ editingNodeId: id });
   },
 

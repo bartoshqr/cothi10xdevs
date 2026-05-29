@@ -123,8 +123,18 @@ function MapEditorInner() {
 
   const { screenToFlowPosition } = useReactFlow();
 
+  const isEditingBlocked = useCallback(() => {
+    if (!editingNodeId) return false;
+    const node = nodes.find((n) => n.id === editingNodeId);
+    if (node?.type !== "statement") return false;
+    if (!node.data.title) return true;
+    if (node.data.role === "source" && !node.data.url) return true;
+    return false;
+  }, [editingNodeId, nodes]);
+
   const handleConnect: OnConnect = useCallback(
     (connection) => {
+      if (isEditingBlocked()) return;
       const targetNode = nodes.find((n) => n.id === connection.target);
       if (targetNode?.type === "connective") {
         addEdgeDirect(connection, "link");
@@ -132,7 +142,7 @@ function MapEditorInner() {
         stagePendingConnection(connection);
       }
     },
-    [nodes, stagePendingConnection, addEdgeDirect],
+    [nodes, stagePendingConnection, addEdgeDirect, isEditingBlocked],
   );
 
   const handleMouseMove = useCallback(
@@ -156,32 +166,34 @@ function MapEditorInner() {
   }, []);
 
   const tryExitEditing = useCallback(() => {
-    if (editingNodeId) {
-      const editingNode = nodes.find((n) => n.id === editingNodeId);
-      if (editingNode?.type === "statement" && editingNode.data.role === "source" && !editingNode.data.url) return;
-    }
+    if (isEditingBlocked()) return;
     setEditingNode(null);
-  }, [editingNodeId, nodes, setEditingNode]);
+  }, [isEditingBlocked, setEditingNode]);
 
   const handlePaneContextMenu = useCallback(
     (e: MouseEvent | React.MouseEvent) => {
       e.preventDefault();
+      if (isEditingBlocked()) return;
       closeAllMenus();
       tryExitEditing();
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, tryExitEditing],
+    [closeAllMenus, tryExitEditing, isEditingBlocked],
   );
 
   const handleConnectEnd: OnConnectEnd = useCallback(
     (e) => {
+      if (isEditingBlocked()) {
+        cancelConnection();
+        return;
+      }
       const point = "changedTouches" in e ? e.changedTouches[0] : e;
       const screenPos = { x: point.clientX, y: point.clientY };
       setKindPickerPosition(screenPos);
       const flowPos = screenToFlowPosition(screenPos);
       addPendingPreview(flowPos.x, flowPos.y);
     },
-    [screenToFlowPosition, addPendingPreview],
+    [screenToFlowPosition, addPendingPreview, cancelConnection, isEditingBlocked],
   );
 
   const handlePaneClick = useCallback(() => {
@@ -208,13 +220,14 @@ function MapEditorInner() {
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
     (e, node) => {
       e.preventDefault();
+      if (isEditingBlocked()) return;
       closeAllMenus();
       setEditingEdgeId(null);
       tryExitEditing();
       selectNode(null);
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectNode, tryExitEditing],
+    [closeAllMenus, selectNode, tryExitEditing, isEditingBlocked],
   );
 
   const handleEdgeClick: EdgeMouseHandler = useCallback(
@@ -231,12 +244,13 @@ function MapEditorInner() {
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
     (e, edge) => {
       e.preventDefault();
+      if (isEditingBlocked()) return;
       closeAllMenus();
       setEditingEdgeId(null);
       selectEdge(edge.id);
       setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectEdge],
+    [closeAllMenus, selectEdge, isEditingBlocked],
   );
 
   const handleNodesDelete = useCallback(

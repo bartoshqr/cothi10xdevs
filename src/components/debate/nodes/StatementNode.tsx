@@ -1,6 +1,6 @@
 import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { roleDescriptors } from "../mapVisualLanguage";
 import type { StatementRole } from "../mapVisualLanguage";
@@ -34,6 +34,16 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   const isEditing = editingNodeId === id;
   const [badgeAnchor, setBadgeAnchor] = useState<{ x: number; y: number } | null>(null);
   const badgeRef = useRef<HTMLSpanElement>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (isEditing && titleRef.current) {
+      const el = titleRef.current;
+      resizeEl(el);
+      el.focus();
+      el.selectionStart = el.selectionEnd = el.value.length;
+    }
+  }, [isEditing]);
 
   const role = data.isRoot ? "claim" : (data.role ?? "claim");
   const descriptor = roleDescriptors[role];
@@ -93,6 +103,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-[var(--muted)]"
                     onClick={() => {
                       updateNodeFields(id, { statementType: r });
+                      if (r === "source") setEditingNode(id);
                       setBadgeAnchor(null);
                     }}
                   >
@@ -185,17 +196,11 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
               )}
               {isEditing ? (
                 <textarea
-                  ref={(el) => {
-                    if (el) {
-                      resizeEl(el);
-                      el.focus();
-                      el.selectionStart = el.selectionEnd = el.value.length;
-                    }
-                  }}
+                  ref={titleRef}
                   rows={1}
                   className="nodrag nopan min-w-0 flex-1 resize-none overflow-hidden rounded border px-1.5 py-0.5 text-sm font-semibold outline-none"
                   style={{
-                    borderColor: "var(--border)",
+                    borderColor: !data.title ? "var(--destructive)" : "var(--border)",
                     backgroundColor: "var(--background)",
                     color: "var(--foreground)",
                   }}

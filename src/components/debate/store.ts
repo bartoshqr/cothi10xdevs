@@ -26,8 +26,6 @@ export interface NodeFieldPatch {
 export interface RFState {
   nodes: DebateNode[];
   edges: DebateEdge[];
-  selectedNodeId: string | null;
-  selectedEdgeId: string | null;
   pendingConnection: Connection | null;
   editingNodeId: string | null;
   editingEdgeId: string | null;
@@ -45,8 +43,6 @@ export interface RFState {
   updateNodeFields: (id: string, patch: NodeFieldPatch) => void;
   deleteNodes: (ids: string[]) => void;
   deleteEdge: (id: string) => void;
-  selectNode: (id: string | null) => void;
-  selectEdge: (id: string | null) => void;
   updateRelationKind: (id: string, kind: RelationKind) => void;
   setRootNode: (id: string) => void;
   addEdgeDirect: (connection: Connection, kind: RelationKind) => void;
@@ -103,8 +99,6 @@ function rowsToGraph(
 export const useStore = create<RFState>()((set, get) => ({
   nodes: [],
   edges: [],
-  selectedNodeId: null,
-  selectedEdgeId: null,
   pendingConnection: null,
   editingNodeId: null,
   editingEdgeId: null,
@@ -158,7 +152,7 @@ export const useStore = create<RFState>()((set, get) => ({
 
   setGraph: (debate, nodeRows, relationRows) => {
     const { nodes, edges } = rowsToGraph(debate, nodeRows, relationRows);
-    set({ nodes, edges, selectedNodeId: null, selectedEdgeId: null, pendingConnection: null });
+    set({ nodes, edges, pendingConnection: null });
   },
 
   createStatementNode: (statementType, position) => {
@@ -217,7 +211,6 @@ export const useStore = create<RFState>()((set, get) => ({
     set((state) => ({
       nodes: state.nodes.filter((n) => !idSet.has(n.id)),
       edges: state.edges.filter((e) => !idSet.has(e.source) && !idSet.has(e.target)),
-      selectedNodeId: state.selectedNodeId && idSet.has(state.selectedNodeId) ? null : state.selectedNodeId,
       editingNodeId: state.editingNodeId && idSet.has(state.editingNodeId) ? null : state.editingNodeId,
     }));
   },
@@ -225,16 +218,7 @@ export const useStore = create<RFState>()((set, get) => ({
   deleteEdge: (id) => {
     set((state) => ({
       edges: state.edges.filter((e) => e.id !== id),
-      selectedEdgeId: state.selectedEdgeId === id ? null : state.selectedEdgeId,
     }));
-  },
-
-  selectNode: (id) => {
-    set({ selectedNodeId: id, selectedEdgeId: null });
-  },
-
-  selectEdge: (id) => {
-    set({ selectedEdgeId: id, selectedNodeId: null });
   },
 
   updateRelationKind: (id, kind) => {

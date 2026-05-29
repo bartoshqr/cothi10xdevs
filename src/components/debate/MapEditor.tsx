@@ -97,8 +97,6 @@ function MapEditorInner() {
     pendingConnection,
     cancelConnection,
     deleteNodes,
-    selectNode,
-    selectEdge,
     createStatementNode,
     setRootNode,
     addPendingPreview,
@@ -118,8 +116,6 @@ function MapEditorInner() {
       pendingConnection: s.pendingConnection,
       cancelConnection: s.cancelConnection,
       deleteNodes: s.deleteNodes,
-      selectNode: s.selectNode,
-      selectEdge: s.selectEdge,
       createStatementNode: s.createStatementNode,
       setRootNode: s.setRootNode,
       addPendingPreview: s.addPendingPreview,
@@ -137,6 +133,12 @@ function MapEditorInner() {
     cancelConnection();
     setKindPickerPosition(undefined);
   }, [setEditingEdgeId, cancelConnection]);
+
+  const cleanupFlow = useCallback(() => {
+    closeAllMenus();
+    closeConnectionPicker();
+    tryExitNodeEditing();
+  }, [closeAllMenus, tryExitNodeEditing, closeConnectionPicker]);
 
   useEffect(() => {
     if (nodes.length === 0) {
@@ -187,74 +189,31 @@ function MapEditorInner() {
   const handlePaneContextMenu = useCallback(
     (e: MouseEvent | React.MouseEvent) => {
       e.preventDefault();
+      cleanupFlow();
       if (isEditingBlocked()) return;
-      closeAllMenus();
-      tryExitNodeEditing();
-      closeConnectionPicker();
-      selectNode(null);
-      selectEdge(null);
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing, isEditingBlocked],
+    [cleanupFlow, isEditingBlocked],
   );
 
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
     (e, node) => {
       e.preventDefault();
+      cleanupFlow();
       if (isEditingBlocked()) return;
-      closeAllMenus();
-      tryExitNodeEditing();
-      closeConnectionPicker();
-      selectNode(null);
-      selectEdge(null);
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing, isEditingBlocked],
+    [cleanupFlow, isEditingBlocked],
   );
 
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
     (e, edge) => {
       e.preventDefault();
+      cleanupFlow();
       if (isEditingBlocked()) return;
-      closeAllMenus();
-      tryExitNodeEditing();
-      closeConnectionPicker();
-      selectNode(null);
-      selectEdge(edge.id);
       setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
     },
-    [closeAllMenus, selectEdge, selectNode, closeConnectionPicker, tryExitNodeEditing, isEditingBlocked],
-  );
-
-  // click
-  const handlePaneClick = useCallback(() => {
-    // if (isEditingBlocked()) return;
-    closeAllMenus();
-    tryExitNodeEditing();
-    closeConnectionPicker();
-    selectNode(null);
-    selectEdge(null);
-  }, [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing]);
-
-  const handleNodeClick: NodeMouseHandler<DebateNode> = useCallback(
-    (_e, _node) => {
-      closeAllMenus();
-      closeConnectionPicker();
-      tryExitNodeEditing();
-      selectNode(null);
-    },
-    [closeAllMenus, selectNode, closeConnectionPicker, tryExitNodeEditing],
-  );
-
-  const handleEdgeClick: EdgeMouseHandler = useCallback(
-    (_e, edge) => {
-      closeAllMenus();
-      closeConnectionPicker();
-      selectNode(null);
-      selectEdge(edge.id);
-      tryExitNodeEditing();
-    },
-    [closeAllMenus, selectNode, selectEdge, closeConnectionPicker, tryExitNodeEditing],
+    [cleanupFlow, isEditingBlocked],
   );
 
   const handleNodesDelete = useCallback(
@@ -286,12 +245,12 @@ function MapEditorInner() {
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
         onConnectEnd={handleConnectEnd}
-        onNodeClick={handleNodeClick}
+        onNodeClick={cleanupFlow}
         onNodeContextMenu={handleNodeContextMenu}
         onNodesDelete={handleNodesDelete}
-        onEdgeClick={handleEdgeClick}
+        onEdgeClick={cleanupFlow}
         onEdgeContextMenu={handleEdgeContextMenu}
-        onPaneClick={handlePaneClick}
+        onPaneClick={cleanupFlow}
         onPaneContextMenu={handlePaneContextMenu}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}

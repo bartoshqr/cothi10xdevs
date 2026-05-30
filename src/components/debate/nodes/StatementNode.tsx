@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { roleDescriptors } from "../mapVisualLanguage";
 import type { StatementRole } from "../mapVisualLanguage";
 import { useStore, useShallow } from "../store";
-import { NODE_CONSTRAINTS } from "@/lib/debate/nodeConstraints";
+import { NODE_CONSTRAINTS, isValidUrl } from "@/lib/debate/nodeConstraints";
 
 export interface StatementNodeData extends Record<string, unknown> {
   role?: StatementRole;
@@ -130,7 +130,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   }
 
   function handleUrlKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && localUrl) {
+    if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && localUrl && isValidUrl(localUrl)) {
       e.preventDefault();
       bodyRef.current?.focus();
     } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -344,7 +344,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   ref={urlRef}
                   className="nodrag nopan w-full rounded border px-1.5 py-0.5 text-xs outline-none"
                   style={{
-                    borderColor: !localUrl ? "var(--destructive)" : "var(--border)",
+                    borderColor: !localUrl || !isValidUrl(localUrl) ? "var(--destructive)" : "var(--border)",
                     backgroundColor: "var(--background)",
                     color: "var(--foreground)",
                   }}
@@ -360,9 +360,9 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   }}
                   onKeyDown={handleUrlKeyDown}
                 />
-                {!localUrl && (
+                {(!localUrl || !isValidUrl(localUrl)) && (
                   <span className="mt-1 block text-[9px]" style={{ color: "var(--destructive)" }}>
-                    URL is required for source nodes
+                    {!localUrl ? "URL is required for source nodes" : "Must be a valid URL (e.g. https://example.com)"}
                   </span>
                 )}
               </div>

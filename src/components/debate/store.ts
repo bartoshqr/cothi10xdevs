@@ -7,6 +7,7 @@ import type { ConnectiveNodeData, ConnectiveNodeType } from "./nodes/ConnectiveN
 import type { RelationEdgeData } from "./edges/RelationEdge";
 import type { StatementRole, ConnectiveOp, RelationKind } from "./mapVisualLanguage";
 import type { Database } from "@/db/database.types";
+import { isValidUrl } from "@/lib/debate/nodeConstraints";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
@@ -238,13 +239,9 @@ export const useStore = create<RFState>()((set, get) => ({
 
   setInEditNode: (id) => {
     if (id !== null) {
-      const { inEditNodeId, nodes } = get();
+      const { inEditNodeId } = get();
       if (inEditNodeId !== null && inEditNodeId !== id) {
-        const current = nodes.find((n) => n.id === inEditNodeId);
-        if (current?.type === "statement") {
-          if (!current.data.title) return;
-          if (current.data.role === "source" && !current.data.url) return;
-        }
+        if (get().isInEditBlocked()) return;
       }
     }
     set({ inEditNodeId: id });
@@ -270,7 +267,7 @@ export const useStore = create<RFState>()((set, get) => ({
     const node = nodes.find((n) => n.id === inEditNodeId);
     if (node?.type !== "statement") return false;
     if (!node.data.title) return true;
-    if (node.data.role === "source" && !node.data.url) return true;
+    if (node.data.role === "source" && (!node.data.url || !isValidUrl(node.data.url))) return true;
     return false;
   },
 

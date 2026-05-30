@@ -27,8 +27,8 @@ export interface RFState {
   nodes: DebateNode[];
   edges: DebateEdge[];
   pendingConnection: Connection | null;
-  editingNodeId: string | null;
-  editingEdgeId: string | null;
+  inEditNodeId: string | null;
+  inEditEdgeId: string | null;
 
   onNodesChange: OnNodesChange<DebateNode>;
   onEdgesChange: OnEdgesChange<DebateEdge>;
@@ -46,10 +46,10 @@ export interface RFState {
   updateRelationKind: (id: string, kind: RelationKind) => void;
   setRootNode: (id: string) => void;
   addEdgeDirect: (connection: Connection, kind: RelationKind) => void;
-  setEditingNode: (id: string | null) => void;
-  setEditingEdgeId: (id: string | null) => void;
-  isEditingBlocked: () => boolean;
-  tryExitNodeEditing: () => void;
+  setInEditNode: (id: string | null) => void;
+  setInEditEdgeId: (id: string | null) => void;
+  isInEditBlocked: () => boolean;
+  tryExitNodeEdit: () => void;
 }
 
 function rowsToGraph(
@@ -100,8 +100,8 @@ export const useStore = create<RFState>()((set, get) => ({
   nodes: [],
   edges: [],
   pendingConnection: null,
-  editingNodeId: null,
-  editingEdgeId: null,
+  inEditNodeId: null,
+  inEditEdgeId: null,
 
   onNodesChange: (changes) => {
     set({ nodes: applyNodeChanges(changes, get().nodes) });
@@ -210,7 +210,7 @@ export const useStore = create<RFState>()((set, get) => ({
     set((state) => ({
       nodes: state.nodes.filter((n) => !idSet.has(n.id)),
       edges: state.edges.filter((e) => !idSet.has(e.source) && !idSet.has(e.target)),
-      editingNodeId: state.editingNodeId && idSet.has(state.editingNodeId) ? null : state.editingNodeId,
+      inEditNodeId: state.inEditNodeId && idSet.has(state.inEditNodeId) ? null : state.inEditNodeId,
     }));
   },
 
@@ -236,22 +236,22 @@ export const useStore = create<RFState>()((set, get) => ({
     }));
   },
 
-  setEditingNode: (id) => {
+  setInEditNode: (id) => {
     if (id !== null) {
-      const { editingNodeId, nodes } = get();
-      if (editingNodeId !== null && editingNodeId !== id) {
-        const current = nodes.find((n) => n.id === editingNodeId);
+      const { inEditNodeId, nodes } = get();
+      if (inEditNodeId !== null && inEditNodeId !== id) {
+        const current = nodes.find((n) => n.id === inEditNodeId);
         if (current?.type === "statement") {
           if (!current.data.title) return;
           if (current.data.role === "source" && !current.data.url) return;
         }
       }
     }
-    set({ editingNodeId: id });
+    set({ inEditNodeId: id });
   },
 
-  setEditingEdgeId: (id) => {
-    set({ editingEdgeId: id });
+  setInEditEdgeId: (id) => {
+    set({ inEditEdgeId: id });
   },
 
   addEdgeDirect: (connection, kind) => {
@@ -264,19 +264,19 @@ export const useStore = create<RFState>()((set, get) => ({
     set((state) => ({ edges: addEdge(edge, state.edges) }));
   },
 
-  isEditingBlocked: () => {
-    const { editingNodeId, nodes } = get();
-    if (!editingNodeId) return false;
-    const node = nodes.find((n) => n.id === editingNodeId);
+  isInEditBlocked: () => {
+    const { inEditNodeId, nodes } = get();
+    if (!inEditNodeId) return false;
+    const node = nodes.find((n) => n.id === inEditNodeId);
     if (node?.type !== "statement") return false;
     if (!node.data.title) return true;
     if (node.data.role === "source" && !node.data.url) return true;
     return false;
   },
 
-  tryExitNodeEditing: () => {
-    if (get().isEditingBlocked()) return;
-    set({ editingNodeId: null });
+  tryExitNodeEdit: () => {
+    if (get().isInEditBlocked()) return;
+    set({ inEditNodeId: null });
   },
 }));
 

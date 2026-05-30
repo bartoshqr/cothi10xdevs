@@ -22,7 +22,7 @@ export default function NodeContextMenu({ nodeId, screenX, screenY, onClose }: P
 
   const node = useStore((s) => s.nodes.find((n) => n.id === nodeId));
   const deleteNodes = useStore((s) => s.deleteNodes);
-  const setEditingNode = useStore((s) => s.setEditingNode);
+  const setInEditNode = useStore((s) => s.setInEditNode);
   const updateNodeFields = useStore((s) => s.updateNodeFields);
 
   const isConnective = node?.type === "connective";
@@ -76,7 +76,7 @@ export default function NodeContextMenu({ nodeId, screenX, screenY, onClose }: P
           <button
             className="nodrag nopan w-full px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--muted)]"
             onClick={() => {
-              setEditingNode(nodeId);
+              setInEditNode(nodeId);
               onClose();
             }}
           >

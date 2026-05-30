@@ -23,18 +23,18 @@ const STATEMENT_ROLES: StatementRole[] = ["claim", "data", "source", "warrant", 
 export default function StatementNode({ id, data }: NodeProps<StatementNodeType>) {
   const { inProgress, toNode } = useConnection();
   const isActiveTarget = inProgress && toNode?.id === id;
-  const { editingNodeId, setEditingNode, updateNodeFields, setRootNode, deleteNodes, tryExitNodeEditing } = useStore(
+  const { inEditNodeId, setInEditNode, updateNodeFields, setRootNode, deleteNodes, tryExitNodeEdit } = useStore(
     useShallow((s) => ({
-      editingNodeId: s.editingNodeId,
-      setEditingNode: s.setEditingNode,
+      inEditNodeId: s.inEditNodeId,
+      setInEditNode: s.setInEditNode,
       updateNodeFields: s.updateNodeFields,
       setRootNode: s.setRootNode,
       deleteNodes: s.deleteNodes,
-      tryExitNodeEditing: s.tryExitNodeEditing,
+      tryExitNodeEdit: s.tryExitNodeEdit,
     })),
   );
 
-  const isEditing = editingNodeId === id;
+  const isEditing = inEditNodeId === id;
   const role = data.isRoot ? "claim" : (data.role ?? "claim");
   const descriptor = roleDescriptors[role];
   const badge = data.isRoot ? "ROOT" : descriptor.badge;
@@ -85,7 +85,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
 
   function handleNodeDoubleClick(e: React.MouseEvent) {
     e.stopPropagation();
-    setEditingNode(id);
+    setInEditNode(id);
   }
 
   function resizeEl(el: HTMLElement) {
@@ -99,7 +99,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
     setLocalTitle(orig.title);
     setLocalBody(orig.body);
     setLocalUrl(orig.url ?? "");
-    setEditingNode(null);
+    setInEditNode(null);
   }
 
   function handleTitleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -112,7 +112,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
       }
     } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
-      tryExitNodeEditing();
+      tryExitNodeEdit();
     } else if (e.key === "Escape") {
       e.preventDefault();
       handleRevertAndExit();
@@ -122,7 +122,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   function handleBodyKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
-      tryExitNodeEditing();
+      tryExitNodeEdit();
     } else if (e.key === "Escape") {
       e.preventDefault();
       handleRevertAndExit();
@@ -135,7 +135,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
       bodyRef.current?.focus();
     } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
-      tryExitNodeEditing();
+      tryExitNodeEdit();
     } else if (e.key === "Escape") {
       e.preventDefault();
       handleRevertAndExit();
@@ -186,7 +186,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                     onClick={(e) => {
                       e.stopPropagation();
                       updateNodeFields(id, { statementType: r });
-                      if (r === "source") setEditingNode(id);
+                      if (r === "source") setInEditNode(id);
                       setBadgeAnchor(null);
                     }}
                   >

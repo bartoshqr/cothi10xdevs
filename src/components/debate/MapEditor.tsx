@@ -102,11 +102,11 @@ function MapEditorInner() {
     setRootNode,
     addPendingPreview,
     addEdgeDirect,
-    editingNodeId,
-    editingEdgeId,
-    setEditingEdgeId,
-    isEditingBlocked,
-    tryExitNodeEditing,
+    inEditNodeId,
+    inEditEdgeId,
+    setInEditEdgeId,
+    isInEditBlocked,
+    tryExitNodeEdit,
   } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
@@ -121,33 +121,33 @@ function MapEditorInner() {
       setRootNode: s.setRootNode,
       addPendingPreview: s.addPendingPreview,
       addEdgeDirect: s.addEdgeDirect,
-      editingNodeId: s.editingNodeId,
-      editingEdgeId: s.editingEdgeId,
-      setEditingEdgeId: s.setEditingEdgeId,
-      isEditingBlocked: s.isEditingBlocked,
-      tryExitNodeEditing: s.tryExitNodeEditing,
+      inEditNodeId: s.inEditNodeId,
+      inEditEdgeId: s.inEditEdgeId,
+      setInEditEdgeId: s.setInEditEdgeId,
+      isInEditBlocked: s.isInEditBlocked,
+      tryExitNodeEdit: s.tryExitNodeEdit,
     })),
   );
 
   const closeConnectionPicker = useCallback(() => {
-    setEditingEdgeId(null);
+    setInEditEdgeId(null);
     cancelConnection();
     setKindPickerPosition(undefined);
-  }, [setEditingEdgeId, cancelConnection]);
+  }, [setInEditEdgeId, cancelConnection]);
 
   const cleanupFlow = useCallback(() => {
     closeAllMenus();
     closeConnectionPicker();
-    tryExitNodeEditing();
-  }, [closeAllMenus, tryExitNodeEditing, closeConnectionPicker]);
+    tryExitNodeEdit();
+  }, [closeAllMenus, tryExitNodeEdit, closeConnectionPicker]);
 
   const handleNodeClick: NodeMouseHandler<DebateNode> = useCallback(
     (_e, node) => {
       closeAllMenus();
       closeConnectionPicker();
-      if (node.id !== editingNodeId) tryExitNodeEditing();
+      if (node.id !== inEditNodeId) tryExitNodeEdit();
     },
-    [closeAllMenus, closeConnectionPicker, tryExitNodeEditing, editingNodeId],
+    [closeAllMenus, closeConnectionPicker, tryExitNodeEdit, inEditNodeId],
   );
 
   useEffect(() => {
@@ -170,7 +170,7 @@ function MapEditorInner() {
   // connection
   const handleConnect: OnConnect = useCallback(
     (connection) => {
-      if (isEditingBlocked()) return;
+      if (isInEditBlocked()) return;
       const targetNode = nodes.find((n) => n.id === connection.target);
       if (targetNode?.type === "connective") {
         addEdgeDirect(connection, "link");
@@ -179,17 +179,17 @@ function MapEditorInner() {
       const existingEdge = edges.find((e) => e.source === connection.source && e.target === connection.target);
       if (existingEdge) {
         setKindPickerPosition(liveScreenCursor);
-        setEditingEdgeId(existingEdge.id);
+        setInEditEdgeId(existingEdge.id);
         return;
       }
       stagePendingConnection(connection);
     },
-    [nodes, edges, stagePendingConnection, addEdgeDirect, isEditingBlocked, setEditingEdgeId],
+    [nodes, edges, stagePendingConnection, addEdgeDirect, isInEditBlocked, setInEditEdgeId],
   );
 
   const handleConnectEnd: OnConnectEnd = useCallback(
     (e) => {
-      if (isEditingBlocked()) {
+      if (isInEditBlocked()) {
         cancelConnection();
         return;
       }
@@ -202,40 +202,40 @@ function MapEditorInner() {
       const flowPos = screenToFlowPosition(screenPos);
       addPendingPreview(flowPos.x, flowPos.y);
     },
-    [screenToFlowPosition, addPendingPreview, cancelConnection, isEditingBlocked],
+    [screenToFlowPosition, addPendingPreview, cancelConnection, isInEditBlocked],
   );
 
-  const showKindPicker = kindPickerPosition !== undefined && (pendingConnection !== null || editingEdgeId !== null);
+  const showKindPicker = kindPickerPosition !== undefined && (pendingConnection !== null || inEditEdgeId !== null);
 
   // context menus
   const handlePaneContextMenu = useCallback(
     (e: MouseEvent | React.MouseEvent) => {
       e.preventDefault();
       cleanupFlow();
-      if (isEditingBlocked()) return;
+      if (isInEditBlocked()) return;
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isEditingBlocked],
+    [cleanupFlow, isInEditBlocked],
   );
 
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
     (e, node) => {
       e.preventDefault();
       cleanupFlow();
-      if (isEditingBlocked()) return;
+      if (isInEditBlocked()) return;
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isEditingBlocked],
+    [cleanupFlow, isInEditBlocked],
   );
 
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
     (e, edge) => {
       e.preventDefault();
       cleanupFlow();
-      if (isEditingBlocked()) return;
+      if (isInEditBlocked()) return;
       setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isEditingBlocked],
+    [cleanupFlow, isInEditBlocked],
   );
 
   const handleNodesDelete = useCallback(
@@ -269,7 +269,7 @@ function MapEditorInner() {
         onMouseMove={handleMouseMove}
         fitView
         fitViewOptions={{ padding: 0.2 }}
-        deleteKeyCode={editingNodeId ? null : "Delete"}
+        deleteKeyCode={inEditNodeId ? null : "Delete"}
       >
         <Background />
         <Controls />
@@ -278,12 +278,12 @@ function MapEditorInner() {
 
       {showKindPicker && (
         <ConnectKindPicker
-          edgeId={editingEdgeId ?? undefined}
+          edgeId={inEditEdgeId ?? undefined}
           position={kindPickerPosition}
           onClose={() => {
-            setEditingEdgeId(null);
+            setInEditEdgeId(null);
             setKindPickerPosition(undefined);
-            if (!editingEdgeId) cancelConnection();
+            if (!inEditEdgeId) cancelConnection();
           }}
         />
       )}
@@ -319,7 +319,7 @@ function MapEditorInner() {
           }}
           onEdit={() => {
             setKindPickerPosition({ x: edgeContextMenu.x, y: edgeContextMenu.y });
-            setEditingEdgeId(edgeContextMenu.edgeId);
+            setInEditEdgeId(edgeContextMenu.edgeId);
           }}
         />
       )}

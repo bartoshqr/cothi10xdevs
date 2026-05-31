@@ -3,7 +3,7 @@ import { useStore } from "./store";
 import { relationDescriptors, MENU_VIEWPORT_MARGIN } from "./mapVisualLanguage";
 import type { RelationKind } from "./mapVisualLanguage";
 
-const KINDS: RelationKind[] = ["supports", "rephrases", "rebuts"];
+const BASE_KINDS: RelationKind[] = ["supports", "rephrases", "rebuts"];
 
 interface Props {
   /** When set, we're changing an existing edge's kind. When null, we're committing a new connection. */
@@ -13,7 +13,6 @@ interface Props {
   position: { x: number; y: number };
 }
 
-// TOTHINK: this picker makes sense only for connections to Statements, not Connectives, SHOULD I write this condition better in the code?
 export default function ConnectKindPicker({ edgeId, onClose, position }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [flipped, setFlipped] = useState(false);
@@ -23,6 +22,10 @@ export default function ConnectKindPicker({ edgeId, onClose, position }: Props) 
       setFlipped(position.y + menuRef.current.offsetHeight + MENU_VIEWPORT_MARGIN > window.innerHeight);
     }
   }, [position]);
+
+  const targetNode = useStore((s) => s.getTargetNode());
+  const targetIsConnective = targetNode?.type === "connective";
+  const kinds: RelationKind[] = targetIsConnective ? [...BASE_KINDS, "link"] : BASE_KINDS;
 
   const commitConnection = useStore((s) => s.commitConnection);
   const cancelConnection = useStore((s) => s.cancelConnection);
@@ -67,7 +70,7 @@ export default function ConnectKindPicker({ edgeId, onClose, position }: Props) 
         >
           {edgeId ? "Change relation kind" : "Choose relation kind"}
         </div>
-        {KINDS.map((kind) => {
+        {kinds.map((kind) => {
           const d = relationDescriptors[kind];
           return (
             <button

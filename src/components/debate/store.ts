@@ -6,6 +6,7 @@ import type { StatementNodeData, StatementNodeType } from "./nodes/StatementNode
 import type { ConnectiveNodeData, ConnectiveNodeType } from "./nodes/ConnectiveNode";
 import type { RelationEdgeData } from "./edges/RelationEdge";
 import type { StatementRole, ConnectiveOp, RelationKind } from "./mapVisualLanguage";
+import { CONNECTIVE_OPERAND_HANDLE, CONNECTIVE_OUTER_HANDLE } from "./mapVisualLanguage";
 import type { Database } from "@/db/database.types";
 import { isValidUrl } from "@/lib/debate/nodeConstraints";
 
@@ -46,11 +47,23 @@ export interface RFState {
   deleteEdge: (id: string) => void;
   updateRelationKind: (id: string, kind: RelationKind) => void;
   setRootNode: (id: string) => void;
-  addEdgeDirect: (connection: Connection, kind: RelationKind) => void;
   setInEditNode: (id: string | null) => void;
   setInEditEdgeId: (id: string | null) => void;
   isInEditBlocked: () => boolean;
   tryExitNodeEdit: () => void;
+  /** Target node of the connection currently being chosen: the edited edge's target, or the pending connection's target. */
+  getTargetNode: () => DebateNode | undefined;
+}
+
+/**
+ * Resolves which target handle an edge of the given kind should attach to.
+ * Connective nodes have two target handles — `link` edges route into the operand body,
+ * everything else to the outer point. Statement nodes have one unnamed handle, so we
+ * return undefined and let React Flow use the default.
+ */
+function targetHandleFor(targetNode: DebateNode | undefined, kind: RelationKind): string | undefined {
+  if (targetNode?.type !== "connective") return undefined;
+  return kind === "link" ? CONNECTIVE_OPERAND_HANDLE : CONNECTIVE_OUTER_HANDLE;
 }
 
 function rowsToGraph(
@@ -129,10 +142,12 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   commitConnection: (kind) => {
-    const { pendingConnection } = get();
+    const { pendingConnection, nodes } = get();
     if (!pendingConnection) return;
+    const targetNode = nodes.find((n) => n.id === pendingConnection.target);
     const newEdge: DebateEdge = {
       ...pendingConnection,
+      targetHandle: targetHandleFor(targetNode, kind),
       id: crypto.randomUUID(),
       type: "relation" as const,
       data: { kind },
@@ -223,7 +238,11 @@ export const useStore = create<RFState>()((set, get) => ({
 
   updateRelationKind: (id, kind) => {
     set((state) => ({
-      edges: state.edges.map((e) => (e.id === id ? { ...e, data: { kind } } : e)),
+      edges: state.edges.map((e) => {
+        if (e.id !== id) return e;
+        const targetNode = state.nodes.find((n) => n.id === e.target);
+        return { ...e, targetHandle: targetHandleFor(targetNode, kind), data: { kind } };
+      }),
     }));
   },
 
@@ -251,16 +270,6 @@ export const useStore = create<RFState>()((set, get) => ({
     set({ inEditEdgeId: id });
   },
 
-  addEdgeDirect: (connection, kind) => {
-    const edge: DebateEdge = {
-      ...connection,
-      id: crypto.randomUUID(),
-      type: "relation" as const,
-      data: { kind },
-    };
-    set((state) => ({ edges: addEdge(edge, state.edges) }));
-  },
-
   isInEditBlocked: () => {
     const { inEditNodeId, nodes } = get();
     if (!inEditNodeId) return false;
@@ -274,6 +283,13 @@ export const useStore = create<RFState>()((set, get) => ({
   tryExitNodeEdit: () => {
     if (get().isInEditBlocked()) return;
     set({ inEditNodeId: null });
+  },
+
+  getTargetNode: () => {
+    const { inEditEdgeId, edges, pendingConnection, nodes } = get();
+    const targetId = inEditEdgeId ? edges.find((e) => e.id === inEditEdgeId)?.target : pendingConnection?.target;
+    if (!targetId) return undefined;
+    return nodes.find((n) => n.id === targetId);
   },
 }));
 

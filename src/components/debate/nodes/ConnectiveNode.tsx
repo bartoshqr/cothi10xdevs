@@ -1,6 +1,6 @@
 import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
-import { connectiveDescriptors } from "../mapVisualLanguage";
+import { connectiveDescriptors, CONNECTIVE_OPERAND_HANDLE, CONNECTIVE_OUTER_HANDLE } from "../mapVisualLanguage";
 import type { ConnectiveOp } from "../mapVisualLanguage";
 
 export interface ConnectiveNodeData extends Record<string, unknown> {
@@ -43,10 +43,11 @@ export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeTyp
       >
         {descriptor.label}
       </div>
+      {/* Full-body catch-all — link edges visually route here */}
       <Handle
         type="target"
         position={Position.Bottom}
-        id="in"
+        id={CONNECTIVE_OPERAND_HANDLE}
         style={{
           position: "absolute",
           top: 0,
@@ -57,6 +58,21 @@ export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeTyp
           opacity: 0,
           borderRadius: "50%",
           pointerEvents: inProgress ? "auto" : "none",
+        }}
+      />
+      {/* Bottom-edge point — supports/rephrases/rebuts edges visually route here */}
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id={CONNECTIVE_OUTER_HANDLE}
+        style={{
+          background: "var(--muted-foreground)",
+          border: "2px solid white",
+          width: 8,
+          height: 8,
+          opacity: 0,
+          pointerEvents: inProgress ? "auto" : "none",
+          zIndex: 1,
         }}
       />
     </>

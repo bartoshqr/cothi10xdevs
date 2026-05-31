@@ -101,7 +101,6 @@ function MapEditorInner() {
     createStatementNode,
     setRootNode,
     addPendingPreview,
-    addEdgeDirect,
     inEditNodeId,
     inEditEdgeId,
     setInEditEdgeId,
@@ -120,7 +119,6 @@ function MapEditorInner() {
       createStatementNode: s.createStatementNode,
       setRootNode: s.setRootNode,
       addPendingPreview: s.addPendingPreview,
-      addEdgeDirect: s.addEdgeDirect,
       inEditNodeId: s.inEditNodeId,
       inEditEdgeId: s.inEditEdgeId,
       setInEditEdgeId: s.setInEditEdgeId,
@@ -171,11 +169,7 @@ function MapEditorInner() {
   const handleConnect: OnConnect = useCallback(
     (connection) => {
       if (isInEditBlocked()) return;
-      const targetNode = nodes.find((n) => n.id === connection.target);
-      if (targetNode?.type === "connective") {
-        addEdgeDirect(connection, "link");
-        return;
-      }
+
       const existingEdge = edges.find((e) => e.source === connection.source && e.target === connection.target);
       if (existingEdge) {
         setKindPickerPosition(liveScreenCursor);
@@ -184,7 +178,7 @@ function MapEditorInner() {
       }
       stagePendingConnection(connection);
     },
-    [nodes, edges, stagePendingConnection, addEdgeDirect, isInEditBlocked, setInEditEdgeId],
+    [edges, stagePendingConnection, isInEditBlocked, setInEditEdgeId],
   );
 
   const handleConnectEnd: OnConnectEnd = useCallback(

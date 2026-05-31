@@ -6,6 +6,14 @@ export type ConnectiveOp = "and" | "or";
 
 export type RelationKind = "supports" | "link" | "rephrases" | "rebuts" | "pending";
 
+/**
+ * Target-handle ids on a connective node. `link` edges route into the operand body;
+ * supports/rephrases/rebuts edges route to the outer bottom point. Statement nodes have a
+ * single unnamed target handle, so their edges leave `targetHandle` undefined.
+ */
+export const CONNECTIVE_OPERAND_HANDLE = "for-operands";
+export const CONNECTIVE_OUTER_HANDLE = "outer";
+
 export interface RoleDescriptor {
   accent: string;
   badge: string | null;

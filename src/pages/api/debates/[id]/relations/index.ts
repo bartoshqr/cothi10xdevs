@@ -21,11 +21,6 @@ export const POST = withAuth(async (context, supabase, user) => {
     return Response.json({ error: z.treeifyError(parsed.error) }, { status: 400 });
   }
 
-  try {
-    const relation = await createRelation(supabase, parsed.data, user.id);
-    return Response.json(relation, { status: 201 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
-  }
+  const relation = await createRelation(supabase, parsed.data, user.id);
+  return Response.json(relation, { status: 201 });
 });

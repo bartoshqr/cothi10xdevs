@@ -9,16 +9,11 @@ export const GET = withAuth(async (context, supabase) => {
     return Response.json({ error: "Invalid debate id" }, { status: 400 });
   }
 
-  try {
-    const graph = await getDebateGraph(supabase, idParsed.data);
-    if (!graph) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
-    return Response.json(graph.nodes);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
+  const graph = await getDebateGraph(supabase, idParsed.data);
+  if (!graph) {
+    return Response.json({ error: "Not found" }, { status: 404 });
   }
+  return Response.json(graph.nodes);
 });
 
 export const POST = withAuth(async (context, supabase, user) => {
@@ -39,14 +34,9 @@ export const POST = withAuth(async (context, supabase, user) => {
     return Response.json({ error: z.treeifyError(parsed.error) }, { status: 400 });
   }
 
-  try {
-    const node =
-      parsed.data.nodeKind === "statement"
-        ? await createStatementNode(supabase, parsed.data, user.id)
-        : await createConnectiveNode(supabase, parsed.data, user.id);
-    return Response.json(node, { status: 201 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
-  }
+  const node =
+    parsed.data.nodeKind === "statement"
+      ? await createStatementNode(supabase, parsed.data, user.id)
+      : await createConnectiveNode(supabase, parsed.data, user.id);
+  return Response.json(node, { status: 201 });
 });

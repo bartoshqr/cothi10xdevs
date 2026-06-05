@@ -21,13 +21,8 @@ export const PATCH = withAuth(async (context, supabase) => {
     return Response.json({ error: z.treeifyError(parsed.error) }, { status: 400 });
   }
 
-  try {
-    const relation = await updateRelation(supabase, relIdParsed.data, parsed.data);
-    return Response.json(relation);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
-  }
+  const relation = await updateRelation(supabase, relIdParsed.data, parsed.data);
+  return Response.json(relation);
 });
 
 export const DELETE = withAuth(async (context, supabase) => {
@@ -36,11 +31,6 @@ export const DELETE = withAuth(async (context, supabase) => {
     return Response.json({ error: "Invalid relation id" }, { status: 400 });
   }
 
-  try {
-    await deleteRelation(supabase, relIdParsed.data);
-    return new Response(null, { status: 204 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
-  }
+  await deleteRelation(supabase, relIdParsed.data);
+  return new Response(null, { status: 204 });
 });

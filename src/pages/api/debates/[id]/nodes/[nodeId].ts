@@ -21,13 +21,8 @@ export const PATCH = withAuth(async (context, supabase) => {
     return Response.json({ error: z.treeifyError(parsed.error) }, { status: 400 });
   }
 
-  try {
-    const node = await updateNode(supabase, nodeIdParsed.data, parsed.data);
-    return Response.json(node);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
-  }
+  const node = await updateNode(supabase, nodeIdParsed.data, parsed.data);
+  return Response.json(node);
 });
 
 export const DELETE = withAuth(async (context, supabase) => {
@@ -36,11 +31,6 @@ export const DELETE = withAuth(async (context, supabase) => {
     return Response.json({ error: "Invalid node id" }, { status: 400 });
   }
 
-  try {
-    await deleteNode(supabase, nodeIdParsed.data);
-    return new Response(null, { status: 204 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
-  }
+  await deleteNode(supabase, nodeIdParsed.data);
+  return new Response(null, { status: 204 });
 });

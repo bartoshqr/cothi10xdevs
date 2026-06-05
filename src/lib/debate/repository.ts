@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/db/database.types";
+import { NotFoundError } from "@/lib/errors";
 import type {
   CreateDebateInput,
   CreateNodeInput,
@@ -20,6 +21,9 @@ export interface DebateGraph {
 }
 
 export async function createDebate(supabase: DB, input: CreateDebateInput): Promise<string> {
+  // The RPC also asserts auth.uid() is not null as DB-layer defense-in-depth.
+  // That branch is unreachable here — withAuth guarantees a user before this runs
+  // — so it has no app-layer 401 mapping; if it ever fired it surfaces as a 500 (F7).
   const { data, error } = await supabase.rpc("create_debate_with_root", {
     p_title: input.title,
     p_root_title: input.rootTitle,
@@ -96,31 +100,8 @@ export async function createConnectiveNode(
 }
 
 export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNodeInput): Promise<NodeRow> {
-  const hasMetadataFields =
-    patch.title !== undefined ||
-    patch.body !== undefined ||
-    patch.url !== undefined ||
-    patch.statementType !== undefined ||
-    patch.connectiveOp !== undefined;
-
-  const positionUpdate: Partial<{ position_x: number; position_y: number }> = {};
-  if (patch.positionX !== undefined) positionUpdate.position_x = patch.positionX;
-  if (patch.positionY !== undefined) positionUpdate.position_y = patch.positionY;
-
-  if (!hasMetadataFields) {
-    const { data, error } = await supabase.from("nodes").update(positionUpdate).eq("id", nodeId).select().single();
-    if (error) throw error;
-    return data;
-  }
-
-  const { data: existing, error: fetchError } = await supabase
-    .from("nodes")
-    .select("metadata")
-    .eq("id", nodeId)
-    .single();
-  if (fetchError) throw fetchError;
-
-  const existingMeta = existing.metadata as Record<string, Json>;
+  // Metadata fields are merged DB-side via patch_node (metadata || patch) so the
+  // read-modify-write is atomic — see migration 20260605000002 (impl-review F2).
   const metadataPatch: Record<string, Json> = {};
   if (patch.title !== undefined) metadataPatch.title = patch.title;
   if (patch.body !== undefined) metadataPatch.body = patch.body;
@@ -128,21 +109,25 @@ export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNode
   if (patch.statementType !== undefined) metadataPatch.statement_type = patch.statementType;
   if (patch.connectiveOp !== undefined) metadataPatch.op = patch.connectiveOp;
 
-  const mergedMetadata: Record<string, Json> = { ...existingMeta, ...metadataPatch };
-
   const { data, error } = await supabase
-    .from("nodes")
-    .update({ ...positionUpdate, metadata: mergedMetadata })
-    .eq("id", nodeId)
-    .select()
-    .single();
+    .rpc("patch_node", {
+      p_node_id: nodeId,
+      p_metadata_patch: Object.keys(metadataPatch).length > 0 ? metadataPatch : undefined,
+      p_position_x: patch.positionX,
+      p_position_y: patch.positionY,
+    })
+    .maybeSingle();
   if (error) throw error;
+  // patch_node returns SETOF, so maybeSingle yields null when the id is unknown or
+  // RLS-scoped out — map that to a 404 rather than returning an all-null node (F4).
+  if (!data) throw new NotFoundError();
   return data;
 }
 
 export async function deleteNode(supabase: DB, nodeId: string): Promise<void> {
-  const { error } = await supabase.from("nodes").delete().eq("id", nodeId);
+  const { data, error } = await supabase.from("nodes").delete().eq("id", nodeId).select("id");
   if (error) throw error;
+  if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
 }
 
 export async function createRelation(supabase: DB, input: CreateRelationInput, authorId: string): Promise<RelationRow> {
@@ -171,12 +156,14 @@ export async function updateRelation(
     .update({ kind: input.kind })
     .eq("id", relationId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new NotFoundError(); // unknown id or RLS-scoped out → 404 (F4)
   return data;
 }
 
 export async function deleteRelation(supabase: DB, relationId: string): Promise<void> {
-  const { error } = await supabase.from("relations").delete().eq("id", relationId);
+  const { data, error } = await supabase.from("relations").delete().eq("id", relationId).select("id");
   if (error) throw error;
+  if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
 }

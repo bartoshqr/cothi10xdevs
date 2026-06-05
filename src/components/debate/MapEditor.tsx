@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -33,12 +33,22 @@ import { useStore, useShallow } from "./store";
 import type { DebateNode } from "./store";
 import type { DebateGraph } from "@/lib/debate/repository";
 
-let liveFlowCursor = { x: 0, y: 0 };
-let liveScreenCursor = { x: 0, y: 0 };
+// Per-instance screen-coord cursor ref, provided by MapEditorInner. The connection
+// line stays a module-level component (stable identity — no React Flow remount) and
+// reads the live pointer through context, converting to flow coords itself. This
+// avoids module-level mutable state while keeping the raw-pointer routing that
+// React Flow's own toX/toY props did not reproduce.
+const ScreenCursorContext = createContext<React.RefObject<{ x: number; y: number }> | null>(null);
 
 function FloatingConnectionLine({ fromX, fromY, fromPosition }: ConnectionLineComponentProps) {
-  const dx = liveFlowCursor.x - fromX;
-  const dy = liveFlowCursor.y - fromY;
+  // React Flow re-renders this on every pointer move during a drag; we read the live
+  // screen cursor from context and convert to flow coords here so each render follows
+  // the raw pointer. (react-compiler sees the ref read and leaves it un-memoized.)
+  const { screenToFlowPosition } = useReactFlow();
+  const screenCursor = useContext(ScreenCursorContext);
+  const flow = screenToFlowPosition(screenCursor?.current ?? { x: 0, y: 0 });
+  const dx = flow.x - fromX;
+  const dy = flow.y - fromY;
   let targetPosition: Position;
   if (Math.abs(dx) > Math.abs(dy)) {
     targetPosition = dx > 0 ? Position.Left : Position.Right;
@@ -49,8 +59,8 @@ function FloatingConnectionLine({ fromX, fromY, fromPosition }: ConnectionLineCo
     sourceX: fromX,
     sourceY: fromY,
     sourcePosition: fromPosition,
-    targetX: liveFlowCursor.x,
-    targetY: liveFlowCursor.y,
+    targetX: flow.x,
+    targetY: flow.y,
     targetPosition,
   });
   return (
@@ -79,6 +89,9 @@ const isValidConnection: IsValidConnection = (connection) => {
 };
 
 function MapEditorInner() {
+  // Screen-coord cursor, used only in event handlers (never read during render) to
+  // place the kind picker when re-dragging an existing edge — impl-review F5.
+  const screenCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [nodeContextMenu, setNodeContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   const [edgeContextMenu, setEdgeContextMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null);
@@ -166,13 +179,9 @@ function MapEditorInner() {
 
   const { screenToFlowPosition } = useReactFlow();
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      liveScreenCursor = { x: e.clientX, y: e.clientY };
-      liveFlowCursor = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    },
-    [screenToFlowPosition],
-  );
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    screenCursorRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
 
   // connection
   const handleConnect: OnConnect = useCallback(
@@ -181,7 +190,7 @@ function MapEditorInner() {
 
       const existingEdge = edges.find((e) => e.source === connection.source && e.target === connection.target);
       if (existingEdge) {
-        setKindPickerPosition(liveScreenCursor);
+        setKindPickerPosition(screenCursorRef.current);
         setInEditEdgeId(existingEdge.id);
         return;
       }
@@ -249,105 +258,107 @@ function MapEditorInner() {
   );
 
   return (
-    <div style={{ width: "100%", height: "100%" }}>
-      {error && (
-        <div
-          className="fixed top-4 left-1/2 z-[60] flex max-w-md -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-2 text-sm shadow-lg"
-          style={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--destructive)",
-            color: "var(--destructive)",
-          }}
-          role="alert"
-        >
-          <span>{error}</span>
-          <button
-            className="shrink-0 rounded px-1.5 leading-none transition-colors hover:bg-[var(--muted)]"
-            style={{ color: "var(--muted-foreground)" }}
-            onClick={clearError}
-            aria-label="Dismiss error"
+    <ScreenCursorContext.Provider value={screenCursorRef}>
+      <div style={{ width: "100%", height: "100%" }}>
+        {error && (
+          <div
+            className="fixed top-4 left-1/2 z-[60] flex max-w-md -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-2 text-sm shadow-lg"
+            style={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--destructive)",
+              color: "var(--destructive)",
+            }}
+            role="alert"
           >
-            ×
-          </button>
-        </div>
-      )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={handleConnect}
-        onConnectEnd={handleConnectEnd}
-        onNodeClick={handleNodeClick}
-        onNodeContextMenu={handleNodeContextMenu}
-        onNodesDelete={handleNodesDelete}
-        onEdgeClick={cleanupFlow}
-        onEdgeContextMenu={handleEdgeContextMenu}
-        onPaneClick={cleanupFlow}
-        onPaneContextMenu={handlePaneContextMenu}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        defaultEdgeOptions={defaultEdgeOptions}
-        isValidConnection={isValidConnection}
-        connectionLineComponent={FloatingConnectionLine}
-        onMouseMove={handleMouseMove}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        deleteKeyCode={inEditNodeId ? null : "Delete"}
-      >
-        <Background />
-        <Controls />
-        <MapLegend />
-      </ReactFlow>
+            <span>{error}</span>
+            <button
+              className="shrink-0 rounded px-1.5 leading-none transition-colors hover:bg-[var(--muted)]"
+              style={{ color: "var(--muted-foreground)" }}
+              onClick={clearError}
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={handleConnect}
+          onConnectEnd={handleConnectEnd}
+          onNodeClick={handleNodeClick}
+          onNodeContextMenu={handleNodeContextMenu}
+          onNodesDelete={handleNodesDelete}
+          onEdgeClick={cleanupFlow}
+          onEdgeContextMenu={handleEdgeContextMenu}
+          onPaneClick={cleanupFlow}
+          onPaneContextMenu={handlePaneContextMenu}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={defaultEdgeOptions}
+          isValidConnection={isValidConnection}
+          connectionLineComponent={FloatingConnectionLine}
+          onMouseMove={handleMouseMove}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          deleteKeyCode={inEditNodeId ? null : "Delete"}
+        >
+          <Background />
+          <Controls />
+          <MapLegend />
+        </ReactFlow>
 
-      {showKindPicker && (
-        <ConnectKindPicker
-          edgeId={inEditEdgeId ?? undefined}
-          position={kindPickerPosition}
-          onClose={() => {
-            setInEditEdgeId(null);
-            setKindPickerPosition(undefined);
-            if (!inEditEdgeId) cancelConnection();
-          }}
-        />
-      )}
+        {showKindPicker && (
+          <ConnectKindPicker
+            edgeId={inEditEdgeId ?? undefined}
+            position={kindPickerPosition}
+            onClose={() => {
+              setInEditEdgeId(null);
+              setKindPickerPosition(undefined);
+              if (!inEditEdgeId) cancelConnection();
+            }}
+          />
+        )}
 
-      {contextMenu && (
-        <AddNodeMenu
-          screenX={contextMenu.x}
-          screenY={contextMenu.y}
-          onClose={() => {
-            setContextMenu(null);
-          }}
-        />
-      )}
+        {contextMenu && (
+          <AddNodeMenu
+            screenX={contextMenu.x}
+            screenY={contextMenu.y}
+            onClose={() => {
+              setContextMenu(null);
+            }}
+          />
+        )}
 
-      {nodeContextMenu && (
-        <NodeContextMenu
-          nodeId={nodeContextMenu.nodeId}
-          screenX={nodeContextMenu.x}
-          screenY={nodeContextMenu.y}
-          onClose={() => {
-            setNodeContextMenu(null);
-          }}
-        />
-      )}
+        {nodeContextMenu && (
+          <NodeContextMenu
+            nodeId={nodeContextMenu.nodeId}
+            screenX={nodeContextMenu.x}
+            screenY={nodeContextMenu.y}
+            onClose={() => {
+              setNodeContextMenu(null);
+            }}
+          />
+        )}
 
-      {edgeContextMenu && (
-        <EdgeContextMenu
-          edgeId={edgeContextMenu.edgeId}
-          screenX={edgeContextMenu.x}
-          screenY={edgeContextMenu.y}
-          onClose={() => {
-            setEdgeContextMenu(null);
-          }}
-          onEdit={() => {
-            setKindPickerPosition({ x: edgeContextMenu.x, y: edgeContextMenu.y });
-            setInEditEdgeId(edgeContextMenu.edgeId);
-          }}
-        />
-      )}
-    </div>
+        {edgeContextMenu && (
+          <EdgeContextMenu
+            edgeId={edgeContextMenu.edgeId}
+            screenX={edgeContextMenu.x}
+            screenY={edgeContextMenu.y}
+            onClose={() => {
+              setEdgeContextMenu(null);
+            }}
+            onEdit={() => {
+              setKindPickerPosition({ x: edgeContextMenu.x, y: edgeContextMenu.y });
+              setInEditEdgeId(edgeContextMenu.edgeId);
+            }}
+          />
+        )}
+      </div>
+    </ScreenCursorContext.Provider>
   );
 }
 

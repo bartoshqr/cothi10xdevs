@@ -83,6 +83,7 @@ export type Database = {
           {
             foreignKeyName: "debates_root_node_id_fkey"
             columns: ["root_node_id"]
+            isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id"]
           },
@@ -123,6 +124,7 @@ export type Database = {
           {
             foreignKeyName: "nodes_debate_id_fkey"
             columns: ["debate_id"]
+            isOneToOne: false
             referencedRelation: "debates"
             referencedColumns: ["id"]
           },
@@ -178,18 +180,21 @@ export type Database = {
           {
             foreignKeyName: "relations_debate_id_fkey"
             columns: ["debate_id"]
+            isOneToOne: false
             referencedRelation: "debates"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "relations_source_node_id_fkey"
             columns: ["source_node_id"]
+            isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "relations_target_node_id_fkey"
             columns: ["target_node_id"]
+            isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id"]
           },
@@ -203,6 +208,30 @@ export type Database = {
       create_debate_with_root: {
         Args: { p_root_body?: string; p_root_title: string; p_title: string }
         Returns: string
+      }
+      patch_node: {
+        Args: {
+          p_metadata_patch?: Json
+          p_node_id: string
+          p_position_x?: number
+          p_position_y?: number
+        }
+        Returns: {
+          author_id: string
+          created_at: string
+          debate_id: string
+          id: string
+          kind: Database["public"]["Enums"]["node_kind"]
+          metadata: Json
+          position_x: number
+          position_y: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "nodes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       username_available: { Args: { check_username: string }; Returns: boolean }
     }
@@ -307,6 +336,7 @@ export type Database = {
           created_at?: string
           id: string
           type?: Database["storage"]["Enums"]["buckettype"]
+          updated_at?: string
         }
         Update: {
           created_at?: string
@@ -348,6 +378,7 @@ export type Database = {
           {
             foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
             columns: ["catalog_id"]
+            isOneToOne: false
             referencedRelation: "buckets_analytics"
             referencedColumns: ["id"]
           },
@@ -397,12 +428,14 @@ export type Database = {
           {
             foreignKeyName: "iceberg_tables_catalog_id_fkey"
             columns: ["catalog_id"]
+            isOneToOne: false
             referencedRelation: "buckets_analytics"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "iceberg_tables_namespace_id_fkey"
             columns: ["namespace_id"]
+            isOneToOne: false
             referencedRelation: "iceberg_namespaces"
             referencedColumns: ["id"]
           },
@@ -476,6 +509,7 @@ export type Database = {
           {
             foreignKeyName: "objects_bucketId_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
@@ -522,6 +556,7 @@ export type Database = {
           {
             foreignKeyName: "s3_multipart_uploads_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
@@ -568,12 +603,14 @@ export type Database = {
           {
             foreignKeyName: "s3_multipart_uploads_parts_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "s3_multipart_uploads_parts_upload_id_fkey"
             columns: ["upload_id"]
+            isOneToOne: false
             referencedRelation: "s3_multipart_uploads"
             referencedColumns: ["id"]
           },
@@ -617,6 +654,7 @@ export type Database = {
           {
             foreignKeyName: "vector_indexes_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets_vectors"
             referencedColumns: ["id"]
           },
@@ -905,3 +943,4 @@ export const Constants = {
     },
   },
 } as const
+

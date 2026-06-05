@@ -31,6 +31,7 @@ import EdgeContextMenu from "./EdgeContextMenu";
 import ConnectKindPicker from "./ConnectKindPicker";
 import { useStore, useShallow } from "./store";
 import type { DebateNode } from "./store";
+import type { DebateGraph } from "@/lib/debate/repository";
 
 let liveFlowCursor = { x: 0, y: 0 };
 let liveScreenCursor = { x: 0, y: 0 };
@@ -92,6 +93,9 @@ function MapEditorInner() {
   const {
     nodes,
     edges,
+    debateId,
+    error,
+    clearError,
     onNodesChange,
     onEdgesChange,
     stagePendingConnection,
@@ -110,6 +114,9 @@ function MapEditorInner() {
     useShallow((s) => ({
       nodes: s.nodes,
       edges: s.edges,
+      debateId: s.debateId,
+      error: s.error,
+      clearError: s.clearError,
       onNodesChange: s.onNodesChange,
       onEdgesChange: s.onEdgesChange,
       stagePendingConnection: s.stagePendingConnection,
@@ -148,12 +155,14 @@ function MapEditorInner() {
     [closeAllMenus, closeConnectionPicker, tryExitNodeEdit, inEditNodeId],
   );
 
+  // Local-only mode (no debate backing) bootstraps a root claim. Persisted debates
+  // always load with their root node, so this never fires there.
   useEffect(() => {
-    if (nodes.length === 0) {
+    if (debateId === null && nodes.length === 0) {
       const id = createStatementNode("claim", { x: 0, y: 0 });
       setRootNode(id);
     }
-  }, [nodes.length, createStatementNode, setRootNode]);
+  }, [debateId, nodes.length, createStatementNode, setRootNode]);
 
   const { screenToFlowPosition } = useReactFlow();
 
@@ -241,6 +250,27 @@ function MapEditorInner() {
 
   return (
     <div style={{ width: "100%", height: "100%" }}>
+      {error && (
+        <div
+          className="fixed top-4 left-1/2 z-[60] flex max-w-md -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-2 text-sm shadow-lg"
+          style={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--destructive)",
+            color: "var(--destructive)",
+          }}
+          role="alert"
+        >
+          <span>{error}</span>
+          <button
+            className="shrink-0 rounded px-1.5 leading-none transition-colors hover:bg-[var(--muted)]"
+            style={{ color: "var(--muted-foreground)" }}
+            onClick={clearError}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -321,7 +351,21 @@ function MapEditorInner() {
   );
 }
 
-export default function MapEditor() {
+interface MapEditorProps {
+  /** When set, the editor autosaves to this debate's API. Omitted = local-only playground. */
+  debateId?: string;
+  /** Server-loaded graph to hydrate the canvas with (passed by the `/debates/[id]` page). */
+  initialGraph?: DebateGraph;
+}
+
+export default function MapEditor({ debateId, initialGraph }: MapEditorProps) {
+  // Hydrate the store synchronously, before the canvas first renders, so the local-only
+  // auto-create effect sees the right debateId and there's no empty-canvas flash.
+  useState(() => {
+    useStore.getState().hydrate(debateId ?? null, initialGraph ?? null);
+    return null;
+  });
+
   return (
     <ReactFlowProvider>
       <MapEditorInner />

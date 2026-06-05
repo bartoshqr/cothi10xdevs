@@ -1,0 +1,19 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import CreateDebateForm from "@/components/debate/CreateDebateForm";
+---
+
+<Layout title="New debate — WVMap">
+  <div class="bg-background flex min-h-screen items-center justify-center p-4">
+    <div class="border-border bg-card w-full max-w-md rounded-2xl border p-8 shadow-sm">
+      <h1 class="text-foreground mb-1 text-center text-2xl font-bold">Start a debate</h1>
+      <p class="text-muted-foreground mb-6 text-center text-sm">
+        Name the debate and state the root claim you'll build your argument map around.
+      </p>
+      <CreateDebateForm client:load />
+      <p class="text-muted-foreground mt-4 text-center text-sm">
+        <a href="/" class="text-primary underline-offset-4 hover:underline">Back to home</a>
+      </p>
+    </div>
+  </div>
+</Layout>

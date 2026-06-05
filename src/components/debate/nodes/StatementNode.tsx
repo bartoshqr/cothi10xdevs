@@ -220,7 +220,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
 
   return (
     <>
-      {!data.isRoot && (
+      {!data.isRoot && !data.pending && (
         <Handle
           type="source"
           position={Position.Top}
@@ -287,6 +287,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   }}
                   value={localTitle}
                   maxLength={NODE_CONSTRAINTS.title.max}
+                  disabled={data.pending}
                   onChange={(e) => {
                     const val = e.target.value;
                     setLocalTitle(val);
@@ -350,6 +351,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   }}
                   value={localUrl}
                   placeholder="https://... (required)"
+                  disabled={data.pending}
                   onChange={(e) => {
                     const val = e.target.value;
                     setLocalUrl(val);
@@ -389,6 +391,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   value={localBody}
                   maxLength={NODE_CONSTRAINTS.body.max}
                   rows={3}
+                  disabled={data.pending}
                   onChange={(e) => {
                     const val = e.target.value;
                     setLocalBody(val);
@@ -432,7 +435,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
           transform: "none",
           opacity: 0,
           borderRadius: "inherit",
-          pointerEvents: inProgress ? "auto" : "none",
+          pointerEvents: inProgress && !data.pending ? "auto" : "none",
         }}
       />
       {badgeDropdown}

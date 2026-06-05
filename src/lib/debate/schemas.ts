@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Constants } from "@/db/database.types";
-import { NODE_CONSTRAINTS } from "./nodeConstraints";
+import { NODE_CONSTRAINTS, DEBATE_CONSTRAINTS } from "./nodeConstraints";
 
 const { statement_type, connective_op, relation_kind } = Constants.public.Enums;
 
@@ -9,7 +9,7 @@ export const connectiveOpEnum = z.enum(connective_op);
 export const relationKindEnum = z.enum(relation_kind);
 
 export const createDebateSchema = z.object({
-  title: z.string().min(1).max(120),
+  title: z.string().min(1).max(DEBATE_CONSTRAINTS.title.max),
   rootTitle: z.string().min(1).max(NODE_CONSTRAINTS.title.max),
   rootBody: z.string().max(NODE_CONSTRAINTS.body.max).optional(),
 });
@@ -37,7 +37,8 @@ export const createNodeSchema = z.discriminatedUnion("nodeKind", [
 export const updateNodeSchema = z.object({
   title: z.string().min(1).max(NODE_CONSTRAINTS.title.max).optional(),
   body: z.string().max(NODE_CONSTRAINTS.body.max).optional(),
-  url: z.url().optional(),
+  // `null` clears the url (e.g. when a source node's role switches to a non-source type).
+  url: z.url().nullable().optional(),
   statementType: statementTypeEnum.optional(),
   connectiveOp: connectiveOpEnum.optional(),
   positionX: z.number().optional(),

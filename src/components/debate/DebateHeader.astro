@@ -1,0 +1,45 @@
+---
+import type { User } from "@supabase/supabase-js";
+
+interface Props {
+  user?: User | null;
+  username?: string | null;
+  title?: string;
+}
+
+const { user, username, title } = Astro.props;
+---
+
+<header
+  class="border-border bg-background/95 supports-[backdrop-filter]:bg-background/80 z-50 flex h-14 w-full shrink-0 items-center justify-between border-b px-4 backdrop-blur sm:px-6"
+>
+  <!-- Left: home + current debate title -->
+  <div class="flex min-w-0 items-center gap-3">
+    <a href="/" class="text-foreground shrink-0 text-lg font-semibold tracking-tight"> WVMap </a>
+    {title && <span class="text-border shrink-0">/</span>}
+    {title && <span class="text-muted-foreground truncate text-sm">{title}</span>}
+  </div>
+
+  <!-- Right: username + sign out -->
+  <div class="flex shrink-0 items-center gap-3">
+    {user && <span class="text-muted-foreground hidden text-sm font-medium sm:inline">{username ?? user.email}</span>}
+    <a
+      href="/"
+      class="text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors"
+    >
+      Home
+    </a>
+    {
+      user && (
+        <form method="POST" action="/api/auth/signout">
+          <button
+            type="submit"
+            class="text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors"
+          >
+            Sign out
+          </button>
+        </form>
+      )
+    }
+  </div>
+</header>

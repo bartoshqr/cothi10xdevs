@@ -17,18 +17,20 @@ export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeTyp
 
   return (
     <>
-      <Handle
-        type="source"
-        position={Position.Top}
-        id="out"
-        style={{
-          background: descriptor.border,
-          border: "2px solid white",
-          width: 10,
-          height: 10,
-          boxShadow: `0 0 0 2px ${descriptor.border}44`,
-        }}
-      />
+      {!data.pending && (
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="out"
+          style={{
+            background: descriptor.border,
+            border: "2px solid white",
+            width: 10,
+            height: 10,
+            boxShadow: `0 0 0 2px ${descriptor.border}44`,
+          }}
+        />
+      )}
       <div
         className="relative flex items-center justify-center rounded-full border-2 text-xs font-bold"
         style={{
@@ -57,7 +59,7 @@ export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeTyp
           transform: "none",
           opacity: 0,
           borderRadius: "50%",
-          pointerEvents: inProgress ? "auto" : "none",
+          pointerEvents: inProgress && !data.pending ? "auto" : "none",
         }}
       />
       {/* Bottom-edge point — supports/rephrases/rebuts edges visually route here */}
@@ -71,7 +73,7 @@ export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeTyp
           width: 8,
           height: 8,
           opacity: 0,
-          pointerEvents: inProgress ? "auto" : "none",
+          pointerEvents: inProgress && !data.pending ? "auto" : "none",
           zIndex: 1,
         }}
       />

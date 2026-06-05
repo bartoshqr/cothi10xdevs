@@ -5,6 +5,12 @@ export const NODE_CONSTRAINTS = {
   body: { max: 250, warnAt: 220 },
 } as const;
 
+// Debate-level limits. The title lives in a page header (more room than a canvas node).
+// Mirrors the DB check `char_length(title) <= 120` in the create_debate_graph migration.
+export const DEBATE_CONSTRAINTS = {
+  title: { max: 120, warnAt: 110 },
+} as const;
+
 export const statementNodeSchema = z.object({
   title: z.string().min(1, "Title is required").max(NODE_CONSTRAINTS.title.max),
   body: z.string().max(NODE_CONSTRAINTS.body.max),

@@ -138,13 +138,16 @@ on conflict (id) do nothing;
 do $$
 declare
   v_owner      uuid := '00000000-0000-0000-0000-000000000001';
-  v_debate     uuid := '00000000-0000-0000-0000-000000000010';
-  v_root       uuid := '00000000-0000-0000-0000-000000000011';
-  v_data       uuid := '00000000-0000-0000-0000-000000000012';
-  v_warrant    uuid := '00000000-0000-0000-0000-000000000013';
-  v_source     uuid := '00000000-0000-0000-0000-000000000014';
-  v_rebuttal   uuid := '00000000-0000-0000-0000-000000000015';
-  v_and        uuid := '00000000-0000-0000-0000-000000000016';
+  -- v4-shaped UUIDs: group 3 starts with version nibble `4`, group 4 with
+  -- variant nibble `8`. Zod 4's z.uuid() (the API node/debate id guard) rejects
+  -- the all-zero nil pattern because it checks version/variant bits, not just shape.
+  v_debate     uuid := '00000000-0000-4000-8000-000000000010';
+  v_root       uuid := '00000000-0000-4000-8000-000000000011';
+  v_data       uuid := '00000000-0000-4000-8000-000000000012';
+  v_warrant    uuid := '00000000-0000-4000-8000-000000000013';
+  v_source     uuid := '00000000-0000-4000-8000-000000000014';
+  v_rebuttal   uuid := '00000000-0000-4000-8000-000000000015';
+  v_and        uuid := '00000000-0000-4000-8000-000000000016';
 begin
   -- Debate row (root_node_id is deferrable — set after node insert)
   insert into public.debates (id, owner_id, title, root_node_id)
@@ -155,7 +158,7 @@ begin
   insert into public.nodes (id, debate_id, author_id, kind, position_x, position_y, metadata)
   values
     (
-      v_root, v_debate, v_owner, 'statement', 400, 50,
+      v_root, v_debate, v_owner, 'statement', 183, -75,
       jsonb_build_object(
         'statement_type', 'claim',
         'title',          'Humans are causing climate change',
@@ -163,7 +166,7 @@ begin
       )
     ),
     (
-      v_data, v_debate, v_owner, 'statement', 150, 250,
+      v_data, v_debate, v_owner, 'statement', 35, 268,
       jsonb_build_object(
         'statement_type', 'data',
         'title',          'CO₂ levels at record highs',
@@ -171,7 +174,7 @@ begin
       )
     ),
     (
-      v_warrant, v_debate, v_owner, 'statement', 400, 250,
+      v_warrant, v_debate, v_owner, 'statement', 361, 261,
       jsonb_build_object(
         'statement_type', 'warrant',
         'title',          'CO₂ is a greenhouse gas',
@@ -179,7 +182,7 @@ begin
       )
     ),
     (
-      v_source, v_debate, v_owner, 'statement', 50, 450,
+      v_source, v_debate, v_owner, 'statement', 35, 441,
       jsonb_build_object(
         'statement_type', 'source',
         'title',          'NOAA Global Monitoring Laboratory',
@@ -187,7 +190,7 @@ begin
       )
     ),
     (
-      v_rebuttal, v_debate, v_owner, 'statement', 650, 250,
+      v_rebuttal, v_debate, v_owner, 'statement', 624, 116,
       jsonb_build_object(
         'statement_type', 'rebuttal',
         'title',          'Natural cycles argument',

@@ -9,10 +9,11 @@ import {
 } from "@xyflow/react";
 import type { DefaultEdgeOptions, EdgeTypes, NodeTypes } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import StatementNode from "./StatementNode";
-import ConnectiveNode from "./ConnectiveNode";
-import RelationEdge from "./RelationEdge";
-import MapLegend from "./MapLegend";
+// Promoted production components — the spike route doubles as their regression canvas.
+import StatementNode from "@/components/debate/nodes/StatementNode";
+import ConnectiveNode from "@/components/debate/nodes/ConnectiveNode";
+import RelationEdge from "@/components/debate/edges/RelationEdge";
+import MapLegend from "@/components/debate/MapLegend";
 import { nodes as exampleNodes, edges as exampleEdges } from "./exampleMap";
 
 const nodeTypes: NodeTypes = {

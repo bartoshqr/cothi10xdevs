@@ -1,0 +1,169 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/db/database.types";
+import { NotFoundError } from "@/lib/errors";
+import type {
+  CreateDebateInput,
+  CreateNodeInput,
+  CreateRelationInput,
+  UpdateNodeInput,
+  UpdateRelationInput,
+} from "./schemas";
+
+type DB = SupabaseClient<Database>;
+type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
+type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
+type DebateRow = Database["public"]["Tables"]["debates"]["Row"];
+
+export interface DebateGraph {
+  debate: DebateRow;
+  nodes: NodeRow[];
+  relations: RelationRow[];
+}
+
+export async function createDebate(supabase: DB, input: CreateDebateInput): Promise<string> {
+  // The RPC also asserts auth.uid() is not null as DB-layer defense-in-depth.
+  // That branch is unreachable here — withAuth guarantees a user before this runs
+  // — so it has no app-layer 401 mapping; if it ever fired it surfaces as a 500 (F7).
+  const { data, error } = await supabase.rpc("create_debate_with_root", {
+    p_title: input.title,
+    p_root_title: input.rootTitle,
+    p_root_body: input.rootBody,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getDebateGraph(supabase: DB, debateId: string): Promise<DebateGraph | null> {
+  const [debateResult, nodesResult, relationsResult] = await Promise.all([
+    supabase.from("debates").select("*").eq("id", debateId).maybeSingle(),
+    supabase.from("nodes").select("*").eq("debate_id", debateId).order("created_at"),
+    supabase.from("relations").select("*").eq("debate_id", debateId),
+  ]);
+
+  if (debateResult.error) throw debateResult.error;
+  if (!debateResult.data) return null;
+  if (nodesResult.error) throw nodesResult.error;
+  if (relationsResult.error) throw relationsResult.error;
+
+  return {
+    debate: debateResult.data,
+    nodes: nodesResult.data,
+    relations: relationsResult.data,
+  };
+}
+
+export async function createStatementNode(
+  supabase: DB,
+  input: Extract<CreateNodeInput, { nodeKind: "statement" }>,
+  authorId: string,
+): Promise<NodeRow> {
+  const { data, error } = await supabase
+    .from("nodes")
+    .insert({
+      debate_id: input.debateId,
+      author_id: authorId,
+      kind: "statement",
+      position_x: input.positionX,
+      position_y: input.positionY,
+      metadata: {
+        statement_type: input.statementType,
+        title: input.title,
+        body: input.body ?? null,
+        url: input.url ?? null,
+      },
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createConnectiveNode(
+  supabase: DB,
+  input: Extract<CreateNodeInput, { nodeKind: "connective" }>,
+  authorId: string,
+): Promise<NodeRow> {
+  const { data, error } = await supabase
+    .from("nodes")
+    .insert({
+      debate_id: input.debateId,
+      author_id: authorId,
+      kind: "connective",
+      position_x: input.positionX,
+      position_y: input.positionY,
+      metadata: { op: input.connectiveOp },
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNodeInput): Promise<NodeRow> {
+  // Metadata fields are merged DB-side via patch_node (metadata || patch) so the
+  // read-modify-write is atomic — see migration 20260605000002 (impl-review F2).
+  const metadataPatch: Record<string, Json> = {};
+  if (patch.title !== undefined) metadataPatch.title = patch.title;
+  if (patch.body !== undefined) metadataPatch.body = patch.body;
+  if (patch.url !== undefined) metadataPatch.url = patch.url;
+  if (patch.statementType !== undefined) metadataPatch.statement_type = patch.statementType;
+  if (patch.connectiveOp !== undefined) metadataPatch.op = patch.connectiveOp;
+
+  const { data, error } = await supabase
+    .rpc("patch_node", {
+      p_node_id: nodeId,
+      p_metadata_patch: Object.keys(metadataPatch).length > 0 ? metadataPatch : undefined,
+      p_position_x: patch.positionX,
+      p_position_y: patch.positionY,
+    })
+    .maybeSingle();
+  if (error) throw error;
+  // patch_node returns SETOF, so maybeSingle yields null when the id is unknown or
+  // RLS-scoped out — map that to a 404 rather than returning an all-null node (F4).
+  if (!data) throw new NotFoundError();
+  return data;
+}
+
+export async function deleteNode(supabase: DB, nodeId: string): Promise<void> {
+  const { data, error } = await supabase.from("nodes").delete().eq("id", nodeId).select("id");
+  if (error) throw error;
+  if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
+}
+
+export async function createRelation(supabase: DB, input: CreateRelationInput, authorId: string): Promise<RelationRow> {
+  const { data, error } = await supabase
+    .from("relations")
+    .insert({
+      debate_id: input.debateId,
+      author_id: authorId,
+      source_node_id: input.sourceNodeId,
+      target_node_id: input.targetNodeId,
+      kind: input.kind,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateRelation(
+  supabase: DB,
+  relationId: string,
+  input: UpdateRelationInput,
+): Promise<RelationRow> {
+  const { data, error } = await supabase
+    .from("relations")
+    .update({ kind: input.kind })
+    .eq("id", relationId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new NotFoundError(); // unknown id or RLS-scoped out → 404 (F4)
+  return data;
+}
+
+export async function deleteRelation(supabase: DB, relationId: string): Promise<void> {
+  const { data, error } = await supabase.from("relations").delete().eq("id", relationId).select("id");
+  if (error) throw error;
+  if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
+}

@@ -2,7 +2,6 @@ ___*
 landing-page-from-v0-inspiration/**
 .claude/
 .agents/
-context/
 skills-lock.json
 CLAUDE.md
 continue.sh

@@ -97,6 +97,17 @@ to ground. Phase 5's e2e on the critical flow similarly waits for S-04
 (`first-divergence-summary`). Phases 1–3 are actionable now against shipped
 S-01.
 
+**Phase 1 scope note (2026-06-06, from `testing-persistence-floor` research +
+PR review):** Phase 1 covers Risk #6 only for the **non-existent id → 404**
+path. The **RLS-hidden id → 404** half (a row that exists but belongs to the
+other pair) needs a two-user fixture and is **carried into Phase 2** (Risk #1),
+where that fixture already lives. Also note: Phase 1 grew two small *features*
+(implemented test-first) — a server-side `link`→connective relation guard and
+root-Claim identity handling (block delete, persisted re-designation, no
+demotion); connective operand-cardinality checks were explicitly **excluded**
+(instant per-node save makes them an exchange-init/round-boundary concern, not
+a persistence-layer rule). See `context/changes/testing-persistence-floor/research.md` §Decisions.
+
 ## 4. Stack
 
 The classic test base for this project. AI-native tools (if any) carry a

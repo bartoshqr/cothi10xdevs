@@ -9,7 +9,7 @@ tags: [research, codebase, testing, debate-graph, validation, supabase, vitest, 
 status: complete
 last_updated: 2026-06-06
 last_updated_by: bartoshqr
-last_updated_note: "Added follow-up: the root-Claim invariant is set only at creation and not maintained — delete (FK-blocked but 500), PATCH demotion, a non-persisted 'Set as Root' UI action, and an optimistic node-delete with no rollback all break it or its UX."
+last_updated_note: "PR-review decisions (2026-06-06): corrected the relation oracle (only link→connective is enforced; all other kinds any→any), dropped connective operand cardinality from Phase 1, made root-Claim identity (3a/3b/3c) a Phase-1 TDD feature, kept 3d in the optimistic-rollback change, and deferred two-user RLS fixtures to Phase 2. See the Decisions section."
 ---
 
 # Research: Test Phase 1 oracle — persistence/shape floor (risks #3, #6)
@@ -31,22 +31,42 @@ Also: inventory the test-runner state (no runner exists yet) so `/10x-plan` can 
 
 ## Summary
 
-The research surfaces **a hard divergence between the product oracle and the shipped implementation for Risk #3 — this is the central finding of this phase and a decision the plan must make explicitly.**
+> **Scope settled by PR review (2026-06-06).** The "the plan must choose" framing below is now resolved — see the **Decisions** section. In short: only `link`→connective is a real relation rule (and Phase 1 implements + TDDs it); connective operand cardinality is dropped from Phase 1; root-Claim identity (3a/3b/3c) is a Phase-1 TDD feature; 3d stays in the `optimistic-rollback` change; two-user RLS fixtures move to Phase 2.
 
-- **Risk #3 (graph-shape legality).** The PRD defines a precise legal/illegal boundary (node taxonomy, relation source/target rules, connective operand cardinality, root-claim initiation). The codebase enforces **only one of the three** illegal cases server-side:
-  - **Case 1 — connective invalid operands**: enforced **nowhere** (not Zod, not API, not DB). Any operand count (incl. 0/1) and any operand node type is accepted.
-  - **Case 2 — relation kind on illegal target**: enforced **only in the client UI** (`ConnectKindPicker.tsx`). The API accepts any `relation_kind` against any UUID target (only `source ≠ target` is checked at the DB).
-  - **Case 3 — no root Claim (FR-007)**: the root Claim is **enforced only at creation** (the `create_debate_with_root` RPC + deferred FK make a rootless debate unreachable *at insert time*). It is **NOT maintained across edits** — see the dedicated finding below. Three post-creation faces break the invariant or its UX:
-    - **3a (delete root)**: blocked by the FK (`ON DELETE NO ACTION`), so no dangling reference is possible — but it surfaces as an unmapped **500**, not a clean 409.
-    - **3b (demote root via PATCH)**: `patch_node` lets a `PATCH …/nodes/:rootId` change the root's `statement_type` away from `claim`; `root_node_id` then points at a node that is no longer a Claim — a real FR-007 violation reachable by mutation. **Red today.**
-    - **3c ("Set as Root" not persisted)**: the UI "Set as Root Claim" action only flips a client `isRoot` flag (and persists the node's type to `claim`); it never moves `debates.root_node_id` (no debate-PATCH endpoint exists). On reload the original root re-asserts itself and the user's choice is silently lost — a store↔persistence drift.
-    - **3d (optimistic delete, no rollback)**: `deleteNodes` removes the node from the canvas *before* the server confirms and has **no rollback** on failure (unlike `rollbackNode`/`rollbackEdge` for creates). So a server-rejected delete — the root delete in 3a is the concrete trigger — makes the node vanish from the UI, then reappear on refresh. The canvas silently diverges from the DB until reload.
+The research surfaces **a divergence between the product oracle and the shipped implementation for Risk #3** — the original central finding of this phase. Phase 1 now closes the parts of that gap the team chose to enforce, test-first.
 
-  → Tests that drive the **API directly** (bypassing React Flow) will expose Cases 1 and 2 as *accepted illegal graphs*. So the plan must choose: **(A)** write red tests that codify the PRD oracle (failing today, demanding server-side validation be implemented first), or **(B)** scope Phase 1's positive assertions to what is enforceable today (root-claim gate + the legal-graph happy path + the structural CHECKs that *do* exist) and record Cases 1/2 as a documented gap / pending risk. This is the kind of "two faces of a risk" the research step exists to surface. **See Open Questions.**
+- **Risk #3 (graph-shape legality).** Of the three "illegal graph" cases originally posed:
+  - **Case 1 — connective operand cardinality**: enforced **nowhere** today — and **deliberately not enforced at the S-01 persistence layer** (instant per-node save means a connective exists before its operands are linked). **Dropped from Phase 1**; any cardinality rule belongs to exchange-initiation / round-boundary validation (test Phase 4). See Decision **D2**.
+  - **Case 2 — relation legality**: the only real structural rule is **`link` must target a connective** (source = any node; `supports`/`rephrases`/`rebuts` = any node → any node — the FR-006 parentheticals are descriptive, not constraints, per FR-014/FR-016). Today this is enforced **only in the client UI** (`ConnectKindPicker.tsx`); the API accepts any `relation_kind` against any UUID target. **Phase 1 implements + TDDs a server-side `link`→connective guard.** See Decision **D1**.
+  - **Case 3 — root Claim (FR-007)**: enforced **only at creation** (the `create_debate_with_root` RPC + deferred FK make a rootless debate unreachable *at insert time*), **not maintained across edits**. Four post-creation faces:
+    - **3a (delete root)**: FK (`ON DELETE NO ACTION`) blocks it → no dangling reference, but it surfaces as an unmapped **500**. **Decision: the UI must block root deletion** (with a message), server FK as backstop. (D3)
+    - **3b (demote root via PATCH)**: `patch_node` lets a `PATCH …/nodes/:rootId` change the root's `statement_type` away from `claim` → `root_node_id` points at a non-Claim. **Red today. Decision: guard it.** (D3)
+    - **3c ("Set as Root" not persisted)**: the UI action only flips a client `isRoot` flag; it never moves `debates.root_node_id` (no debate-PATCH endpoint exists), so the choice is lost on reload. **Decision: make re-designation a real persisted action** (and the new root drops its outgoing edges). (D3)
+    - **3d (optimistic delete, no rollback)**: a server-rejected delete vanishes from the canvas then reappears on refresh. **Decision: handled in the separate `optimistic-rollback` change** (re-fetch-on-failure); 3a's UI block removes its acute trigger. (D4)
 
 - **Risk #6 (missing-id 404).** Good news: the lived S-01 trap is **already fixed** and all four mutating endpoints currently return 404 on an unknown id. The one RPC in any mutating path (`patch_node`) is correctly declared `RETURNS SETOF public.nodes` (with a comment documenting exactly why bare-composite would 200-with-nulls). The regression a test must **pin** is `patch_node` reverting to a bare composite return — an integration test hitting `PATCH /api/debates/:id/nodes/:nodeId` with a non-existent id and asserting **404** would turn red if that happens. The same unknown-id→404 assertion is worth pinning on all four endpoints; only the PATCH-node case exercises the SETOF-specific failure mode.
 
 - **Runner state.** No test runner, config, `test` script, or test files exist. Vitest/Vite-native is the §4 candidate; the stack is already Vite-based (`vite ^7.3.2`, Astro 6, React 19, TS 5.9, Zod 4). Supabase local is ready (config.toml, 5 migrations, seed.sql). CI runs lint+build; a test step slots between `npm run lint` and `npm run build` in `.github/workflows/ci.yml`.
+
+## Decisions (2026-06-06, from PR review)
+
+These resolve the Open Questions below and **correct the oracle**; they are authoritative for `/10x-plan`. Guiding principle the reviewer set: *the PRD is not set in stone — implementation may surface shifts.* The **two features** Phase 1 implements + tests TDD are **(A) the `link`→connective server guard (D1)** and **(B) root-Claim identity (D3)**.
+
+- **D1 — Relation legality (corrects Case 2 oracle).** The FR-006 parentheticals ("`supports` backs a Claim", "`rebuts` a Rebuttal attacks a Claim/Warrant", …) are *descriptive of intent, not enforced constraints* — confirmed against **FR-014 / FR-016**, which let either party relate their Statements to **any existing Statement**. The **only** structural relation rule in MVP: **a `link` relation must target a connective node** (source may be **any** node, including a connective); `supports` / `rephrases` / `rebuts` may connect **any node → any node**. Phase 1 **implements + TDDs** a server-side guard for the `link`→connective rule (today it is UI-only in `ConnectKindPicker.tsx`). First red test, e.g.: *"a `link` relation whose target is a statement node is rejected (422); a `link` targeting a connective is accepted."* PRD FR-006 annotated.
+
+- **D2 — Connective operand cardinality dropped from Phase 1 (and from S-01).** "AND requires all operands / OR requires any one" (FR-004a) is an **aggregation/evaluation** semantic, not a creation-time structural rule. With instant per-node save, a connective is created seconds/minutes before its operands are linked, so "≥1 operand" cannot be enforced at node creation. Any cardinality check belongs at **exchange-initiation / round-boundary** validation (turn mechanic, roadmap S-03/S-05 → test **Phase 4**), **not** the S-01 persistence layer. **No Phase 1 test.** PRD FR-004a annotated. (Resolves the connective half of OQ#1 and all of OQ#5.)
+
+- **D3 — Root-Claim identity is a Phase 1 feature, TDD'd.** Implement and TDD all of:
+  - **3a — block root deletion.** The UI must prevent deleting the root Claim, with the message *"You cannot delete the root claim, but you can set a different claim as the root."* The DB FK remains the server backstop. (Optionally also map the FK violation to a clean 4xx instead of a 500 — nice-to-have, the UI guard is the primary fix.)
+  - **3c — persisted re-designation.** "Set as Root Claim" must **persist** the new `root_node_id` — which requires a **server path that does not exist today** (no debate-PATCH endpoint). On (re-)designation, the newly-designated root Claim **loses its outgoing (source) relations**: the root is the map's apex — it only *receives* support, it does not act as a source. This supersedes 3c's "drift" framing — the action becomes real, not discarded on reload.
+  - **3b — no demotion.** The designated root's `statement_type` cannot be changed away from `claim` (guard the PATCH path against `debates.root_node_id`). Changing the root is done **only** via 3c re-designation.
+  - **Planning note:** the new root-(re)designation endpoint is itself a Risk #6 not-found surface — fold "re-designate on an unknown/RLS-hidden id → 404" into the #6 tests. (Resolves the root half of OQ#1 and all of OQ#2.)
+
+- **D4 — 3d stays in the separate `optimistic-rollback` change.** With 3a blocking root deletion in the UI, 3d's acute trigger is gone; the general "a rejected mutation leaves the canvas diverged until refresh" gap remains and is handled by the re-fetch-on-failure strategy in `context/changes/optimistic-rollback/`. **Not** a Phase 1 test target here.
+
+- **D5 — Two-user / RLS-hidden fixtures → test Phase 2.** Phase 1 covers only the **non-existent id → 404** path for Risk #6. The RLS-hidden-id path needs a two-user fixture and moves to **test Phase 2** (Risk #1). Logged in `test-plan.md` (Phase 2 row) so it is not lost. (Resolves OQ#3.)
+
+**Still open for `/10x-plan`:** **OQ#4** — test-DB strategy (service-role vs two-user client; `seed.sql` reuse vs per-test seeding via the RPC).
 
 ## Detailed Findings
 
@@ -65,22 +85,22 @@ This taxonomy matches the PRD's intended model exactly (see Oracle below), so th
 
 The product's authoritative rules (`context/foundation/prd.md`):
 
-- **FR-004a** (prd.md:110-111): "logical-connective nodes (AND / OR) that aggregate multiple supporting Statements before they support a Claim — **AND requires all operands, OR requires any one**. Connectives are a second node category, not a statement type." → connective operand cardinality is **≥1**; operands feed via `link`; the connective's single output `supports` the Claim.
-- **FR-006** (prd.md:114-115): directed relations — `supports` (a Statement **or connective** backs **a Claim**), `link` (an operand feeds **a connective** node), `rephrases` (a Statement restates another — e.g. a Source rephrasing the Data it grounds), `rebuts` (a **Rebuttal** attacks **a Claim/Warrant**).
+- **FR-004a** (prd.md:110-111): "logical-connective nodes (AND / OR) that aggregate multiple supporting Statements before they support a Claim — **AND requires all operands, OR requires any one**." → per **D2**, this is an *aggregation* semantic evaluated at exchange-init / round boundaries, **not** a creation-time cardinality constraint. Not a Phase-1 rule.
+- **FR-006** (prd.md:114-115): directed relations — `supports`, `link`, `rephrases`, `rebuts`. ⚠️ The role parentheticals in FR-006 are **descriptive of intent, not enforced constraints** (**D1**), corroborated by FR-014 / FR-016 ("relations between their Statements and **any existing Statements**").
 - **FR-007** (prd.md:116-117): "Advocate can initiate an exchange **once at least one root Claim Statement exists** in the map. A root Claim Statement is one explicitly designated as the root by the advocate **at the time of debate creation**."
 
-Derived oracle (legal source→target per relation kind):
+**Corrected oracle (D1)** — relation legality the server should enforce:
 
 | Relation | Legal source | Legal target |
 |----------|--------------|--------------|
-| `supports` | Statement or Connective | Claim |
-| `link` | Statement (operand) | Connective (AND/OR) |
-| `rephrases` | Source (Statement) | Data/Warrant/Backing/Claim Statement |
-| `rebuts` | Rebuttal (Statement) | Claim or Warrant Statement |
+| `link` | **any node** (incl. connective) | **connective only** |
+| `supports` | any node | any node |
+| `rephrases` | any node | any node |
+| `rebuts` | any node | any node |
 
-Illegal (per the oracle): missing root Claim at initiation; `supports` not targeting a Claim; `link` not feeding a connective; `rebuts` not sourced by a Rebuttal or not targeting Claim/Warrant; a connective with **zero** operands; a `statement_type` outside the six.
+Illegal (per the corrected oracle): **a `link` relation whose target is not a connective**; a missing root Claim at initiation; a `statement_type` outside the six; (self-loops — `source = target` — already DB-blocked). Everything else about source/target pairing is legal in MVP.
 
-> Note: the PRD does **not** mandate full transitive connectivity to the root during map-building (orphan handling is an exchange-close concern, FR-019/FR-004), and sets **no maximum** operand cap. Do not invent those rules into the oracle.
+> Note: the PRD does **not** mandate full transitive connectivity to the root during map-building (orphan handling is an exchange-close concern, FR-019/FR-004), sets **no maximum** operand cap, and (per D2) no creation-time **minimum** either. Do not invent those rules into the oracle.
 
 ### Risk #3 — what the code actually enforces (the gap)
 
@@ -90,13 +110,14 @@ Illegal (per the oracle): missing root Claim at initiation; `supports` not targe
 - `nodes` table CHECKs (migration L31-46) cover only statement title/body length — no operand-count constraint, no trigger.
 - The only "rule" artifact is a display string in the legend: `src/components/debate/MapLegend.tsx:45` `{ op:"and", description:"All operands required" }` — documentation, not validation.
 - **Boundary drawn by code: none.** A connective with 0/1 operands, or operands of any node type, is fully accepted server-side.
+- **Decision (D2): not a Phase-1 concern.** Creation-time cardinality is incompatible with instant per-node save; defer any operand rule to exchange-init / round-boundary validation (Phase 4). No test here.
 
-**Case 2 — relation kind on illegal target: client-only guard.**
+**Case 2 — relation legality: client-only guard; Phase 1 adds the `link`→connective server rule.**
 - The rule lives entirely in `src/components/debate/ConnectKindPicker.tsx:6,26-28`: base kinds `["supports","rephrases","rebuts"]` for any target; `"link"` appended **only when** `targetNode?.type === "connective"`.
 - Server: `createRelationSchema` (`src/lib/debate/schemas.ts:48-53`) validates only `kind ∈ relation_kind` + three UUIDs. It does **not** load the target node or check its kind.
 - `createRelation` (`src/lib/debate/repository.ts:133-147`) inserts directly. `relations` table (migration L54-63) enforces only `source_node_id <> target_node_id` (no self-loops, L62) + FKs that the nodes exist. No kind/target-type constraint.
 - POST handler `src/pages/api/debates/[id]/relations/index.ts` does no target-type validation.
-- **A `link` relation pointing at a statement (or any illegal target) is accepted by the API.**
+- **A `link` relation pointing at a statement is accepted by the API today.** Per **D1**, this is the one relation rule worth enforcing — Phase 1 adds a server guard (a `createRelationSchema` superRefine that loads the target node, or a check in `createRelation`/the POST handler) so `link` requires a connective target. `supports`/`rephrases`/`rebuts` remain unconstrained on source/target — **do not** add guards for those (they are legal any→any per FR-014/016).
 
 **Case 3 — no root Claim (FR-007): enforced server-side, atomic.**
 - `createDebateSchema` (`src/lib/debate/schemas.ts:11-15`) **requires** `rootTitle: z.string().min(1)`.
@@ -109,15 +130,17 @@ Illegal (per the oracle): missing root Claim at initiation; `supports` not targe
 
 FR-007 wants the debate's designated root to be a **Claim** for the life of the debate. The code guarantees that only at the moment of creation. Three reachable post-creation paths break the invariant or its UX. **This is a material expansion of Case 3 surfaced during review — it straddles Risk #3 (graph-shape legality) and Risk #5 (edit corrupts the graph, Phase 4).**
 
-**3a — Deleting the root node: FK-blocked (safe), but a 500.** `deleteNode` runs `DELETE FROM nodes WHERE id = nodeId` (`src/lib/debate/repository.ts:128`). The `debates_root_node_id_fkey` is declared with **no `ON DELETE` clause** (migration L49-52) → default `ON DELETE NO ACTION`, `deferrable initially deferred`. Deleting the root → at commit the `debates` row still references it → **FK violation → the delete errors**. So a dangling `root_node_id` is *not* reachable via the API. But `deleteNode` only maps the zero-rows case to `NotFoundError`/404 (`repository.ts:130`); a raw FK-violation error is rethrown unmapped (`repository.ts:129`) and surfaces as a **500**, not a clean `409 "cannot delete the root node"`. *(Inferred from standard Postgres FK-NO-ACTION semantics + the schema; not yet verified against a live DB — Supabase MCP not connected this session.)* Deleting the whole debate is fine: `nodes.debate_id` cascades (migration L33), so nothing dangles.
+**3a — Deleting the root node: FK-blocked (safe), but a 500.** `deleteNode` runs `DELETE FROM nodes WHERE id = nodeId` (`src/lib/debate/repository.ts:128`). The `debates_root_node_id_fkey` is declared with **no `ON DELETE` clause** (migration L49-52) → default `ON DELETE NO ACTION`, `deferrable initially deferred`. Deleting the root → at commit the `debates` row still references it → **FK violation → the delete errors**. So a dangling `root_node_id` is *not* reachable via the API. But `deleteNode` only maps the zero-rows case to `NotFoundError`/404 (`repository.ts:130`); a raw FK-violation error is rethrown unmapped (`repository.ts:129`) and surfaces as a **500**, not a clean `409 "cannot delete the root node"`. *(FK-block behaviour verified live by the reviewer 2026-06-06.)* Deleting the whole debate is fine: `nodes.debate_id` cascades (migration L33), so nothing dangles. **Decision (D3-3a):** the **UI must block** deleting the root with the message *"You cannot delete the root claim, but you can set a different claim as the root"*; the FK stays as backstop.
 
 **3b — Demoting the root via PATCH: a real invariant hole (red today).** The root's claim-ness is hardcoded only at creation (`create_debate_with_root` sets `statement_type='claim'`, migration L188). Nothing preserves it afterward: `updateNodeSchema` allows `statementType: statementTypeEnum.optional()` with no refinement (`src/lib/debate/schemas.ts:42`); `updateNode` forwards it into the metadata patch (`repository.ts:109`); `patch_node` blindly merges `metadata || p_metadata_patch` (`supabase/migrations/20260605000002_atomic_node_metadata_patch.sql:20-21`) with no root-awareness. So `PATCH /api/debates/:id/nodes/:rootNodeId` with `{ "statementType": "rebuttal" }` is **accepted (200)** and `root_node_id` now points at a non-Claim node. (`kind` can't change this way — `patch_node` touches only metadata + position — so the corruption is specifically the `statement_type` demotion, not statement↔connective.) Candidate Phase-1 assertion: *"a PATCH that would change the designated root's `statement_type` away from `claim` is rejected."*
 
-**3c — "Set as Root Claim" is not persisted: store↔persistence drift.** `setRootNode` (`src/components/debate/store.ts:506-514`) is a pure client-state mutation — it flips the `isRoot` flag on store nodes and makes **no API call**; there is no debate-PATCH endpoint to move `root_node_id`. The UI "Set as Root Claim" button (`src/components/debate/nodes/StatementNode.tsx:217-228`) calls `updateNodeFields(id, { statementType: "claim" })` (which *does* persist via `patch_node`) and `setRootNode(id)` (which does **not**). On reload the store recomputes `isRoot: row.id === debate.root_node_id` from the **debate table** (`store.ts:98`), so the *original* creation-time root re-asserts itself and the user's choice is silently discarded — and you can be left with two `claim`-typed nodes, only one of which is the persisted root. The author flagged this inline: `// controversial, let's check with users` (`StatementNode.tsx:222`). This is Risk #2 (round-trip fidelity, Phase 3) territory, but it is the *same* root-identity gap viewed from the client: **the API exposes no legitimate way to change which node is the root.**
+**3c — "Set as Root Claim" is not persisted: store↔persistence drift.** `setRootNode` (`src/components/debate/store.ts:506-514`) is a pure client-state mutation — it flips the `isRoot` flag on store nodes and makes **no API call**; there is no debate-PATCH endpoint to move `root_node_id`. The UI "Set as Root Claim" button (`src/components/debate/nodes/StatementNode.tsx:217-228`) calls `updateNodeFields(id, { statementType: "claim" })` (which *does* persist via `patch_node`) and `setRootNode(id)` (which does **not**). On reload the store recomputes `isRoot: row.id === debate.root_node_id` from the **debate table** (`store.ts:98`), so the *original* creation-time root re-asserts itself and the user's choice is silently discarded — and you can be left with two `claim`-typed nodes, only one of which is the persisted root. The author flagged this inline: `// controversial, let's check with users` (`StatementNode.tsx:222`). **Decision (D3-3c):** re-designation becomes a **real, persisted action** — add a server path to move `debates.root_node_id` (none exists today), and on (re-)designation the newly-designated root Claim **loses its outgoing (source) relations** (the root is the apex — receives support only). The `// controversial` question is hereby answered: persist it.
 
 **3d — Optimistic node-delete has no rollback: canvas diverges until reload.** `deleteNodes` (`src/components/debate/store.ts:447-471`) optimistically strips the node and its incident edges from the store (L456-460), then fires `apiDeleteNode` and on failure calls only `reportError` (L466-468) — it never restores the node. This is an asymmetry: optimistic *creates* roll back via `rollbackNode` (`store.ts:210`, called at L380/410) and `rollbackEdge` (`store.ts:227`, called at L320), but the delete path has no equivalent. So any server-rejected delete leaves the canvas inconsistent with the DB; the **root delete (3a)** is the concrete reproducible trigger — the node disappears, the 500 fires a toast, and the node reappears only after a refresh re-runs `getDebateGraph`. (`deleteEdge`, L473-487, shares the no-rollback shape.) Suggested fix: on `apiDeleteNode` rejection, re-insert the node + incident edges, mirroring the create-rollback helpers. This is primarily Risk #2 (store↔canvas/persistence fidelity, Phase 3), but it is the client face of the same root-delete gap.
 
-Net: there is no server guard that (a) keeps the designated root a Claim, (b) lets the root be re-designated, or (c) refuses to delete it gracefully — and the client (d) does not reconcile the canvas when a delete is rejected. The creation-time guarantee is the *only* protection, ordinary edits route around it, and the UI does not surface the DB's refusal.
+Net (current state): there is no server guard that (a) keeps the designated root a Claim, (b) lets the root be re-designated, or (c) refuses to delete it gracefully — and the client (d) does not reconcile the canvas when a delete is rejected. The creation-time guarantee is the *only* protection, ordinary edits route around it, and the UI does not surface the DB's refusal.
+
+**Resolution:** D3 closes (a)/(b)/(c) in Phase 1 — guard demotion (3b), add persisted re-designation that strips the new root's source edges (3c), block root deletion in the UI (3a). (d) is the `optimistic-rollback` change (D4).
 
 ### Risk #6 — Oracle and current behaviour: missing-id → 404
 
@@ -186,7 +209,7 @@ Mutating endpoints under `src/pages/api/debates/` (the debate resource `[id]/ind
 ## Historical Context (from prior changes)
 
 - `context/foundation/lessons.md` §4 — the `RETURNS SETOF` lesson, lived in slice **S-01** where `patch_node` 200'd on an unknown node id. Risk #6 is the regression guard for that fix.
-- `context/foundation/lessons.md` §3 — "Centralize shared validation limits" (`nodeConstraints.ts`); relevant if Phase 1 adds operand-cardinality limits, they should live there, not be hard-coded.
+- `context/foundation/lessons.md` §3 — "Centralize shared validation limits" (`nodeConstraints.ts`); per D2 no operand-cardinality limit is added in Phase 1, but if the `link`-target rule (D1) needs any shared constant it should live there, not be hard-coded.
 - `context/foundation/lessons.md` §1 — the `withAuth`/`guardRequest` shared preamble; confirms why all four endpoints share one 404 mapping (`src/lib/api.ts:26`).
 - Recent commits `0b2e1fb` (harden persistence API & graph RLS), `072957c` (valid v4 seed UUIDs) — the RLS tightening is Phase 2's territory; the seed-UUID fix matters for any integration fixture that reuses `supabase/seed.sql`.
 - `context/changes/advocate-map-builder/` and `context/changes/bootstrap-verification/` exist as sibling changes — the map-builder slice (S-01) is the code under test here.
@@ -197,16 +220,15 @@ Mutating endpoints under `src/pages/api/debates/` (the debate resource `[id]/ind
 
 ## Open Questions
 
-1. **Risk #3 decision — codify the oracle (red) vs. test what's enforced (green)?** The PRD says Cases 1 (connective operand cardinality ≥1) and 2 (relation-kind→target legality) are illegal, but **the server enforces neither** — only the client does. Options for `/10x-plan`:
-   - **(A) Oracle-first / red tests:** write API-level tests asserting `link → statement` and `0-operand connective` are **rejected (400/422)**. These fail today and require server-side validation (likely a Zod superRefine or a new lib guard, with limits in `nodeConstraints.ts`) to be implemented before they go green. Largest signal, but expands Phase 1 scope from "lock shipped behaviour" into "add missing validation."
-   - **(B) Scope-to-shipped:** Phase 1 asserts (i) the **root-claim gate** (Case 3, enforceable now), (ii) a **legal-graph happy path** round-trips/accepts, (iii) the structural CHECKs that *do* exist (self-loop rejection, enum/length limits). Record Cases 1/2 as a **documented validation gap** (a new `lessons.md` entry + a noted risk) deferred to a follow-up change. Honest to "lock the floor that exists."
-   - This is a genuine WHAT-to-build question (server-side validation is arguably a feature, not a test). Recommend resolving with the user — possibly via `/10x-frame` — before `/10x-plan`, since it changes the phase's deliverable.
-2. **Root-Claim invariant across edits (Case 3a/3b/3c) — in scope for Phase 1?** The creation-time root gate (Case 3) is the one rule the server enforces, but it is not maintained afterward. Three sub-decisions for `/10x-plan` (and possibly `/10x-frame`, since 3b/3c imply *features*, not just tests):
-   - **3b (demotion):** add a server guard so a PATCH cannot change the designated root's `statement_type` away from `claim` (likely a check in `patch_node`/`updateNode` against `debates.root_node_id`)? A red test pins the intent.
-   - **3c (re-designation):** the UI "Set as Root" promises something the API can't deliver. Either add a debate-PATCH path to move `root_node_id` (with validation that the target is a `claim`), or remove/disable the UI action. Round-trip fidelity here is formally Phase 3 (Risk #2) — decide whether to assert it now or cross-reference.
-   - **3a (delete):** map the FK-violation to a clean `409` in `deleteNode` rather than a 500? Cheap, improves the contract; a test asserts "deleting the root → 409, debate still has its root."
-   - **3d (no delete rollback):** add a rollback to `deleteNodes` (re-insert node + incident edges on `apiDeleteNode` failure), mirroring `rollbackNode`/`rollbackEdge`, so the canvas reconciles with the DB instead of waiting for a refresh. Primarily Risk #2 (Phase 3); pairs naturally with 3a's clean error so the client knows to roll back.
-   - These compound Open Question #1's "oracle-first vs. scope-to-shipped" choice: 3b and the demotion guard are the same *add-missing-validation* decision as Cases 1 & 2.
-3. **RLS-hidden vs. non-existent id for Risk #6.** Phase 1 can fully cover the *non-existent* id → 404 path. The *RLS-hidden* id → 404 path needs a two-user fixture that belongs to Phase 2 (Risk #1). Confirm Phase 1 asserts only the non-existent case and cross-references Phase 2 for the hidden case.
-4. **Test-DB strategy for integration.** Run against Supabase local (real Postgres + migrations + RLS) per §4 — but as the **service-role** client (bypassing RLS) for shape/not-found tests, reserving the anon/two-user path for Phase 2? Decide in `/10x-plan`; affects fixture setup and whether `seed.sql` is reused or each test seeds its own debate via the RPC.
-5. **Connective operand "type" rule.** The PRD says operands feed via `link` and a connective's output `supports` a Claim, but does not explicitly forbid a connective operand being another connective. Treat "operand node type" as **unspecified** unless the user clarifies; assert only cardinality (≥1) if option (A) is chosen.
+> Most of these were **resolved** by the 2026-06-06 PR review — see the **Decisions** section. Kept here with their resolutions for traceability.
+
+1. ~~Risk #3 — codify the oracle (red) vs. test what's enforced?~~ **Resolved (D1 + D2 + D3):** oracle-first / implement-and-TDD, but with a corrected, narrowed oracle — only the `link`→connective rule (D1) and root-Claim identity (D3) are enforced; connective cardinality is dropped (D2).
+2. ~~Root-Claim invariant across edits — in scope for Phase 1?~~ **Resolved (D3):** yes — 3a (UI block delete), 3b (guard demotion), 3c (persisted re-designation + strip new root's source edges) are Phase-1 TDD features. 3d → `optimistic-rollback` change (D4).
+3. ~~RLS-hidden vs. non-existent id for Risk #6?~~ **Resolved (D5):** Phase 1 = non-existent id → 404 only; two-user RLS-hidden fixture → test Phase 2. Logged in `test-plan.md`.
+4. **Test-DB strategy for integration — STILL OPEN for `/10x-plan`.** Run against Supabase local (real Postgres + migrations + RLS) per §4 — but as the **service-role** client (bypassing RLS) for shape/not-found tests, reserving the anon/two-user path for Phase 2? Affects fixture setup and whether `seed.sql` is reused or each test seeds its own debate via the RPC.
+5. ~~Connective operand "type" rule?~~ **Resolved (D2):** moot — connective operand rules (type and cardinality) are out of Phase 1 entirely.
+
+### New questions raised by the decisions (for `/10x-plan`)
+
+- **Shape of the root re-designation endpoint (D3-3c).** No debate-level mutating endpoint exists today (`debates/[id]/index.ts` is GET-only). Options: a `PATCH /api/debates/:id` taking `{ rootNodeId }`, or a dedicated `POST …/root`. It must (i) verify the target node is a `claim` in this debate, (ii) update `debates.root_node_id`, and (iii) delete relations where the new root is the **source** — ideally atomically in an RPC (mirrors `create_debate_with_root`). This endpoint is also a Risk #6 not-found surface (unknown/RLS-hidden id → 404).
+- **Where the `link`-target guard lives (D1).** A `createRelationSchema` superRefine can't see the DB; loading the target node needs the repository/handler or a DB trigger/constraint. Decide unit (pure rule) vs integration (API rejects) split — likely both, per the two-layer strategy.

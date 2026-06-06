@@ -1,8 +1,8 @@
 import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { roleDescriptors } from "../mapVisualLanguage";
+import { roleDescriptors, MENU_VIEWPORT_MARGIN } from "../mapVisualLanguage";
 import type { StatementRole } from "../mapVisualLanguage";
 import { useStore, useShallow } from "../store";
 import { NODE_CONSTRAINTS, isValidUrl } from "@/lib/debate/nodeConstraints";
@@ -52,7 +52,10 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   // Snapshot of data at the moment edit mode opens — used to revert on Escape.
   const originalDataRef = useRef({ title: data.title, body: data.body, url: data.url, role: data.role });
 
-  const [badgeAnchor, setBadgeAnchor] = useState<{ x: number; y: number } | null>(null);
+  // `y` = open-downward anchor (below the badge); `flipTop` = open-upward anchor (above the badge).
+  const [badgeAnchor, setBadgeAnchor] = useState<{ x: number; y: number; flipTop: number } | null>(null);
+  const [badgeFlipped, setBadgeFlipped] = useState(false);
+  const badgeMenuRef = useRef<HTMLDivElement>(null);
   const badgeRef = useRef<HTMLSpanElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
@@ -146,8 +149,17 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
     if (data.isRoot) return;
     e.stopPropagation();
     const rect = badgeRef.current?.getBoundingClientRect();
-    if (rect) setBadgeAnchor({ x: rect.left, y: rect.bottom + 4 });
+    if (rect) setBadgeAnchor({ x: rect.left, y: rect.bottom + 4, flipTop: rect.top - 4 });
   }
+
+  // Flip the role dropdown upward when it would overflow the bottom of the viewport
+  // (same transform trick as AddNodeMenu / NodeContextMenu). Runs before paint so
+  // there is no downward flash before the correction.
+  useLayoutEffect(() => {
+    if (badgeAnchor && badgeMenuRef.current) {
+      setBadgeFlipped(badgeAnchor.y + badgeMenuRef.current.offsetHeight + MENU_VIEWPORT_MARGIN > window.innerHeight);
+    }
+  }, [badgeAnchor]);
 
   const badgeDropdown =
     badgeAnchor !== null
@@ -160,10 +172,12 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
               }}
             />
             <div
+              ref={badgeMenuRef}
               className="fixed z-50 overflow-hidden rounded-lg shadow-lg"
               style={{
                 left: badgeAnchor.x,
-                top: badgeAnchor.y,
+                top: badgeFlipped ? badgeAnchor.flipTop : badgeAnchor.y,
+                transform: badgeFlipped ? "translateY(-100%)" : undefined,
                 minWidth: 150,
                 backgroundColor: "var(--card)",
                 border: "1px solid var(--border)",

@@ -235,16 +235,26 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
 
   return (
     <>
-      {!data.isRoot && !data.pending && (
+      {/* Keep the source Handle mounted whenever the node is real (not pending) and
+          toggle it via `isConnectable` + CSS rather than conditional rendering. React
+          Flow caches per-node `handleBounds` on Handle *mount*; since a node's id is
+          stable across root re-designation, unmounting on `isRoot` left a stale
+          "no source handle" record, so a former root's handle was dead on re-add.
+          Always-mounting keeps the registration intact. (Pending nodes still gate
+          out — their id swaps on reconcile, giving a fresh clean internals record.) */}
+      {!data.pending && (
         <Handle
           type="source"
           position={Position.Top}
+          isConnectable={!data.isRoot}
           style={{
             background: descriptor.accent,
             border: "2px solid white",
             width: 12,
             height: 12,
             boxShadow: `0 0 0 2px ${descriptor.accent}44`,
+            opacity: data.isRoot ? 0 : 1,
+            pointerEvents: data.isRoot ? "none" : "auto",
           }}
         />
       )}

@@ -544,7 +544,7 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Manual
 
-- [ ] 6.4 A PR shows the test step running in GitHub Actions checks
+- [x] 6.4 A PR shows the test step running in GitHub Actions checks
 
   > **Agent-automatable**: Partial — workflow YAML is verifiable locally; the actual Actions run needs a push/PR and the GitHub UI (or `gh run watch`).
 
@@ -562,7 +562,7 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Manual
 
-- [ ] 7.3 Reviewer confirms §6.1/§6.2 cookbook and §3 status match the shipped tests
+- [x] 7.3 Reviewer confirms §6.1/§6.2 cookbook and §3 status match the shipped tests
 
   > **Agent-automatable**: No — a human reads the prose for accuracy against the tests on disk.
 

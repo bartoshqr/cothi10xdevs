@@ -148,6 +148,9 @@ export async function deleteNode(supabase: DB, nodeId: string): Promise<void> {
     // deleting the designated root trips a foreign-key violation (SQLSTATE 23503)
     // at commit. Map that to a clean 409 backstop instead of leaking the raw FK
     // error as a 500 — the UI blocks this first, but the API must not 500 either.
+    // ASSUMPTION: root_node_id is the only inbound FK to `nodes` (relations
+    // cascade), so any 23503 here is the root-delete case. If another table ever
+    // FKs to nodes without ON DELETE CASCADE, narrow this to the constraint name.
     if (error.code === "23503")
       throw new ConflictError("The root claim cannot be deleted; set a different claim as the root instead.");
     throw error;

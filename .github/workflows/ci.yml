@@ -18,6 +18,12 @@ jobs:
       - run: npm ci
       - run: npx astro sync
       - run: npm run lint
+      # Unit suite gates every run — pure, no infra (Vitest `unit` project).
+      # The integration suite needs a live Supabase local stack and is run
+      # ad-hoc/locally rather than in CI (see test-plan §4). Those tests self-skip
+      # when SUPABASE_SERVICE_ROLE_KEY is absent, so they would no-op here anyway —
+      # a unit-only gate keeps that explicit.
+      - run: npm run test:unit
       - run: npm run build
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

@@ -123,6 +123,14 @@ exposed in the current session.
 | e2e | Playwright (candidate) | — | none yet — see Phase 5; reserved for the one critical flow (build → invite → mark → summary) once S-04 lands. No Playwright MCP this session. |
 | accessibility | none yet | — | Out of scope for the integrity-first rollout; revisit if a UI-regression risk surfaces. |
 
+**Integration-in-CI decision (Phase 1, checked: 2026-06-08):** CI runs the
+**unit** suite only (`npm run test:unit`, no infra). The **integration** suite
+runs **ad-hoc/locally** against a live Supabase local stack — starting that
+stack per CI run (Docker pull + `supabase start`, ~minutes) was judged too heavy
+for every PR, and the integration tests self-skip without
+`SUPABASE_SERVICE_ROLE_KEY` so they would no-op in CI regardless. Revisit if a
+persistence regression slips past the unit gate.
+
 **Stack grounding tools (current session):**
 - Docs: `ctx7` CLI (Context7) — available; use to ground exact Vitest / Playwright / Astro-on-Vite / Supabase test-setup APIs and current config syntax before Phase 1 writes config; checked: 2026-06-05
 - Search: none (no Exa / web-search MCP exposed this session) — rely on Context7 for docs; checked: 2026-06-05

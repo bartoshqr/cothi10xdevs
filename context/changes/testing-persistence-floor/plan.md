@@ -521,14 +521,14 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [x] 5.1 Integration: demoting the root's `statement_type` → 422 (red→green); non-root demotion allowed; root title/body/position still patchable
-- [x] 5.2 Integration: deleting the root → 409; deleting a non-root → 204
-- [x] 5.3 Store/UI-logic test: root delete blocked client-side
-- [x] 5.4 `npm run lint` + `npx astro check` clean
+- [x] 5.1 Integration: demoting the root's `statement_type` → 422 (red→green); non-root demotion allowed; root title/body/position still patchable — 7161283
+- [x] 5.2 Integration: deleting the root → 409; deleting a non-root → 204 — 7161283
+- [x] 5.3 Store/UI-logic test: root delete blocked client-side — 7161283
+- [x] 5.4 `npm run lint` + `npx astro check` clean — 7161283
 
 #### Manual
 
-- [x] 5.5 In the UI: the root's delete is blocked with the specified message
+- [x] 5.5 In the UI: the root's delete is blocked with the specified message — 7161283
 
   > **Agent-automatable**: No — requires inspecting the rendered node's disabled/blocked delete affordance and its message.
 
@@ -538,9 +538,9 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [ ] 6.1 Workflow runs `test:unit` and it passes on a pushed branch / PR
-- [ ] 6.2 Integration job (if wired) starts Supabase, runs `test:integration` green, stops it
-- [ ] 6.3 Lint + build steps still pass in the updated workflow
+- [x] 6.1 Workflow runs `test:unit` and it passes on a pushed branch / PR
+- [x] 6.2 Integration job (if wired) starts Supabase, runs `test:integration` green, stops it
+- [x] 6.3 Lint + build steps still pass in the updated workflow
 
 #### Manual
 

@@ -1,10 +1,10 @@
 ---
 change_id: optimistic-rollback
 title: Add rollback/reconciliation to all optimistic store mutations
-status: impl_reviewed
+status: archived
 created: 2026-06-06
 updated: 2026-06-08
-archived_at: null
+archived_at: 2026-06-08T14:26:09Z
 ---
 
 ## Notes

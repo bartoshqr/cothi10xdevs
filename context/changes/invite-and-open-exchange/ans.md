@@ -7,3 +7,5 @@
 4. advocates can't even see themselves in usernames search
 
 5. first we choose challenger, then number of rounds
+
+6. ui for creating an exchange should be dropping, slide from the header or from the side

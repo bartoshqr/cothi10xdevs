@@ -4,6 +4,7 @@ import type { DebateGraph } from "@/lib/debate/repository";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
+type DebateRow = Database["public"]["Tables"]["debates"]["Row"];
 
 /**
  * Thin fetch wrappers around the Phase 2 CRUD endpoints. They carry the
@@ -70,6 +71,17 @@ export async function apiUpdateRelation(
 export async function apiDeleteRelation(debateId: string, relationId: string): Promise<void> {
   const res = await fetch(`/api/debates/${debateId}/relations/${relationId}`, { method: "DELETE" });
   expectOk(res, "Delete relation");
+}
+
+/** D3-3c: persist a root re-designation. Returns the updated debate row. */
+export async function apiSetDebateRoot(debateId: string, nodeId: string): Promise<DebateRow> {
+  const res = await fetch(`/api/debates/${debateId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rootNodeId: nodeId }),
+  });
+  expectOk(res, "Set root claim");
+  return res.json() as Promise<DebateRow>;
 }
 
 export async function apiGetGraph(debateId: string): Promise<DebateGraph> {

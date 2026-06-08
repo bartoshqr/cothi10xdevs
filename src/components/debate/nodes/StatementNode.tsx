@@ -219,8 +219,9 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 style={{ color: "var(--primary)" }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  updateNodeFields(id, { statementType: "claim" }); // controversial, let's check with users
-                  setRootNode(id);
+                  // Single persisted, atomic re-designation (D3-3c): the store awaits
+                  // the server, then applies role→claim, isRoot, and edge-strip on success.
+                  void setRootNode(id);
                   setBadgeAnchor(null);
                 }}
               >

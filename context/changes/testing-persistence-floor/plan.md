@@ -481,13 +481,13 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [x] 3.1 Unit `isLegalRelationTarget` passes (red→green recorded)
-- [x] 3.2 Integration: `link`→non-connective rejected (422); `link`→connective accepted; other kinds any→any accepted
-- [x] 3.3 `npm run lint` + `npx astro check` clean
+- [x] 3.1 Unit `isLegalRelationTarget` passes (red→green recorded) — 9512faa
+- [x] 3.2 Integration: `link`→non-connective rejected (422); `link`→connective accepted; other kinds any→any accepted — 9512faa
+- [x] 3.3 `npm run lint` + `npx astro check` clean — 9512faa
 
 #### Manual
 
-- [x] 3.4 In the UI, creating a `link` to a connective still works
+- [x] 3.4 In the UI, creating a `link` to a connective still works — 9512faa
 
   > **Agent-automatable**: No — requires the React canvas and a drag-to-connect interaction.
 
@@ -497,16 +497,16 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [ ] 4.1 `set_debate_root` migration applies cleanly
-- [ ] 4.2 Integration: re-designation moves `root_node_id`, coerces role → `claim`, strips outgoing relations
-- [ ] 4.3 Integration: connective target rejected (422); unknown debate/node id → 404
-- [ ] 4.4 Integration: `PATCH /api/debates/:id` accepts only whitelisted fields
-- [ ] 4.5 Store unit test: apply-on-success updates `isRoot`/role/edges; failure leaves canvas unchanged
-- [ ] 4.6 `npm run lint` + `npx astro check` clean
+- [x] 4.1 `set_debate_root` migration applies cleanly
+- [x] 4.2 Integration: re-designation moves `root_node_id`, coerces role → `claim`, strips outgoing relations
+- [x] 4.3 Integration: connective target rejected (422); unknown debate/node id → 404
+- [x] 4.4 Integration: `PATCH /api/debates/:id` accepts only whitelisted fields
+- [x] 4.5 Store unit test: apply-on-success updates `isRoot`/role/edges; failure leaves canvas unchanged
+- [x] 4.6 `npm run lint` + `npx astro check` clean
 
 #### Manual
 
-- [ ] 4.7 In the UI: "Set as Root Claim" → reload → choice persists; new root's outgoing edges gone; only one root
+- [x] 4.7 In the UI: "Set as Root Claim" → reload → choice persists; new root's outgoing edges gone; only one root
 
   > **Agent-automatable**: Partial — the DB effect is scriptable via SQL; the click + reload UX needs a browser.
 

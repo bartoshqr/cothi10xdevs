@@ -233,6 +233,22 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      set_debate_root: {
+        Args: { p_debate_id: string; p_node_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          owner_id: string
+          root_node_id: string | null
+          title: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "debates"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       username_available: { Args: { check_username: string }; Returns: boolean }
     }
     Enums: {

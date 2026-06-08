@@ -131,6 +131,33 @@ export async function deleteNode(supabase: DB, nodeId: string): Promise<void> {
   if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
 }
 
+export async function setDebateRoot(supabase: DB, debateId: string, nodeId: string): Promise<DebateRow> {
+  // D3-3c: re-designate the debate's root. Pre-check the target app-side (mirrors
+  // the D1 link guard): an unknown node/debate pair → NotFoundError (404); a
+  // non-statement target (e.g. a connective) → ValidationError (422). The atomic
+  // effects (coerce role → claim, strip outgoing relations, move root_node_id)
+  // run inside the set_debate_root RPC.
+  const { data: node, error: nodeError } = await supabase
+    .from("nodes")
+    .select("kind")
+    .eq("id", nodeId)
+    .eq("debate_id", debateId)
+    .maybeSingle();
+  if (nodeError) throw nodeError;
+  if (!node) throw new NotFoundError();
+  if (node.kind !== "statement") {
+    throw new ValidationError("Only a statement node can be set as the root claim.");
+  }
+
+  const { data, error } = await supabase
+    .rpc("set_debate_root", { p_debate_id: debateId, p_node_id: nodeId })
+    .maybeSingle();
+  if (error) throw error;
+  // SETOF: an unknown pair yields an empty set → null (lessons §4), not an all-null row.
+  if (!data) throw new NotFoundError();
+  return data;
+}
+
 export async function createRelation(supabase: DB, input: CreateRelationInput, authorId: string): Promise<RelationRow> {
   // D1: a `link` must target a connective. Load the target's kind and reject an
   // illegal pairing app-side (422) before inserting — the rule can't be expressed

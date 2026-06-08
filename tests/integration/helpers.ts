@@ -31,6 +31,17 @@ export function requireServiceClient(): SupabaseClient<Database> {
   return serviceClient;
 }
 
+/**
+ * Id of the dedicated seeding user. Use as `authorId` when inserting extra nodes
+ * or relations directly (the FK `author_id → auth.users` needs a real user).
+ * Call inside `describeIntegration` blocks.
+ */
+export function requireSeedingUserId(): string {
+  const user = inject("seedingUser");
+  if (!user) throw new Error("seeding user not provisioned (globalSetup did not run or env is absent)");
+  return user.userId;
+}
+
 // Lazily sign the dedicated seeding user in once per worker, then reuse.
 let seedingClientPromise: Promise<SupabaseClient<Database>> | null = null;
 

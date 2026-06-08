@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/db/database.types";
-import { NotFoundError } from "@/lib/errors";
+import { NotFoundError, ValidationError } from "@/lib/errors";
+import { isLegalRelationTarget } from "./relationRules";
 import type {
   CreateDebateInput,
   CreateNodeInput,
@@ -131,6 +132,21 @@ export async function deleteNode(supabase: DB, nodeId: string): Promise<void> {
 }
 
 export async function createRelation(supabase: DB, input: CreateRelationInput, authorId: string): Promise<RelationRow> {
+  // D1: a `link` must target a connective. Load the target's kind and reject an
+  // illegal pairing app-side (422) before inserting — the rule can't be expressed
+  // as a simple column/check constraint, and the canvas guard can be bypassed via
+  // the API. Unknown target → NotFoundError (404), consistent with Risk #6.
+  const { data: target, error: targetError } = await supabase
+    .from("nodes")
+    .select("kind")
+    .eq("id", input.targetNodeId)
+    .maybeSingle();
+  if (targetError) throw targetError;
+  if (!target) throw new NotFoundError();
+  if (!isLegalRelationTarget(input.kind, target.kind)) {
+    throw new ValidationError(`A '${input.kind}' relation must target a connective node.`);
+  }
+
   const { data, error } = await supabase
     .from("relations")
     .insert({

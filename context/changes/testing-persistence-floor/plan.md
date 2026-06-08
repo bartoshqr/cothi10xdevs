@@ -447,13 +447,13 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [x] 2.1 Unknown-id → `NotFoundError` for `updateNode`, `deleteNode`, `updateRelation`, `deleteRelation`
-- [x] 2.2 `patch_node` SETOF-contract test (empty set → null, not all-null row)
-- [x] 2.3 `npm run lint` + `npx astro check` clean
+- [x] 2.1 Unknown-id → `NotFoundError` for `updateNode`, `deleteNode`, `updateRelation`, `deleteRelation` — 3720518
+- [x] 2.2 `patch_node` SETOF-contract test (empty set → null, not all-null row) — 3720518
+- [x] 2.3 `npm run lint` + `npx astro check` clean — 3720518
 
 #### Manual
 
-- [x] 2.4 Real `PATCH` to an unknown node id over HTTP returns 404
+- [x] 2.4 Real `PATCH` to an unknown node id over HTTP returns 404 — 3720518
 
   > **Agent-automatable**: Partial — DB layer is scriptable; the HTTP layer needs a bearer token from a password sign-in.
 
@@ -481,13 +481,13 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [ ] 3.1 Unit `isLegalRelationTarget` passes (red→green recorded)
-- [ ] 3.2 Integration: `link`→non-connective rejected (422); `link`→connective accepted; other kinds any→any accepted
-- [ ] 3.3 `npm run lint` + `npx astro check` clean
+- [x] 3.1 Unit `isLegalRelationTarget` passes (red→green recorded)
+- [x] 3.2 Integration: `link`→non-connective rejected (422); `link`→connective accepted; other kinds any→any accepted
+- [x] 3.3 `npm run lint` + `npx astro check` clean
 
 #### Manual
 
-- [ ] 3.4 In the UI, creating a `link` to a connective still works
+- [x] 3.4 In the UI, creating a `link` to a connective still works
 
   > **Agent-automatable**: No — requires the React canvas and a drag-to-connect interaction.
 

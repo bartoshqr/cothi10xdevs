@@ -418,14 +418,14 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [x] 1.1 Deps install and `npm run test:unit` passes the smoke unit test
-- [x] 1.2 `npm run test:integration` passes the smoke integration test
-- [x] 1.3 `npx astro check` passes with test files present
-- [x] 1.4 `npm run lint` passes on new test files
+- [x] 1.1 Deps install and `npm run test:unit` passes the smoke unit test — 52d8d2b
+- [x] 1.2 `npm run test:integration` passes the smoke integration test — 52d8d2b
+- [x] 1.3 `npx astro check` passes with test files present — 52d8d2b
+- [x] 1.4 `npm run lint` passes on new test files — 52d8d2b
 
 #### Manual
 
-- [x] 1.5 Service-role + seeding clients connect and round-trip a seeded debate
+- [x] 1.5 Service-role + seeding clients connect and round-trip a seeded debate — 52d8d2b
 
   > **Agent-automatable**: Yes — scriptable via the Supabase service-role client + the RPC.
 
@@ -447,24 +447,31 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [ ] 2.1 Unknown-id → `NotFoundError` for `updateNode`, `deleteNode`, `updateRelation`, `deleteRelation`
-- [ ] 2.2 `patch_node` SETOF-contract test (empty set → null, not all-null row)
-- [ ] 2.3 `npm run lint` + `npx astro check` clean
+- [x] 2.1 Unknown-id → `NotFoundError` for `updateNode`, `deleteNode`, `updateRelation`, `deleteRelation`
+- [x] 2.2 `patch_node` SETOF-contract test (empty set → null, not all-null row)
+- [x] 2.3 `npm run lint` + `npx astro check` clean
 
 #### Manual
 
-- [ ] 2.4 Real `PATCH` to an unknown node id over HTTP returns 404
+- [x] 2.4 Real `PATCH` to an unknown node id over HTTP returns 404
 
   > **Agent-automatable**: Partial — DB layer is scriptable; the HTTP layer needs a bearer token from a password sign-in.
 
+  Uses the fixtures from `supabase/seed.sql` (present after `npx supabase db reset`): user
+  `s@e.pl` / `pwd123!` owns the seed debate `00000000-0000-4000-8000-000000000010`, so the
+  request reaches the not-found path (RLS allows it; only the node id is unknown). Requires the
+  Astro dev server on `:4321` (`npm run dev`) and the anon key in `$SUPABASE_KEY` (export it from
+  `npx supabase status` → Publishable key, or your `.env`).
+
   ```bash
-  # Get a user token (avoids browser cookie extraction)
+  # Get a user token (avoids browser cookie extraction). `echo "$TOKEN"` to inspect it —
+  # it's a short-lived access JWT, fine to print locally.
   TOKEN=$(curl -s "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
     -H "apikey: $SUPABASE_KEY" -H "Content-Type: application/json" \
-    -d '{"email":"<test-user>","password":"<pw>"}' | jq -r .access_token)
-  # PATCH a non-existent node id under a real debate
+    -d '{"email":"s@e.pl","password":"pwd123!"}' | jq -r .access_token)
+  # PATCH a non-existent node id under the seed debate
   curl -s -o /dev/null -w "%{http_code}\n" -X PATCH \
-    "http://127.0.0.1:4321/api/debates/<debateId>/nodes/00000000-0000-0000-0000-000000000000" \
+    "http://127.0.0.1:4321/api/debates/00000000-0000-4000-8000-000000000010/nodes/00000000-0000-0000-0000-000000000000" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
     -d '{"title":"x"}'
   # Expected: 404

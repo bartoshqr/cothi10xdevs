@@ -370,13 +370,13 @@ None — no schema or data changes. `setGraph`/`apiGetGraph` already exist; this
 
 #### Automated
 
-- [x] 2.1 Integration root-protection test passes: `npx vitest run tests/integration/rootProtection.test.ts`
-- [x] 2.2 Full suite passes: `npm run test`
-- [x] 2.3 Cookbook entry present: `grep -n "reconcileFromServer" context/foundation/test-plan.md`
+- [x] 2.1 Integration root-protection test passes: `npx vitest run tests/integration/rootProtection.test.ts` — 49001fe
+- [x] 2.2 Full suite passes: `npm run test` — 49001fe
+- [x] 2.3 Cookbook entry present: `grep -n "reconcileFromServer" context/foundation/test-plan.md` — 49001fe
 
 #### Manual
 
-- [x] 2.4 §6 cookbook entry reads clearly
+- [x] 2.4 §6 cookbook entry reads clearly — 49001fe
 
   > **Agent-automatable**: Partial — presence is greppable (2.3), but judging clarity for a fresh reader is a human review step.
 

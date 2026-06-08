@@ -557,8 +557,8 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [x] 7.1 Full `npm test` suite green
-- [x] 7.2 `npm run lint` + `npm run build` pass
+- [x] 7.1 Full `npm test` suite green — 023b8ca
+- [x] 7.2 `npm run lint` + `npm run build` pass — 023b8ca
 
 #### Manual
 

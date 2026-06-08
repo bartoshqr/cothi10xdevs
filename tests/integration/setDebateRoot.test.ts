@@ -39,13 +39,22 @@ describeIntegration("setDebateRoot re-designation (D3-3c)", () => {
       { debateId, sourceNodeId: newRoot.id, targetNodeId: target.id, kind: "supports" },
       authorId,
     );
+    // Give the new root a source url; a root is a claim and a claim has no url, so
+    // promotion must strip it server-side (impl-review F1 — mirrors the client's
+    // apply-on-success, which clears url, so persisted state can't diverge on reload).
+    await supabase
+      .from("nodes")
+      .update({ metadata: { statement_type: "rebuttal", url: "https://example.com/src" } })
+      .eq("id", newRoot.id);
 
     const updated = await setDebateRoot(supabase, debateId, newRoot.id);
 
     expect(updated.root_node_id).toBe(newRoot.id);
 
     const { data: node } = await supabase.from("nodes").select("metadata").eq("id", newRoot.id).single();
-    expect((node?.metadata as { statement_type: string }).statement_type).toBe("claim");
+    const meta = node?.metadata as { statement_type: string; url?: string };
+    expect(meta.statement_type).toBe("claim");
+    expect(meta.url).toBeUndefined(); // F1: url stripped on promotion to root claim
 
     const { data: outgoing } = await supabase.from("relations").select("id").eq("source_node_id", newRoot.id);
     expect(outgoing).toEqual([]);

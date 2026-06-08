@@ -27,6 +27,11 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.production
+.env.test
+.env.test.local
+
+# vitest coverage
+coverage/
 
 # cloudflare
 .dev.vars

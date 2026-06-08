@@ -418,14 +418,14 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [ ] 1.1 Deps install and `npm run test:unit` passes the smoke unit test
-- [ ] 1.2 `npm run test:integration` passes the smoke integration test
-- [ ] 1.3 `npx astro check` passes with test files present
-- [ ] 1.4 `npm run lint` passes on new test files
+- [x] 1.1 Deps install and `npm run test:unit` passes the smoke unit test
+- [x] 1.2 `npm run test:integration` passes the smoke integration test
+- [x] 1.3 `npx astro check` passes with test files present
+- [x] 1.4 `npm run lint` passes on new test files
 
 #### Manual
 
-- [ ] 1.5 Service-role + seeding clients connect and round-trip a seeded debate
+- [x] 1.5 Service-role + seeding clients connect and round-trip a seeded debate
 
   > **Agent-automatable**: Yes — scriptable via the Supabase service-role client + the RPC.
 

@@ -21,6 +21,7 @@ import {
   apiSetDebateRoot,
   apiGetGraph,
 } from "./persistence";
+import { ApiError } from "./apiError";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
@@ -375,6 +376,10 @@ export const useStore = create<RFState>()((set, get) => ({
         .catch((e: unknown) => {
           rollbackEdge(edgeId);
           reportError(e instanceof Error ? e.message : "Failed to create relation");
+          // A 409 means these two nodes are already connected server-side (another
+          // session created the edge). Reconcile so that existing edge appears —
+          // otherwise the canvas shows no connection at all, contradicting the banner.
+          if (e instanceof ApiError && e.status === 409) void reconcileFromServer();
         });
     }
   },

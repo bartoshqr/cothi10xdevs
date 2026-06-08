@@ -45,6 +45,16 @@ export const updateNodeSchema = z.object({
   positionY: z.number().optional(),
 });
 
+// D3-3c: PATCH /api/debates/:id whitelist. `.strict()` rejects any field not
+// listed, so the endpoint can never write an arbitrary debate column. Only
+// `rootNodeId` is persisted this phase (routes to setDebateRoot); future fields
+// (e.g. title) are added here explicitly when their handler path exists.
+export const updateDebateSchema = z
+  .object({
+    rootNodeId: z.uuid().optional(),
+  })
+  .strict();
+
 export const createRelationSchema = z.object({
   debateId: z.uuid(),
   sourceNodeId: z.uuid(),
@@ -63,5 +73,6 @@ export const debateIdParamSchema = z.uuid();
 export type CreateDebateInput = z.infer<typeof createDebateSchema>;
 export type CreateNodeInput = z.infer<typeof createNodeSchema>;
 export type UpdateNodeInput = z.infer<typeof updateNodeSchema>;
+export type UpdateDebateInput = z.infer<typeof updateDebateSchema>;
 export type CreateRelationInput = z.infer<typeof createRelationSchema>;
 export type UpdateRelationInput = z.infer<typeof updateRelationSchema>;

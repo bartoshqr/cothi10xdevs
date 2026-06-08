@@ -219,8 +219,9 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 style={{ color: "var(--primary)" }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  updateNodeFields(id, { statementType: "claim" }); // controversial, let's check with users
-                  setRootNode(id);
+                  // Single persisted, atomic re-designation (D3-3c): the store awaits
+                  // the server, then applies role→claim, isRoot, and edge-strip on success.
+                  void setRootNode(id);
                   setBadgeAnchor(null);
                 }}
               >
@@ -234,16 +235,26 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
 
   return (
     <>
-      {!data.isRoot && !data.pending && (
+      {/* Keep the source Handle mounted whenever the node is real (not pending) and
+          toggle it via `isConnectable` + CSS rather than conditional rendering. React
+          Flow caches per-node `handleBounds` on Handle *mount*; since a node's id is
+          stable across root re-designation, unmounting on `isRoot` left a stale
+          "no source handle" record, so a former root's handle was dead on re-add.
+          Always-mounting keeps the registration intact. (Pending nodes still gate
+          out — their id swaps on reconcile, giving a fresh clean internals record.) */}
+      {!data.pending && (
         <Handle
           type="source"
           position={Position.Top}
+          isConnectable={!data.isRoot}
           style={{
             background: descriptor.accent,
             border: "2px solid white",
             width: 12,
             height: 12,
             boxShadow: `0 0 0 2px ${descriptor.accent}44`,
+            opacity: data.isRoot ? 0 : 1,
+            pointerEvents: data.isRoot ? "none" : "auto",
           }}
         />
       )}
@@ -258,7 +269,10 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
         }}
         onDoubleClick={handleNodeDoubleClick}
       >
-        {isEditing && (
+        {/* D3-3a: the root claim has no delete affordance — re-designate via the
+            badge menu's "Set as Root Claim" instead. Other delete paths (keyboard,
+            context menu) are blocked in the store, and the server backstops with a 409. */}
+        {isEditing && !data.isRoot && (
           <button
             className="nodrag nopan absolute top-1 right-1 z-10 flex h-4 w-4 items-center justify-center rounded text-xs leading-none transition-colors hover:bg-[var(--muted)]"
             style={{ color: "var(--muted-foreground)" }}

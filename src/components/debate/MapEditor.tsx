@@ -173,7 +173,8 @@ function MapEditorInner() {
   useEffect(() => {
     if (debateId === null && nodes.length === 0) {
       const id = createStatementNode("claim", { x: 0, y: 0 });
-      setRootNode(id);
+      // Local-only (debateId === null): setRootNode applies synchronously, no await needed.
+      void setRootNode(id);
     }
   }, [debateId, nodes.length, createStatementNode, setRootNode]);
 

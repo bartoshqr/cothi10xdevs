@@ -18,6 +18,7 @@ import {
   apiCreateRelation,
   apiUpdateRelation,
   apiDeleteRelation,
+  apiSetDebateRoot,
 } from "./persistence";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
@@ -61,7 +62,7 @@ export interface RFState {
   deleteNodes: (ids: string[]) => void;
   deleteEdge: (id: string) => void;
   updateRelationKind: (id: string, kind: RelationKind) => void;
-  setRootNode: (id: string) => void;
+  setRootNode: (id: string) => Promise<void>;
   setInEditNode: (id: string | null) => void;
   setInEditEdgeId: (id: string | null) => void;
   isInEditBlocked: () => boolean;
@@ -447,6 +448,13 @@ export const useStore = create<RFState>()((set, get) => ({
   deleteNodes: (ids) => {
     const idSet = new Set(ids);
     const { debateId, nodes, edges } = get();
+    // D3-3a: the root claim cannot be deleted — only re-designated via "Set as Root
+    // Claim". Block the whole batch (the server backstops this with a 409) so the
+    // user re-issues the delete without the root rather than losing its siblings.
+    if (nodes.some((n) => idSet.has(n.id) && n.type === "statement" && n.data.isRoot)) {
+      reportError("You cannot delete the root claim, but you can set a different claim as the root.");
+      return;
+    }
     const persistedIds = debateId ? nodes.filter((n) => idSet.has(n.id) && !n.data.pending).map((n) => n.id) : [];
     // Relations cascade server-side; drop any in-flight edge bookkeeping for incident edges.
     for (const e of edges) {
@@ -503,14 +511,38 @@ export const useStore = create<RFState>()((set, get) => ({
     }
   },
 
-  setRootNode: (id) => {
-    set((state) => ({
-      nodes: state.nodes.map((n) => {
-        if (n.type !== "statement") return n;
-        if (n.id === id) return { ...n, data: { ...n.data, isRoot: true, url: undefined } };
-        return { ...n, data: { ...n.data, isRoot: false } };
-      }),
-    }));
+  setRootNode: async (id) => {
+    const { debateId } = get();
+
+    // Apply all three effects together: the new root flips isRoot + role→claim
+    // (a root is always a claim), every other statement loses isRoot, and the new
+    // root's outgoing edges are dropped (server-side set_debate_root strips them —
+    // a root claim is a sink). Mirrors the persisted operation exactly.
+    const applyEffects = () => {
+      set((state) => ({
+        nodes: state.nodes.map((n) => {
+          if (n.type !== "statement") return n;
+          if (n.id === id) return { ...n, data: { ...n.data, isRoot: true, role: "claim", url: undefined } };
+          return { ...n, data: { ...n.data, isRoot: false } };
+        }),
+        edges: state.edges.filter((e) => e.source !== id),
+      }));
+    };
+
+    // Local-only canvas (no persisted debate): apply immediately, nothing to call.
+    if (!debateId) {
+      applyEffects();
+      return;
+    }
+
+    // Apply-on-success (D4): touch the canvas only after the server confirms (200).
+    // On failure the canvas is left untouched and the error banner surfaces.
+    try {
+      await apiSetDebateRoot(debateId, id);
+      applyEffects();
+    } catch (e) {
+      reportError(e instanceof Error ? e.message : "Failed to set root claim");
+    }
   },
 
   setInEditNode: (id) => {

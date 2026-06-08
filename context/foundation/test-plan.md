@@ -6,7 +6,7 @@
 >
 > Refresh: re-run `/10x-test-plan --refresh` when stale (see §8).
 >
-> Last updated: 2026-06-05 (Phase 1 change opened)
+> Last updated: 2026-06-08 (Phase 1 complete — cookbook §6.1/§6.2/§6.6 filled)
 
 ## 1. Strategy
 
@@ -80,7 +80,7 @@ orchestrator updates Status as artifacts appear on disk.
 
 | # | Phase name | Goal (one line) | Risks covered | Test types | Status | Change folder |
 |---|------------|-----------------|----------------|------------|--------|----------------|
-| 1 | Bootstrap + persistence/shape floor | Stand up the test runner and lock the shipped S-01 persistence + graph-shape rules at the cheapest layer | #3, #6 | unit + integration | change opened | context/changes/testing-persistence-floor/ |
+| 1 | Bootstrap + persistence/shape floor | Stand up the test runner and lock the shipped S-01 persistence + graph-shape rules at the cheapest layer | #3, #6 | unit + integration | complete | context/changes/testing-persistence-floor/ |
 | 2 | Authorization / RLS | Prove cross-pair access to debates / nodes / relations is denied at the database | #1 | integration | not started | — |
 | 3 | Canvas↔store↔persistence round-trip | Defend store / persistence fidelity — the drift the team fears most | #2 | unit + integration | not started | — |
 | 4 | Turn / round + edit-delete integrity | Lock turn-locking, mark-invalidation, and orphaning once the slices ship | #4, #5 | integration | not started | — |
@@ -97,6 +97,17 @@ to ground. Phase 5's e2e on the critical flow similarly waits for S-04
 (`first-divergence-summary`). Phases 1–3 are actionable now against shipped
 S-01.
 
+**Phase 1 scope note (2026-06-06, from `testing-persistence-floor` research +
+PR review):** Phase 1 covers Risk #6 only for the **non-existent id → 404**
+path. The **RLS-hidden id → 404** half (a row that exists but belongs to the
+other pair) needs a two-user fixture and is **carried into Phase 2** (Risk #1),
+where that fixture already lives. Also note: Phase 1 grew two small *features*
+(implemented test-first) — a server-side `link`→connective relation guard and
+root-Claim identity handling (block delete, persisted re-designation, no
+demotion); connective operand-cardinality checks were explicitly **excluded**
+(instant per-node save makes them an exchange-init/round-boundary concern, not
+a persistence-layer rule). See `context/changes/testing-persistence-floor/research.md` §Decisions.
+
 ## 4. Stack
 
 The classic test base for this project. AI-native tools (if any) carry a
@@ -111,6 +122,14 @@ exposed in the current session.
 | component / store | Vitest + Testing Library | — | For the Zustand store and persistence mapping (Risk #2). Add `@testing-library/react` in Phase 3 if a rendered-component test is justified over a pure store test. |
 | e2e | Playwright (candidate) | — | none yet — see Phase 5; reserved for the one critical flow (build → invite → mark → summary) once S-04 lands. No Playwright MCP this session. |
 | accessibility | none yet | — | Out of scope for the integrity-first rollout; revisit if a UI-regression risk surfaces. |
+
+**Integration-in-CI decision (Phase 1, checked: 2026-06-08):** CI runs the
+**unit** suite only (`npm run test:unit`, no infra). The **integration** suite
+runs **ad-hoc/locally** against a live Supabase local stack — starting that
+stack per CI run (Docker pull + `supabase start`, ~minutes) was judged too heavy
+for every PR, and the integration tests self-skip without
+`SUPABASE_SERVICE_ROLE_KEY` so they would no-op in CI regardless. Revisit if a
+persistence regression slips past the unit gate.
 
 **Stack grounding tools (current session):**
 - Docs: `ctx7` CLI (Context7) — available; use to ground exact Vitest / Playwright / Astro-on-Vite / Supabase test-setup APIs and current config syntax before Phase 1 writes config; checked: 2026-06-05
@@ -148,14 +167,102 @@ relevant rollout phase ships; before that, the sub-section reads "TBD — see
 
 ### 6.1 Adding a unit test
 
-- TBD — see §3 Phase 1 (graph-shape constraint / schema rules: connective
-  operand legality, relation-target legality, shared validation limits).
+Unit tests run under the Vitest `unit` project (`node` env, no infra) and live
+in `tests/unit/**/*.test.ts`. Run them with `npm run test:unit` (or `npm test`
+for the whole suite). They never touch Supabase, so they stay green even with
+the local stack down.
+
+Use a unit test when the rule is a **pure function** or **pure store/logic
+slice** — no DB round-trip needed. Examples shipped in Phase 1:
+
+- **Pure predicate** — `tests/unit/relationRules.test.ts` pins
+  `isLegalRelationTarget` (the `link`→connective rule). Import the function via
+  the `@/*` alias (resolved in the Vitest config) and assert against the
+  **oracle** (the FR / research rule), never by re-deriving the result with the
+  same logic. Use `it.each` for the "any→any" kinds so each case is one row, not
+  six copies (`tests/unit/relationRules.test.ts:15`).
+- **Schema rule** — `tests/unit/updateDebateSchema.test.ts` proves the
+  whitelist: a known field parses, an unknown field is stripped/rejected.
+- **Store logic** — `tests/unit/setRootNode.store.test.ts` and
+  `tests/unit/deleteRootBlock.store.test.ts` exercise a store action in
+  isolation (build a store, dispatch, assert the resulting slice), with no React
+  render and no network.
+
+Pattern:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { isLegalRelationTarget } from "@/lib/debate/relationRules";
+
+describe("isLegalRelationTarget", () => {
+  it("allows link only when the target is a connective", () => {
+    expect(isLegalRelationTarget("link", "connective")).toBe(true);
+    expect(isLegalRelationTarget("link", "statement")).toBe(false);
+  });
+});
+```
 
 ### 6.2 Adding an integration test (API endpoint)
 
-- TBD — see §3 Phase 1 (debates / nodes / relations CRUD, incl. the
-  not-found 404 branch — Risk #6) and §3 Phase 2 (cross-pair RLS denial —
-  Risk #1).
+Integration tests run under the Vitest `integration` project (`node` env,
+`setupFiles: tests/integration/setup.ts`) and live in
+`tests/integration/**/*.test.ts`. Run them with `npm run test:integration`
+against a live **Supabase local** stack (`npx supabase start`).
+
+**Env + self-skip.** The suite needs `SUPABASE_URL`, `SUPABASE_KEY` (anon), and
+`SUPABASE_SERVICE_ROLE_KEY` (from `supabase start` output, uncommitted). When any
+is missing, `describeIntegration` becomes `describe.skip` (`tests/integration/helpers.ts:16`)
+so unit-only runs and CI stay green without infra. **Always declare suites with
+`describeIntegration`, never raw `describe`.**
+
+**Auth split (load-bearing — see §6.6).** Assertions and teardown use the
+**service-role** client (`requireServiceClient()`, RLS bypassed). Seeding uses a
+**user-scoped** client, because `create_debate_with_root` reads `auth.uid()` and
+a pure service-role caller has none. Both are wired in `helpers.ts`; you rarely
+touch the split directly — call `seedDebate()`.
+
+**Fixtures.** `seedDebate(input?) → { debateId, rootNodeId }` creates a debate
+through the real creation RPC; `cleanupDebate(debateId)` removes it (`nodes` /
+`relations` cascade). Default titles are `test-<uuid>` so strays are easy to
+spot. Seed in `beforeEach`/`beforeAll`, clean up in `afterEach`/`afterAll`.
+
+Test the repository fns directly — they take the `supabase` client as the first
+arg, so no HTTP server is needed for the DB-layer contract. Shipped examples:
+
+- **Not-found 404 branch (Risk #6)** — `tests/integration/notFound.test.ts`: a
+  mutating call on a random non-existent UUID rejects with `NotFoundError`
+  (→404). It also pins the `patch_node` SETOF contract: an unknown id yields a
+  real `null` (empty set), **not** an all-null row — the regression that lessons
+  §4 records.
+- **Server-side shape guard** — `tests/integration/relationGuard.test.ts`:
+  `link`→non-connective is rejected (`ValidationError` → 422); legal pairings are
+  accepted.
+- **Atomic RPC + endpoint** — `tests/integration/setDebateRoot.test.ts` and
+  `tests/integration/rootProtection.test.ts`: re-designation moves
+  `root_node_id`, coerces role → `claim`, strips outgoing edges; root demotion →
+  422; root delete → 409.
+
+Pattern:
+
+```ts
+import { randomUUID } from "node:crypto";
+import { expect, it } from "vitest";
+import { updateNode } from "@/lib/debate/repository";
+import { NotFoundError } from "@/lib/errors";
+import { describeIntegration, requireServiceClient, seedDebate, cleanupDebate } from "./helpers";
+
+describeIntegration("updateNode", () => {
+  it("rejects an unknown node id with NotFoundError (→404)", async () => {
+    const supabase = requireServiceClient();
+    await expect(updateNode(supabase, randomUUID(), { title: "x" })).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+```
+
+For an end-to-end HTTP assertion (status-code mapping through `withAuth`), see
+the Phase 2 manual step in the change plan — it shows obtaining a bearer token
+via a password sign-in and `curl`-ing the running dev server. Cross-pair RLS
+denial (Risk #1) and the two-user fixture arrive in §3 Phase 2.
 
 ### 6.3 Adding a store / persistence round-trip test
 
@@ -174,6 +281,23 @@ relevant rollout phase ships; before that, the sub-section reads "TBD — see
 
 (Optional. After each phase lands, `/10x-implement` appends a 2–3 line note
 here capturing anything surprising the phase taught.)
+
+**Phase 1 — Bootstrap + persistence/shape floor (2026-06-08):**
+
+- **Integration auth split.** `create_debate_with_root` is `SECURITY DEFINER`
+  and reads `auth.uid()`, so a pure service-role client **cannot** call it
+  (`auth.uid()` is null → the RPC raises). Seeding therefore runs through a
+  dedicated test user signed in with the anon key (provisioned in
+  `globalSetup.ts`, injected as `seedingUser`), while assertions/teardown use the
+  service-role client. New params-only RPCs (`set_debate_root`) follow the
+  `patch_node` shape — `SECURITY INVOKER`, `set search_path = ''` — so they stay
+  directly callable under service-role.
+- **SETOF is load-bearing for 404.** `patch_node` must stay `RETURNS SETOF`: a
+  bare-composite return yields an all-null row (truthy) on an unknown id and
+  silently defeats the `if (!data)` 404 guard. `notFound.test.ts` pins this.
+- **Integration is not in CI.** Starting Supabase per CI run was judged too
+  heavy; CI runs `test:unit` only and the integration suite self-skips without
+  `SUPABASE_SERVICE_ROLE_KEY` (see §4 decision, §5 gate).
 
 ## 7. What We Deliberately Don't Test
 

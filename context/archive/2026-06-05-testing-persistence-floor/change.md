@@ -1,10 +1,10 @@
 ---
 change_id: testing-persistence-floor
 title: "Test Phase 1: stand up the runner + persistence/shape floor (risks #3, #6)"
-status: implemented
+status: archived
 created: 2026-06-05
 updated: 2026-06-08
-archived_at: null
+archived_at: 2026-06-08T12:30:00Z
 ---
 
 ## Notes

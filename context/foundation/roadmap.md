@@ -3,7 +3,7 @@ project: WVMap
 version: 1
 status: draft
 created: 2026-05-25
-updated: 2026-05-27
+updated: 2026-06-08
 prd_version: 1
 main_goal: market-feedback
 top_blocker: capacity
@@ -47,7 +47,7 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 | F-01 | username-profiles           | (foundation) register with a unique username; look users up by it   | —             | FR-001, FR-002                            | done     |
 | S-00 | landing-page-refresh        | land on a page that clearly pitches WVMap and directs them to sign up | —           | —                                         | done     |
 | F-02 | map-visual-spike            | (design spike) see a static example Toulmin map rendered in React Flow — node/edge visual language | —  | US-01 (visual), FR-004, FR-006 (visual)   | done |
-| S-01 | advocate-map-builder        | build a debate: root Claim, typed statements, sources, relations    | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006     | proposed |
+| S-01 | advocate-map-builder        | build a debate: root Claim, typed statements, sources, relations    | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006     | done     |
 | S-02 | invite-and-open-exchange    | set round count, invite a challenger by username, they accept | S-01          | US-01, FR-007, FR-008, FR-009, FR-010     | proposed |
 | S-03 | challenger-first-turn       | mark every advocate statement and add own statements, submit turn   | S-02          | US-02, FR-011, FR-012, FR-013, FR-014     | proposed |
 | S-04 | first-divergence-summary    | respond, complete round 1, and view the divergence summary          | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | proposed |
@@ -134,7 +134,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - Source field is free-text URL-or-citation with no validation in MVP — confirm no canonical format is needed yet. Owner: user. Block: no.
 - **Risk:** This establishes the debate/statement/relation/source schema the entire graph depends on, plus the React Flow map editor. Invest deeply in the data model here; a shaky schema forces rework in every later slice. Frontend kept lean by leaning on React Flow rather than a custom canvas.
-- **Status:** proposed
+- **Status:** done
 
 ### S-02: Advocate invites a challenger and opens the exchange
 
@@ -253,3 +253,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **F-01: (foundation) register with a unique username; look users up by it** — Archived 2026-05-26 → `context/archive/2026-05-25-username-profiles/`. Lesson: —.
 - **S-00: land on a page that clearly pitches WVMap and directs them to sign up** — Archived 2026-05-26 → `context/archive/2026-05-26-landing-page-refresh/`. Lesson: —.
 - **F-02: (design spike) a static, hardcoded example Toulmin map renders in a React Flow canvas — a root Claim plus Data/Warrant/Backing/Rebuttal nodes wired with supports/bridges/rebuts edges — establishing the node/edge visual language (per-type node design, per-kind edge styling, color palette, layout) before any schema or store is built.** — Archived 2026-05-27 → `context/archive/2026-05-27-map-visual-spike/`. Lesson: —.
+- **S-01: advocate builds a structured map** — Archived 2026-06-08 → `context/archive/2026-05-26-advocate-map-builder/`. Lesson: —.

@@ -1,10 +1,10 @@
 ---
 change_id: advocate-map-builder
 title: Advocate map builder
-status: impl_reviewed
+status: archived
 created: 2026-05-26
-updated: 2026-06-05
-archived_at: null
+updated: 2026-06-08
+archived_at: 2026-06-08T00:00:00Z
 ---
 
 ## Notes

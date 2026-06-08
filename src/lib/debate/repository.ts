@@ -212,7 +212,13 @@ export async function createRelation(supabase: DB, input: CreateRelationInput, a
     })
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    // A duplicate directed relation trips the unique constraint relations_uniq_pair
+    // (SQLSTATE 23505): the two nodes are already connected in this direction. Map it
+    // to a 409 with a safe message instead of leaking the raw constraint text as a 500.
+    if (error.code === "23505") throw new ConflictError("These two nodes are already connected.");
+    throw error;
+  }
   return data;
 }
 

@@ -266,7 +266,44 @@ denial (Risk #1) and the two-user fixture arrive in §3 Phase 2.
 
 ### 6.3 Adding a store / persistence round-trip test
 
-- TBD — see §3 Phase 3 (store → API payload → reload fidelity — Risk #2).
+When a store mutation fails (e.g. an optimistic delete is rejected by the server),
+the canvas must converge to authoritative server state **without a page reload**.
+Use the **re-fetch-on-failure** pattern: wrap the mutation's catch block with a
+single-flight `reconcileFromServer()` call that re-fetches the full graph
+(`apiGetGraph`), rebuilds the canvas (`setGraph`), clears in-flight bookkeeping
+(`patchTimers`, `patchBuffers`), and closes any open editor. This is the primary
+defense against the diverged-canvas-until-reload regression (Risk #2).
+
+**Implementation** (`src/components/debate/store.ts`):
+
+- `reconcileFromServer()` is a module-scoped async helper that guards against
+  concurrent failures (single-flight: `reconciling` + `reconcileQueued` flags
+  ensure ≤2 fetches per burst).
+- Each of the four catch sites (node-field update, node-position update,
+  edge-kind update, edge delete, plus per-node delete failures) follows the same
+  pattern: `reportError(msg)` → `void reconcileFromServer()`.
+- On `apiGetGraph` failure, emit the distinct message "Couldn't refresh the
+  canvas — reload the page to see the latest."
+- **Preserve in-flight creates**: snapshot `pending` nodes and edges in
+  `unsavedEdgeIds` before the swap; append them back after `setGraph` so their
+  create handlers can still resolve normally. Create paths (`rollbackNode`,
+  `rollbackEdge`) are independent and fully separate.
+
+**Hermetic unit tests** (`tests/unit/reconcileFromServer.store.test.ts`,
+`tests/unit/optimisticReconcile.store.test.ts`):
+
+- Single-flight coalescing: N concurrent failures → ≤2 `apiGetGraph` calls.
+- Bookkeeping reset: `patchTimers`, `patchBuffers`, `inEditNodeId`,
+  `inEditEdgeId` are cleared after reconcile.
+- In-flight create survives: a `pending` node absent from the re-fetch is
+  preserved (create-rollback path untouched).
+- Per-path convergence: each of the five logical paths re-syncs nodes/edges to
+  the server graph on rejection.
+
+**Regression**: Without this pattern, a failed optimistic mutation leaves the
+canvas diverged from the database until a manual page reload — the user sees a
+stale node that was deleted, or a deleted node that was updated, confusing
+further edits and producing phantom saves.
 
 ### 6.4 Adding a turn / mark-invalidation integrity test
 
@@ -298,6 +335,19 @@ here capturing anything surprising the phase taught.)
 - **Integration is not in CI.** Starting Supabase per CI run was judged too
   heavy; CI runs `test:unit` only and the integration suite self-skips without
   `SUPABASE_SERVICE_ROLE_KEY` (see §4 decision, §5 gate).
+
+**Future change — reunify store-test fixtures (deferred):**
+
+- The store unit tests (`deleteRootBlock`, `setRootNode`, `reconcileFromServer`,
+  `optimisticReconcile`) each re-declare the same hermetic scaffolding: the full
+  `vi.mock("@/components/debate/persistence", …)` api-fn list and the
+  `debateRow`/`statementRow`/`relationRow`/`graph`/`statementNode` fixture
+  builders. This duplication is intentional for now (kept each test file
+  self-contained while the reconcile work landed), but it should be **factored
+  into a shared `tests/unit/_fixtures` helper as a separate change**, not folded
+  into a feature PR. Watch the mock api-fn list especially: when a new `api*` fn
+  is added to `persistence.ts`, every store test mock must be updated in lockstep
+  — exactly the kind of N-place edit the shared-helper lesson warns about.
 
 ## 7. What We Deliberately Don't Test
 

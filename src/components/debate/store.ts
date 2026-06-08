@@ -19,7 +19,9 @@ import {
   apiUpdateRelation,
   apiDeleteRelation,
   apiSetDebateRoot,
+  apiGetGraph,
 } from "./persistence";
+import { ApiError } from "./apiError";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
@@ -189,6 +191,7 @@ async function flushPatch(nodeId: string) {
     await apiUpdateNode(debateId, nodeId, patch);
   } catch (e) {
     reportError(e instanceof Error ? e.message : "Failed to save changes");
+    void reconcileFromServer();
   }
 }
 
@@ -231,6 +234,59 @@ function rollbackEdge(tempId: string) {
     edges: state.edges.filter((e) => e.id !== tempId),
     inEditEdgeId: state.inEditEdgeId === tempId ? null : state.inEditEdgeId,
   }));
+}
+
+// --- Re-fetch-on-failure reconciliation (orthogonal to create-rollback above) ---
+// Single-flight guard: a burst of failures (batch delete, drag-spam) coalesces into
+// 1–2 fetches, never zero — a failure arriving mid-fetch is queued, not dropped.
+let reconciling = false;
+let reconcileQueued = false;
+
+/**
+ * Re-fetch the authoritative graph and snap the canvas to it after a mutation is
+ * rejected by the server, so the canvas never stays diverged-until-reload. Server
+ * state wins for committed entities; in-flight creates (owned by the create-rollback
+ * mechanism) are snapshotted and re-applied on top so a live create isn't erased.
+ * No-ops on a local-only canvas. On fetch failure it surfaces a distinct, actionable
+ * banner and leaves the canvas untouched.
+ */
+export async function reconcileFromServer(): Promise<void> {
+  const { debateId } = useStore.getState();
+  if (!debateId) return; // local-only canvas: nothing to reconcile, no endpoint to call
+  if (reconciling) {
+    reconcileQueued = true;
+    return;
+  }
+  reconciling = true;
+  try {
+    const graph = await apiGetGraph(debateId);
+    // One synchronous block once the fetch resolves: snapshot in-flight creates,
+    // clear committed-entity bookkeeping, swap the canvas, re-append the creates.
+    const { nodes, edges } = useStore.getState();
+    const pendingNodes = nodes.filter((n) => n.data.pending === true);
+    const pendingEdges = edges.filter((e) => unsavedEdgeIds.has(e.id));
+    // Committed bookkeeping only — leave unsavedEdgeIds intact for the preserved edges.
+    patchTimers.forEach((t) => {
+      clearTimeout(t);
+    });
+    patchTimers.clear();
+    patchBuffers.clear();
+    useStore.getState().setGraph(graph.debate, graph.nodes, graph.relations);
+    useStore.setState((state) => ({
+      nodes: [...state.nodes, ...pendingNodes],
+      edges: [...state.edges, ...pendingEdges],
+      inEditNodeId: null,
+      inEditEdgeId: null,
+    }));
+  } catch {
+    reportError("Couldn't refresh the canvas — reload the page to see the latest.");
+  } finally {
+    reconciling = false;
+    if (reconcileQueued) {
+      reconcileQueued = false;
+      void reconcileFromServer();
+    }
+  }
 }
 
 /** Translate a UI field patch into the API's UpdateNode shape, dropping values that aren't safe to persist yet. */
@@ -320,6 +376,10 @@ export const useStore = create<RFState>()((set, get) => ({
         .catch((e: unknown) => {
           rollbackEdge(edgeId);
           reportError(e instanceof Error ? e.message : "Failed to create relation");
+          // A 409 means these two nodes are already connected server-side (another
+          // session created the edge). Reconcile so that existing edge appears —
+          // otherwise the canvas shows no connection at all, contradicting the banner.
+          if (e instanceof ApiError && e.status === 409) void reconcileFromServer();
         });
     }
   },
@@ -473,6 +533,7 @@ export const useStore = create<RFState>()((set, get) => ({
       for (const nodeId of persistedIds) {
         apiDeleteNode(debateId, nodeId).catch((e: unknown) => {
           reportError(e instanceof Error ? e.message : "Failed to delete node");
+          void reconcileFromServer();
         });
       }
     }
@@ -491,6 +552,7 @@ export const useStore = create<RFState>()((set, get) => ({
     }
     apiDeleteRelation(debateId, id).catch((e: unknown) => {
       reportError(e instanceof Error ? e.message : "Failed to delete relation");
+      void reconcileFromServer();
     });
   },
 
@@ -507,6 +569,7 @@ export const useStore = create<RFState>()((set, get) => ({
     if (debateId && !unsavedEdgeIds.has(id) && kind !== "pending") {
       apiUpdateRelation(debateId, id, { kind }).catch((e: unknown) => {
         reportError(e instanceof Error ? e.message : "Failed to save relation");
+        void reconcileFromServer();
       });
     }
   },

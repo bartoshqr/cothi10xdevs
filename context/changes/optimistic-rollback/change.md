@@ -1,9 +1,9 @@
 ---
 change_id: optimistic-rollback
 title: Add rollback/reconciliation to all optimistic store mutations
-status: new
+status: planned
 created: 2026-06-06
-updated: 2026-06-06
+updated: 2026-06-08
 archived_at: null
 ---
 

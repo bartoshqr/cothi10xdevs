@@ -323,11 +323,11 @@ None — no schema or data changes. `setGraph`/`apiGetGraph` already exist; this
 
 #### Automated
 
-- [ ] 1.1 Type checking passes: `npx astro check`
-- [ ] 1.2 Linting passes: `npm run lint`
-- [ ] 1.3 Unit tests pass: `npm run test:unit`
-- [ ] 1.4 Helper test file green: `npx vitest run tests/unit/reconcileFromServer.store.test.ts`
-- [ ] 1.5 Per-path test file green: `npx vitest run tests/unit/optimisticReconcile.store.test.ts`
+- [x] 1.1 Type checking passes: `npx astro check`
+- [x] 1.2 Linting passes: `npm run lint`
+- [x] 1.3 Unit tests pass: `npm run test:unit`
+- [x] 1.4 Helper test file green: `npx vitest run tests/unit/reconcileFromServer.store.test.ts`
+- [x] 1.5 Per-path test file green: `npx vitest run tests/unit/optimisticReconcile.store.test.ts`
 
 #### Manual
 

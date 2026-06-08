@@ -6,6 +6,6 @@
 
 4. advocates can't even see themselves in usernames search
 
-5. first we choose challenger, then number of rounds
+5. we choose challenger, and number of rounds in any order, one ui box
 
-6. ui for creating an exchange should be dropping, slide from the header or from the side
+6. ui for creating an exchange should be dropping, slide from the header or from the side, we should see several available users, now sorted alphabetically by default, e.g. 5 having substring from search; empty search, all users match, then click for selection

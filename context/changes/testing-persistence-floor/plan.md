@@ -538,9 +538,9 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [x] 6.1 Workflow runs `test:unit` and it passes on a pushed branch / PR
-- [x] 6.2 Integration job (if wired) starts Supabase, runs `test:integration` green, stops it
-- [x] 6.3 Lint + build steps still pass in the updated workflow
+- [x] 6.1 Workflow runs `test:unit` and it passes on a pushed branch / PR — 2773d34
+- [x] 6.2 Integration job (if wired) starts Supabase, runs `test:integration` green, stops it — 2773d34
+- [x] 6.3 Lint + build steps still pass in the updated workflow — 2773d34
 
 #### Manual
 
@@ -557,8 +557,8 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [ ] 7.1 Full `npm test` suite green
-- [ ] 7.2 `npm run lint` + `npm run build` pass
+- [x] 7.1 Full `npm test` suite green
+- [x] 7.2 `npm run lint` + `npm run build` pass
 
 #### Manual
 

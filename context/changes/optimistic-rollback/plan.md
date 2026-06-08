@@ -323,11 +323,11 @@ None — no schema or data changes. `setGraph`/`apiGetGraph` already exist; this
 
 #### Automated
 
-- [x] 1.1 Type checking passes: `npx astro check`
-- [x] 1.2 Linting passes: `npm run lint`
-- [x] 1.3 Unit tests pass: `npm run test:unit`
-- [x] 1.4 Helper test file green: `npx vitest run tests/unit/reconcileFromServer.store.test.ts`
-- [x] 1.5 Per-path test file green: `npx vitest run tests/unit/optimisticReconcile.store.test.ts`
+- [x] 1.1 Type checking passes: `npx astro check` — b8d14cc
+- [x] 1.2 Linting passes: `npm run lint` — b8d14cc
+- [x] 1.3 Unit tests pass: `npm run test:unit` — b8d14cc
+- [x] 1.4 Helper test file green: `npx vitest run tests/unit/reconcileFromServer.store.test.ts` — b8d14cc
+- [x] 1.5 Per-path test file green: `npx vitest run tests/unit/optimisticReconcile.store.test.ts` — b8d14cc
 
 #### Manual
 
@@ -370,13 +370,13 @@ None — no schema or data changes. `setGraph`/`apiGetGraph` already exist; this
 
 #### Automated
 
-- [ ] 2.1 Integration root-protection test passes: `npx vitest run tests/integration/rootProtection.test.ts`
-- [ ] 2.2 Full suite passes: `npm run test`
-- [ ] 2.3 Cookbook entry present: `grep -n "reconcileFromServer" context/foundation/test-plan.md`
+- [x] 2.1 Integration root-protection test passes: `npx vitest run tests/integration/rootProtection.test.ts`
+- [x] 2.2 Full suite passes: `npm run test`
+- [x] 2.3 Cookbook entry present: `grep -n "reconcileFromServer" context/foundation/test-plan.md`
 
 #### Manual
 
-- [ ] 2.4 §6 cookbook entry reads clearly
+- [x] 2.4 §6 cookbook entry reads clearly
 
   > **Agent-automatable**: Partial — presence is greppable (2.3), but judging clarity for a fresh reader is a human review step.
 

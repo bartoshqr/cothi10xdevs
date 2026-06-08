@@ -259,7 +259,10 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
         }}
         onDoubleClick={handleNodeDoubleClick}
       >
-        {isEditing && (
+        {/* D3-3a: the root claim has no delete affordance — re-designate via the
+            badge menu's "Set as Root Claim" instead. Other delete paths (keyboard,
+            context menu) are blocked in the store, and the server backstops with a 409. */}
+        {isEditing && !data.isRoot && (
           <button
             className="nodrag nopan absolute top-1 right-1 z-10 flex h-4 w-4 items-center justify-center rounded text-xs leading-none transition-colors hover:bg-[var(--muted)]"
             style={{ color: "var(--muted-foreground)" }}

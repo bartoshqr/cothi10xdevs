@@ -24,3 +24,18 @@ export class ValidationError extends Error {
     this.name = "ValidationError";
   }
 }
+
+/**
+ * Raised by repository functions when a well-formed request collides with the
+ * current persisted state in a way the client could resolve differently — e.g.
+ * deleting the debate's designated root claim, which the deferred root FK forbids
+ * (D3-3a). The withAuth wrapper maps this to 409 (Conflict): the request is valid
+ * but cannot apply while that state holds. The message is safe to surface (no
+ * Postgres internals — the raw FK-violation text never reaches the client).
+ */
+export class ConflictError extends Error {
+  constructor(message = "Conflict") {
+    super(message);
+    this.name = "ConflictError";
+  }
+}

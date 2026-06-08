@@ -497,16 +497,16 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [x] 4.1 `set_debate_root` migration applies cleanly
-- [x] 4.2 Integration: re-designation moves `root_node_id`, coerces role → `claim`, strips outgoing relations
-- [x] 4.3 Integration: connective target rejected (422); unknown debate/node id → 404
-- [x] 4.4 Integration: `PATCH /api/debates/:id` accepts only whitelisted fields
-- [x] 4.5 Store unit test: apply-on-success updates `isRoot`/role/edges; failure leaves canvas unchanged
-- [x] 4.6 `npm run lint` + `npx astro check` clean
+- [x] 4.1 `set_debate_root` migration applies cleanly — 9f001da
+- [x] 4.2 Integration: re-designation moves `root_node_id`, coerces role → `claim`, strips outgoing relations — 9f001da
+- [x] 4.3 Integration: connective target rejected (422); unknown debate/node id → 404 — 9f001da
+- [x] 4.4 Integration: `PATCH /api/debates/:id` accepts only whitelisted fields — 9f001da
+- [x] 4.5 Store unit test: apply-on-success updates `isRoot`/role/edges; failure leaves canvas unchanged — 9f001da
+- [x] 4.6 `npm run lint` + `npx astro check` clean — 9f001da
 
 #### Manual
 
-- [x] 4.7 In the UI: "Set as Root Claim" → reload → choice persists; new root's outgoing edges gone; only one root
+- [x] 4.7 In the UI: "Set as Root Claim" → reload → choice persists; new root's outgoing edges gone; only one root — 9f001da
 
   > **Agent-automatable**: Partial — the DB effect is scriptable via SQL; the click + reload UX needs a browser.
 
@@ -521,14 +521,14 @@ One new migration (`set_debate_root`). It is additive (new function + grants); n
 
 #### Automated
 
-- [ ] 5.1 Integration: demoting the root's `statement_type` → 422 (red→green); non-root demotion allowed; root title/body/position still patchable
-- [ ] 5.2 Integration: deleting the root → 409; deleting a non-root → 204
-- [ ] 5.3 Store/UI-logic test: root delete blocked client-side
-- [ ] 5.4 `npm run lint` + `npx astro check` clean
+- [x] 5.1 Integration: demoting the root's `statement_type` → 422 (red→green); non-root demotion allowed; root title/body/position still patchable
+- [x] 5.2 Integration: deleting the root → 409; deleting a non-root → 204
+- [x] 5.3 Store/UI-logic test: root delete blocked client-side
+- [x] 5.4 `npm run lint` + `npx astro check` clean
 
 #### Manual
 
-- [ ] 5.5 In the UI: the root's delete is blocked with the specified message
+- [x] 5.5 In the UI: the root's delete is blocked with the specified message
 
   > **Agent-automatable**: No — requires inspecting the rendered node's disabled/blocked delete affordance and its message.
 

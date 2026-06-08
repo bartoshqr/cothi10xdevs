@@ -448,6 +448,13 @@ export const useStore = create<RFState>()((set, get) => ({
   deleteNodes: (ids) => {
     const idSet = new Set(ids);
     const { debateId, nodes, edges } = get();
+    // D3-3a: the root claim cannot be deleted — only re-designated via "Set as Root
+    // Claim". Block the whole batch (the server backstops this with a 409) so the
+    // user re-issues the delete without the root rather than losing its siblings.
+    if (nodes.some((n) => idSet.has(n.id) && n.type === "statement" && n.data.isRoot)) {
+      reportError("You cannot delete the root claim, but you can set a different claim as the root.");
+      return;
+    }
     const persistedIds = debateId ? nodes.filter((n) => idSet.has(n.id) && !n.data.pending).map((n) => n.id) : [];
     // Relations cascade server-side; drop any in-flight edge bookkeeping for incident edges.
     for (const e of edges) {

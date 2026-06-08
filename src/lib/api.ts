@@ -1,7 +1,7 @@
 import type { APIContext, APIRoute } from "astro";
 import type { User } from "@supabase/supabase-js";
 import { createClient, getAuthUser } from "@/lib/supabase";
-import { NotFoundError, ValidationError } from "@/lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 
 type DB = NonNullable<ReturnType<typeof createClient>>;
 
@@ -30,6 +30,11 @@ export function withAuth(handler: AuthedHandler): APIRoute {
       // (Unprocessable Entity), not a server error — D1 link-target guard.
       if (err instanceof ValidationError) {
         return Response.json({ error: err.message }, { status: 422 });
+      }
+      // A valid request that collides with persisted state (e.g. deleting the
+      // root claim, blocked by the deferred root FK) is a 409, not a 500 — D3-3a.
+      if (err instanceof ConflictError) {
+        return Response.json({ error: err.message }, { status: 409 });
       }
       // Log the real error server-side; never leak Postgres/Supabase internals
       // (constraint names, RPC messages) to the client — impl-review F3.

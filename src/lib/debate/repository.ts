@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/db/database.types";
-import { NotFoundError, ValidationError } from "@/lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { isLegalRelationTarget } from "./relationRules";
 import type {
   CreateDebateInput,
@@ -101,6 +101,22 @@ export async function createConnectiveNode(
 }
 
 export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNodeInput): Promise<NodeRow> {
+  // D3-3b: the designated root claim cannot be demoted away from `claim`. If this
+  // patch would set the root's statement_type to anything else, reject it app-side
+  // (422) before the merge — mirrors the D1 link guard's app-layer placement. Other
+  // fields (title/body/position) stay patchable, and non-root nodes demote freely.
+  if (patch.statementType !== undefined && patch.statementType !== "claim") {
+    const { data: rootDebate, error: rootError } = await supabase
+      .from("debates")
+      .select("id")
+      .eq("root_node_id", nodeId)
+      .maybeSingle();
+    if (rootError) throw rootError;
+    if (rootDebate) {
+      throw new ValidationError("The root claim cannot be demoted; set a different claim as the root instead.");
+    }
+  }
+
   // Metadata fields are merged DB-side via patch_node (metadata || patch) so the
   // read-modify-write is atomic — see migration 20260605000002 (impl-review F2).
   const metadataPatch: Record<string, Json> = {};
@@ -127,7 +143,15 @@ export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNode
 
 export async function deleteNode(supabase: DB, nodeId: string): Promise<void> {
   const { data, error } = await supabase.from("nodes").delete().eq("id", nodeId).select("id");
-  if (error) throw error;
+  if (error) {
+    // D3-3a: the debate's root_node_id FK is `deferrable initially deferred`, so
+    // deleting the designated root trips a foreign-key violation (SQLSTATE 23503)
+    // at commit. Map that to a clean 409 backstop instead of leaking the raw FK
+    // error as a 500 — the UI blocks this first, but the API must not 500 either.
+    if (error.code === "23503")
+      throw new ConflictError("The root claim cannot be deleted; set a different claim as the root instead.");
+    throw error;
+  }
   if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
 }
 

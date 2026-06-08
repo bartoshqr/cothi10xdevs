@@ -1,0 +1,1 @@
+1. before opening exchange, also and and or should have at least 2 operands

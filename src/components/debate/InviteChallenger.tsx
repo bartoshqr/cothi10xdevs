@@ -16,8 +16,6 @@ interface ExistingExchange {
 
 interface Props {
   debateId: string;
-  hasRoot: boolean;
-  isWellFormed: boolean;
   existingExchange: ExistingExchange | null;
 }
 

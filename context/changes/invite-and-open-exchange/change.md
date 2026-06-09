@@ -1,7 +1,7 @@
 ---
 change_id: invite-and-open-exchange
 title: Advocate invites a challenger and opens the exchange
-status: implemented
+status: impl_reviewed
 created: 2026-06-08
 updated: 2026-06-09
 archived_at: null

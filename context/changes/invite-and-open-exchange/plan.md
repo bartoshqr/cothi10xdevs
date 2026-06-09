@@ -684,12 +684,12 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [ ] 5.1 Integration suite passes: `npm run test:integration`
-- [ ] 5.2 Full type + lint + build clean: `npx astro check && npm run lint && npm run build`
+- [x] 5.1 Integration suite passes: `npm run test:integration`
+- [x] 5.2 Full type + lint + build clean: `npx astro check && npm run lint && npm run build`
 
 #### Manual
 
-- [ ] 5.3 Suite skips cleanly when integration env is absent
+- [x] 5.3 Suite skips cleanly when integration env is absent
 
   > **Agent-automatable**: Yes — unset `SUPABASE_SERVICE_ROLE_KEY` and confirm `describe.skip`.
 

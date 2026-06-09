@@ -48,7 +48,9 @@ export async function openExchange(supabase: DB, input: OpenExchangeInput, advoc
   const connectiveIds = connectivesResult.data.map((n) => n.id);
   const linkTargets = linksResult.data.map((r) => r.target_node_id);
   if (!isMapWellFormed(connectiveIds, linkTargets)) {
-    throw new ValidationError("Every AND/OR group needs at least two operands before you can invite a challenger.");
+    throw new ValidationError(
+      "Every AND/OR group needs at least two operands before you can invite a challenger. Please adjust your graph",
+    );
   }
 
   // (d) Self-invite guard — defense in depth (search endpoint excludes caller; DB CHECK backstops).
@@ -88,6 +90,54 @@ export async function respondToInvite(supabase: DB, exchangeId: string, accept: 
   if (error) throw error;
   if (!data) throw new NotFoundError();
   return data;
+}
+
+export interface ExchangeStatus {
+  status: Database["public"]["Enums"]["exchange_status"];
+  challengerUsername: string | null;
+  roundCount: number;
+}
+
+// Read the current state of an exchange for the freshness poll + the advocate's
+// status line. RLS scopes the row to the advocate or the challenger; the join to
+// profiles resolves the challenger's username. null = unknown id or RLS-scoped out.
+export async function getExchangeStatus(supabase: DB, exchangeId: string): Promise<ExchangeStatus | null> {
+  const { data, error } = await supabase
+    .from("exchanges")
+    .select("status, round_count, challenger_id")
+    .eq("id", exchangeId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", data.challenger_id)
+    .maybeSingle();
+  if (profileError) throw profileError;
+
+  return {
+    status: data.status,
+    challengerUsername: profile?.username ?? null,
+    roundCount: data.round_count,
+  };
+}
+
+// Advocate revokes a still-pending invite. Deletes the row (re-opening the
+// one-open-exchange slot so the advocate can re-invite). RLS exchanges_delete
+// enforces advocate identity AND status='pending'; the explicit filters here
+// surface a clean 404 (null) for unknown / not-yours / already-responded.
+export async function revokeInvite(supabase: DB, exchangeId: string, advocateId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("exchanges")
+    .delete()
+    .eq("id", exchangeId)
+    .eq("advocate_id", advocateId)
+    .eq("status", "pending")
+    .select("id");
+  if (error) throw error;
+  if (data.length === 0) throw new NotFoundError();
 }
 
 export interface ChallengerInvite {

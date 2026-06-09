@@ -1,124 +1,93 @@
--- seed.sql: Local dev fixture data for S-01 advocate-map-builder.
+-- seed.sql: Local dev fixture data for the WVMap debate app.
 -- Runs as postgres superuser after all migrations on `npx supabase db reset`.
 -- Fixed UUIDs → idempotent: re-running db reset always produces the same rows.
 -- DO NOT use this file in production or against a cloud project.
 
--- ─── Auth users ──────────────────────────────────────────────────────────────
--- Two users so RLS isolation (step 1.7) can be tested without signing up manually.
--- s@e.pl  owns the test debate.
--- a@e.pl  owns nothing — used to verify they cannot read seed1's data.
-
+-- ─── Auth users (10) ─────────────────────────────────────────────────────────
+-- Ten ready users so the FR-009 invite search has a realistic pool and RLS
+-- pair-visibility can be exercised by hand without signing up.
+--
+--   email     user01@e.pl … user10@e.pl   (password: pwd123!  for all)
+--   username  user01      … user10
+--   id        00000000-0000-4000-8000-000000000001 … …00000000000a
+--
+-- The ids are valid **v4-shaped** UUIDs (version nibble `4` in group 3, variant
+-- nibble `8` in group 4). This matters: Zod 4's z.uuid() — the API's challengerId
+-- guard — rejects the old nil-pattern ids (…000000000002) because it checks the
+-- version/variant bits, not just the hyphen shape. A nil-pattern challengerId
+-- would 400 with "Invalid UUID" before it ever reached the repository.
+--
 -- NOTE: the token columns (confirmation_token, recovery_token, email_change,
 -- email_change_token_new, email_change_token_current, phone_change,
 -- phone_change_token, reauthentication_token) MUST be empty strings, not NULL.
 -- GoTrue scans them into Go `string` (not sql.NullString), so a NULL value
 -- causes "converting NULL to string is unsupported" at sign-in time even
 -- though the row inserts cleanly.
+--
+-- The on_auth_user_created trigger materializes a profiles row from
+-- raw_user_meta_data.username on each auth.users insert; the explicit profiles
+-- insert below is an idempotent backstop for re-runs (ON CONFLICT skips it when
+-- the trigger already created the row).
 
-insert into auth.users (
-  id,
-  instance_id,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  role,
-  aud,
-  created_at,
-  updated_at,
-  confirmation_token,
-  recovery_token,
-  email_change,
-  email_change_token_new,
-  email_change_token_current,
-  phone_change,
-  phone_change_token,
-  reauthentication_token
-)
-values
-  (
-    '00000000-0000-0000-0000-000000000001',
-    '00000000-0000-0000-0000-000000000000',
-    's@e.pl',
-    crypt('pwd123!', gen_salt('bf')),
-    now(),
-    '{"provider": "email", "providers": ["email"]}',
-    '{"username": "user1"}',
-    'authenticated',
-    'authenticated',
-    now(),
-    now(),
-    '', '', '', '', '', '', '', ''
-  ),
-  (
-    '00000000-0000-0000-0000-000000000002',
-    '00000000-0000-0000-0000-000000000000',
-    'a@e.pl',
-    crypt('pwd123!', gen_salt('bf')),
-    now(),
-    '{"provider": "email", "providers": ["email"]}',
-    '{"username": "user2"}',
-    'authenticated',
-    'authenticated',
-    now(),
-    now(),
-    '', '', '', '', '', '', '', ''
-  )
-on conflict (id) do nothing;
+do $$
+declare
+  i      int;
+  uid    uuid;
+  uname  text;
+  uemail text;
+begin
+  for i in 1..10 loop
+    -- v4-shaped id: group 3 = 4xxx, group 4 = 8xxx; suffix is the user index in hex.
+    uid    := ('00000000-0000-4000-8000-0000000000' || lpad(to_hex(i), 2, '0'))::uuid;
+    uname  := 'user' || lpad(i::text, 2, '0');
+    uemail := uname || '@e.pl';
 
--- ─── Auth identities ─────────────────────────────────────────────────────────
--- GoTrue requires an auth.identities row per user for sign-in to work.
--- A UI sign-up creates this automatically; a raw auth.users insert does not.
+    insert into auth.users (
+      id, instance_id, email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data, role, aud, created_at, updated_at,
+      confirmation_token, recovery_token, email_change, email_change_token_new,
+      email_change_token_current, phone_change, phone_change_token, reauthentication_token
+    )
+    values (
+      uid,
+      '00000000-0000-0000-0000-000000000000',
+      uemail,
+      crypt('pwd123!', gen_salt('bf')),
+      now(),
+      '{"provider": "email", "providers": ["email"]}',
+      jsonb_build_object('username', uname),
+      'authenticated',
+      'authenticated',
+      now(), now(),
+      '', '', '', '', '', '', '', ''
+    )
+    on conflict (id) do nothing;
 
--- provider_id is NOT NULL since late 2023; for the email provider the
--- convention (matching dashboard sign-up) is the user's UUID cast to text,
--- NOT the email address. Using the email here is what makes login fail
--- silently for some auth.identities lookups.
+    -- GoTrue requires an auth.identities row per user for sign-in. provider_id is
+    -- the user's UUID cast to text (NOT the email) — the dashboard-signup convention.
+    insert into auth.identities (
+      id, user_id, provider, provider_id, identity_data,
+      last_sign_in_at, created_at, updated_at
+    )
+    values (
+      uid, uid, 'email', uid::text,
+      jsonb_build_object('sub', uid::text, 'email', uemail, 'email_verified', true),
+      now(), now(), now()
+    )
+    on conflict (id) do nothing;
 
-insert into auth.identities (
-  id,
-  user_id,
-  provider,
-  provider_id,
-  identity_data,
-  last_sign_in_at,
-  created_at,
-  updated_at
-)
-values
-  (
-    '00000000-0000-0000-0000-000000000001',
-    '00000000-0000-0000-0000-000000000001',
-    'email',
-    '00000000-0000-0000-0000-000000000001',
-    '{"sub": "00000000-0000-0000-0000-000000000001", "email": "s@e.pl", "email_verified": true}',
-    now(), now(), now()
-  ),
-  (
-    '00000000-0000-0000-0000-000000000002',
-    '00000000-0000-0000-0000-000000000002',
-    'email',
-    '00000000-0000-0000-0000-000000000002',
-    '{"sub": "00000000-0000-0000-0000-000000000002", "email": "a@e.pl", "email_verified": true}',
-    now(), now(), now()
-  )
-on conflict (id) do nothing;
+    insert into public.profiles (id, username)
+    values (uid, uname)
+    on conflict (id) do nothing;
+  end loop;
+end;
+$$;
 
--- ─── Profiles ────────────────────────────────────────────────────────────────
--- The on_auth_user_created trigger creates profiles automatically on auth.users
--- insert, but only when the row is actually written (not when ON CONFLICT skips it).
--- Explicit inserts here make the seed idempotent on re-runs.
-
-insert into public.profiles (id, username)
-values
-  ('00000000-0000-0000-0000-000000000001', 'user1'),
-  ('00000000-0000-0000-0000-000000000002', 'user2')
-on conflict (id) do nothing;
-
--- ─── Debate graph (seed1 owns it) ────────────────────────────────────────────
--- Build a small but complete graph that exercises every node kind and relation kind.
+-- ─── Debate graph (user01 owns it) ───────────────────────────────────────────
+-- A small but complete graph exercising every node kind and relation kind.
 -- Layout mirrors exampleMap.ts from the spike for easy visual comparison.
+-- Every debate here is created WITH a root claim — never seed a rootless debate
+-- (the create_debate_with_root RPC is the only creation path and always sets one).
 --
 -- Nodes:
 --   root_claim   (statement/claim,   isRoot)
@@ -137,10 +106,9 @@ on conflict (id) do nothing;
 
 do $$
 declare
-  v_owner      uuid := '00000000-0000-0000-0000-000000000001';
-  -- v4-shaped UUIDs: group 3 starts with version nibble `4`, group 4 with
-  -- variant nibble `8`. Zod 4's z.uuid() (the API node/debate id guard) rejects
-  -- the all-zero nil pattern because it checks version/variant bits, not just shape.
+  v_owner      uuid := '00000000-0000-4000-8000-000000000001';  -- user01
+  -- v4-shaped UUIDs (group 3 = 4xxx, group 4 = 8xxx); suffixes 0x10–0x16 don't
+  -- collide with the user ids (0x01–0x0a above).
   v_debate     uuid := '00000000-0000-4000-8000-000000000010';
   v_root       uuid := '00000000-0000-4000-8000-000000000011';
   v_data       uuid := '00000000-0000-4000-8000-000000000012';

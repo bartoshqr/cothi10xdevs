@@ -123,4 +123,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4 / Preflight no longer sets cursor:pointer on buttons — restore it
+     project-wide so anything clickable looks clickable, and disabled looks blocked. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }

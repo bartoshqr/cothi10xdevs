@@ -37,7 +37,7 @@ An advocate viewing their own debate (with a well-formed root map) opens a **sli
 - **No full debate-list / inbox UI** (FR-024/025) — that is the parallel slice S-06. S-02 ships only a *minimal* `/invites` accept/decline page so the slice is acceptable end-to-end; S-06 replaces it later.
 - **No exhaustive Phase-2 RLS test matrix** — the test-plan's Phase 2 (Risk #1) owns that. S-02 ships a focused smoke suite for its own integrity boundaries, introducing the two-user fixture that Phase 2 reuses.
 - **No `debate_participants` membership table** — MVP is strictly two-party (FR-021); a denormalized predicate over the exchange is sufficient.
-- **No advocate-side cancel/withdraw of an invite**, no exchange close/complete state — later slices.
+- **No exchange close/complete state** — later slices. (Advocate-side **revoke of a still-`pending` invite** is now in scope — added in Phase 4.5 — but withdrawing an already-`accepted` exchange is not.)
 - **No email search** — removed as unsafe (prd.md:126); username-only.
 
 ## Implementation Approach
@@ -340,6 +340,121 @@ Accepted rows show an **Enter debate** link to `/debates/:id` instead of Accept/
 - Two-session click-through: advocate searches + invites; challenger sees the invite, **opens "View debate" while still pending to read the map**, then accepts; decline hides it and allows re-invite.
 - Attempting to invite when no root Claim exists **or** a connective has <2 operands shows a clear UI message naming the cause (server 422 surfaced via `apiError`); the advocate is not silently blocked by a greyed button.
 
+**Implementation Note**: Pause for confirmation after automated verification before Phase 4.5.
+
+---
+
+## Phase 4.5: Editing lock during exchange + invite UX polish + seed/cursor fixes
+
+### Overview
+
+Phase 4 shipped the invite/inbox UI but a two-session walkthrough surfaced gaps that make the slice incorrect or confusing in practice. This phase closes them: (1) **lock graph editing** once an exchange exists — a challenger never edits, and the advocate is frozen the moment they send an invite — flipped **in place via a cross-island event** so there's no page-reload flicker; (2) **polish the invite affordance** — name the challenger + rounds in the status line, add a **revoke** action for a still-`pending` invite, keep the advocate's view fresh (a visibility-gated poll) so an accept isn't missed on a stale page, fix the search-open flash, and dismiss the panel on an outside click; (3) **fix the seed** — all valid v4 UUIDs and 10 ready users, then `db reset`; (4) a **global cursor affordance** plus reuse of the existing `Button` primitive; and (5) show the **owner's username** to a viewing challenger. All advocate transitions (send/revoke/accept/decline) update **without a reload**. These are corrections to Phase 4, scoped before the Phase 5 integration suite so the suite tests the corrected behaviour.
+
+### Changes Required:
+
+#### 1. Read-only editing lock (`canEdit` flag)
+
+**Files**: `src/components/debate/store.ts`, `src/components/debate/MapEditor.tsx`, `src/components/debate/nodes/StatementNode.tsx`, `src/pages/debates/[id].astro` (only `StatementNode` has inline edit affordances; `ConnectiveNode` has none, so it needs no gating)
+
+**Intent**: The map is editable **only** by the advocate **before** any exchange is opened. Per the developer:
+- **1.1 — challenger is read-only now and always (for S-02).** A pending **or** accepted challenger can read the graph but cannot change a single node/edge. (S-03 will introduce author-scoped partial edits once `author_id` is surfaced into node/edge data; that is explicitly out of scope here — block everything for the challenger now.)
+- **1.2 — advocate is frozen once an invite is sent.** As soon as an exchange exists (`pending` **or** `accepted`), the advocate can no longer edit either. Revoking a pending invite (item 5) re-opens editing.
+
+**Contract**:
+- `[id].astro` computes `const canEdit = isOwner && existingExchange === null;` — false for a challenger (non-owner participant) and false for the advocate once an exchange row exists. The **local-only** playground (CreateDebateForm, no `debateId`) stays `canEdit = true` by default.
+- Thread a `canEdit?: boolean` prop (default `true`) through `MapEditor` → `hydrate(debateId, graph, canEdit)` → a new `canEdit: boolean` field on the store state.
+- **Store is the chokepoint**: guard every mutator with an early return when `!get().canEdit` — `createStatementNode`, `createConnectiveNode`, `updateNodeFields`, `deleteNodes`, `deleteEdge`, `updateRelationKind`, `setRootNode`, `stagePendingConnection`, `commitConnection`, `setInEditNode`. (A read-only canvas never renders the menus that call these, but the guard makes the store the authoritative boundary — same philosophy as RLS being the server boundary.)
+- **MapEditor**: set `nodesDraggable={canEdit}`, `nodesConnectable={canEdit}`, `elementsSelectable={canEdit}`; early-return the pane/node/edge context-menu and connect handlers when `!canEdit`; `deleteKeyCode={canEdit ? (inEditNodeId ? null : "Delete") : null}`.
+- **Node components**: read `canEdit` from the store and gate edit entry — `handleNodeDoubleClick`, the role/badge dropdown (cursor/title also drop when locked), and the inline delete `×` no-op / don't render when `!canEdit`. (The server already denies challenger writes via RLS, and the advocate's own writes still succeed at the API; this lock is the **UX** half so a frozen user isn't offered controls that will silently fail.)
+- **Runtime lock flip without a reload (cross-island).** The advocate's send/revoke happens in the `InviteChallenger` island, but the canvas is the separate `MapEditor` island, hydrated once with the SSR `canEdit`. To re-lock/unlock **in place** (no page reload, no flicker), add a `setCanEdit(canEdit)` store action and have `MapEditorInner` listen on `window` for a `wvmap:set-can-edit` `CustomEvent` (dispatched by `InviteChallenger`). A `window` event is used rather than a shared-store reference because the two islands aren't guaranteed to share the same store chunk. `setCanEdit(false)` also clears `inEditNodeId`/`inEditEdgeId`/`pendingConnection` so no stale editor lingers when the lock drops.
+
+#### 2. Exchange read + revoke — migration, repository, endpoints
+
+**Files**: `supabase/migrations/20260609000003_exchanges_delete_policy.sql` (new), `src/lib/exchange/repository.ts`, `src/pages/api/exchanges/[id]/index.ts` (new)
+
+**Intent**: Back the revoke action (1.2 re-open) and the freshness poll (item 5) with a server boundary.
+
+**Contract**:
+- **Migration**: add an `exchanges_delete` RLS policy `using (advocate_id = (select auth.uid()) and status = 'pending')` and `grant delete on public.exchanges to authenticated;` — the advocate can delete **only** their own still-pending exchange; an accepted/declined row is immutable to delete. (Declined rows already drop out of the partial-unique index, so deleting a pending row is the clean re-invite path alongside decline.)
+- **Repository**:
+  - `getExchangeStatus(supabase, exchangeId)` → `{ status, challengerUsername, roundCount } | null` (two flat selects: the exchange row, then `profiles` for the challenger username; RLS scopes to advocate-or-challenger; null → 404).
+  - `revokeInvite(supabase, exchangeId, advocateId)` → `delete from exchanges where id = $1 and advocate_id = $2 and status = 'pending'` `.select("id")`; `data.length === 0` → `NotFoundError` (404; unknown, not-yours, or already-responded). Returns `void`.
+- **Endpoint** `src/pages/api/exchanges/[id]/index.ts` (sits alongside the existing `[id]/respond.ts`):
+  - `GET = withAuth(...)` → validate `id` (`exchangeIdParamSchema`), `getExchangeStatus`, return `{ status, challengerUsername, roundCount }` (404 if null).
+  - `DELETE = withAuth(...)` → validate `id`, `revokeInvite(supabase, id, user.id)`, return `{ ok: true }` (404 if nothing revoked).
+
+#### 3. InviteChallenger UX polish
+
+**File**: `src/components/debate/InviteChallenger.tsx`
+
+**Intent**: Address the confusing status line (#2), the search-open flash (#4), and the stale advocate view (#5) — all **without page reloads** (a reload re-downloads the canvas and flickers).
+
+**Contract**:
+- **Live exchange state, no reload.** `[id].astro` loads the open exchange with challenger username + round_count + status and passes `existingExchange: { id, status, challengerUsername, roundCount } | null`. `InviteChallenger` seeds a local `activeExchange` state from that prop and mutates it **in place** on send/revoke/poll, pairing each transition with the cross-island `wvmap:set-can-edit` event (item 1) so the canvas re-locks/unlocks without a reload. Render:
+  - `pending` → **"Invite sent to @{challengerUsername} for {roundCount} rounds — awaiting response"** plus a **Revoke** button (only while pending).
+  - `accepted` → **"@{challengerUsername} accepted · {roundCount} rounds"** (no revoke).
+- **Send** → `POST /api/exchanges` → on success set `activeExchange` to the new `pending` row (challenger username + rounds known from the selection) and `signalCanEdit(false)`; close the panel. No reload.
+- **Revoke** → `DELETE /api/exchanges/:id` → on success clear `activeExchange` and `signalCanEdit(true)` (editing re-opens). No reload. Surface a 404/failure via the error line.
+- **Search (#4) — no on-open fetch, no flash.** A single debounced effect that fires **only once the advocate has typed** (empty query ⇒ no request). Empty query renders a hint (**"Type a username to search."**); an in-flight request renders **"Searching…"**; the prior list stays visible during a re-search (no flicker); no matches renders **"No users found."** Clearing the box drops stale matches and returns to the hint. This supersedes the Phase-4 "pre-populated list on open" behaviour — there is no network call until the user types.
+- **Freshness poll (#5)**: while `activeExchange?.status === "pending"`, poll `GET /api/exchanges/:id` on a **~1 s** interval **and** on `window` focus. On a status change, update **in place** (no reload): `accepted` ⇒ update the status line (the advocate stays locked — an accepted exchange still freezes edits); `declined` ⇒ clear the line and `signalCanEdit(true)` (editing re-opens, advocate can re-invite). **Gate the interval on tab visibility** — pause when `document.hidden`, resume with an immediate `check()` on `visibilitychange`/focus. This keeps 1 s safe rather than wasteful: the poll only fires while the tab is visible (feels live for an advocate watching), an abandoned background tab goes quiet instead of ~3600 req/hour, and the focus handler makes the tab-return case instant. The endpoint is a single-row indexed read.
+- **Dismiss on outside click (incl. the canvas).** Close the panel on any click outside it via a **capture-phase `pointerdown`** listener on `document` scoped to the component's container ref. A `position:fixed` backdrop overlay does **not** work here: the debate header's `backdrop-blur` is a containing block, so a fixed overlay only covers the header strip, not the canvas below. Capture phase fires before React Flow can stop propagation on a canvas pointerdown.
+
+#### 4. Seed overhaul — valid UUIDs + 10 users, then `db reset`
+
+**File**: `supabase/seed.sql`
+
+**Intent**: Fix the invalid-UUID invite error (#6) and the orphan rootless debate (#8), and give the dev environment a realistic pool to search/invite from (#9).
+
+**Contract**:
+- Replace the two seed users with **10**, generated by a `do $$ … for i in 1..10 … $$` loop, every id a valid **v4-shaped** UUID (version nibble `4`, variant nibble `8`) — `00000000-0000-4000-8000-0000000000` + the index in 2-hex (`…000000000001` … `…00000000000a`). Mirror each into `auth.identities` (provider_id = the uuid text) and `public.profiles` (usernames `user01`…`user10`, emails `user01@e.pl`…). Keep the empty-string token-column convention from the current file (GoTrue NULL-scan caveat).
+- The demo debate graph already uses v4-shaped ids — keep it, owned by `user01`. **Do not seed any debate with a NULL `root_node_id`.** `create_debate_with_root` is the only creation path and always sets the root, so the orphan at `aaaaaaaa-…0001` (#8) is stray manual data — a `db reset` (which truncates + reseeds) removes it; nothing in code can recreate it.
+- **Run `npx supabase db reset`** to apply migrations (incl. item 2's policy) + the new seed.
+
+#### 5. Global cursor affordance + reuse the existing Button primitive
+
+**Files**: `src/styles/global.css`, and adopt the existing `src/components/ui/button.tsx` in `InviteChallenger.tsx` / `RespondInvite.tsx`
+
+**Intent**: Clickable things should always look clickable (#7), and the invite/respond buttons repeat enough markup to justify a shared primitive (#7 "reusable components").
+
+**Contract**:
+- In `global.css` `@layer base`, add: `button:not(:disabled), [role="button"]:not([aria-disabled="true"]), a[href], summary, label[for] { cursor: pointer; }` and `button:disabled, [aria-disabled="true"] { cursor: not-allowed; }`. (Tailwind v4 / Preflight no longer sets `cursor: pointer` on buttons by default — this restores it project-wide.)
+- **Reuse the existing shadcn `Button`** (`src/components/ui/button.tsx`, named export, `variant`/`size` props) rather than creating a new primitive — a `ui/Button.tsx` would also collide on case-insensitive filesystems. Adopt it in `InviteChallenger` (trigger `ghost`/`sm`, Send `default`/`sm`, Revoke `outline`/`sm`) and `RespondInvite` (Accept `default`/`sm`, Decline `outline`/`sm`), passing `type="button"`. The inbox page (`invites.astro`) uses anchor links for navigation, which pick up the pointer cursor from the base layer. The round-count chips and search-result rows stay bespoke (special states).
+
+#### 6. Rename `id` → `debateId` in the debate page
+
+**File**: `src/pages/debates/[id].astro`
+
+**Intent**: `const { id } = Astro.params;` is ambiguous next to node/exchange ids (#3).
+
+**Contract**: rename the destructured param to `debateId` and update its uses on the page (the route filename stays `[id].astro`).
+
+#### 7. Owner-username label for the challenger
+
+**File**: `src/pages/debates/[id].astro`
+
+**Intent**: The owner sees the `InviteChallenger` affordance in the header; a **challenger** viewing the debate should see whose debate it is.
+
+**Contract**: when the viewer is **not** the owner, resolve the owner's username (`profiles` by `debate.owner_id`; `profiles_select_authenticated` lets any authed user read it) and render it muted in the header's `header-actions` slot — **"Advocate: @{ownerUsername}"** with `text-muted-foreground`. Only the owner branch renders `InviteChallenger`.
+
+### Success Criteria:
+
+#### Automated Verification:
+
+- `npx supabase db reset` applies all migrations + the new seed cleanly (10 profiles present).
+- Type checking passes: `npx astro check`
+- Linting passes: `npm run lint`
+- Build passes: `npm run build`
+
+#### Manual Verification:
+
+- As a **challenger** (pending or accepted), the debate canvas is fully read-only — no drag, connect, context menu, role change, delete, or double-click edit; reads work. The header shows **"Advocate: @{owner}"**.
+- As the **advocate**, editing freezes **in place** (no reload/flicker) the instant an invite is sent; **Revoke** re-opens editing and clears the status line in place.
+- The status line reads **"Invite sent to @{user} for {n} rounds — awaiting response"** while pending, and flips to accepted **without a manual hard refresh** (poll/focus) once the challenger accepts; a decline re-opens editing.
+- The username search shows **no list and a "Type a username to search." hint on open** (no network call); typing shows **"Searching…"** then matches, self excluded, with no empty-then-full flash.
+- The invite panel **closes on an outside click**, including on the canvas.
+- Inviting `user02` (a valid-UUID seed user) succeeds — no "Invalid UUID" 400 (#6).
+- Buttons and links show a pointer cursor; disabled buttons show not-allowed.
+
 **Implementation Note**: Pause for confirmation after automated verification before Phase 5.
 
 ---
@@ -373,6 +488,7 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 - **Self-invite:** `advocateId === challengerId` ⇒ `ValidationError` (422). Also assert `searchUsersByUsername` never returns the caller (advocate absent from their own results).
 - **Duplicate open:** second open on the same debate while one is pending/accepted ⇒ `ConflictError` (409). After a decline, re-invite ⇒ succeeds.
 - **Respond transitions:** accept flips `status='accepted'` + sets `responded_at` (and leaves `current_round=1`, `current_turn='challenger'`); decline flips `status='declined'`; responding to a non-pending exchange ⇒ `NotFoundError` (404).
+- **Revoke (Phase 4.5 — `exchanges_delete`):** the advocate's as-user client deletes their own **pending** exchange ⇒ row gone, the partial-unique slot re-opens (re-invite succeeds), and userB can **no longer read** the graph (revoke closes read access like decline). The advocate cannot delete an **accepted** exchange (pending-only). A non-advocate (userB or a third user) cannot delete the exchange (RLS denies — 0 rows / 404 via `revokeInvite`). Exercise via `revokeInvite` and/or the as-user client directly.
 
 ### Success Criteria:
 
@@ -402,6 +518,7 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 - Self-invite (422) **and** caller absent from search results.
 - Duplicate-open (409), re-invite-after-decline (success).
 - Respond transitions incl. the not-found / already-responded branch.
+- Revoke (Phase 4.5): advocate deletes a pending exchange (slot re-opens, challenger read closes); pending-only (accepted not deletable); non-advocate denied.
 
 ### Manual Testing Steps:
 
@@ -521,19 +638,47 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [ ] 4.1 Type checking passes: `npx astro check`
-- [ ] 4.2 Linting passes: `npm run lint`
-- [ ] 4.3 Build passes: `npm run build`
+- [x] 4.1 Type checking passes: `npx astro check`
+- [x] 4.2 Linting passes: `npm run lint`
+- [x] 4.3 Build passes: `npm run build`
 
 #### Manual
 
-- [ ] 4.4 Slide-over panel: open shows alphabetical users (self excluded), substring narrows, no-match shows empty list; pick user + rounds in one box → invite → challenger reads map while pending → accept; decline → re-invite
+- [x] 4.4 Slide-over panel: open shows alphabetical users (self excluded), substring narrows, no-match shows empty list; pick user + rounds in one box → invite → challenger reads map while pending → accept; decline → re-invite
 
   > **Agent-automatable**: No — requires two browser sessions and visual confirmation of the slide-over invite UI.
 
-- [ ] 4.5 Clicking Send when no root Claim **or** a connective has <2 operands surfaces a clear UI message naming the cause (server 422 via `apiError`); advocate not silently blocked
+- [x] 4.5 Clicking Send when no root Claim **or** a connective has <2 operands surfaces a clear UI message naming the cause (server 422 via `apiError`); advocate not silently blocked
 
   > **Agent-automatable**: No — visual inspection of the debate page UI state.
+
+### Phase 4.5: Editing lock during exchange + invite UX polish + seed/cursor fixes
+
+#### Automated
+
+- [x] 4.5.1 `canEdit` lock wired: store guards + MapEditor interaction props + node edit-entry gates; `[id].astro` computes `isOwner && existingExchange === null`; runtime flip via `setCanEdit` + cross-island `wvmap:set-can-edit` event (no reload)
+- [x] 4.5.2 Exchange read+revoke shipped: `exchanges_delete` policy migration, `getExchangeStatus` + `revokeInvite` repo fns, `GET`/`DELETE /api/exchanges/[id]`
+- [x] 4.5.3 InviteChallenger UX: status line names challenger + rounds, in-place Revoke, type-to-search (no on-open fetch, "Searching…"/hint states), visibility-gated freshness poll, outside-click dismiss
+- [x] 4.5.4 Seed overhaul: 10 users with valid v4 UUIDs + identities + profiles; `npx supabase db reset` applies cleanly
+- [x] 4.5.5 Global cursor affordance in `global.css` + existing shadcn `Button` adopted in invite/respond surfaces
+- [x] 4.5.6 `id` → `debateId` rename in `[id].astro`; challenger sees "Advocate: @{owner}" in the header
+- [x] 4.5.7 Type checking passes: `npx astro check`
+- [x] 4.5.8 Linting passes: `npm run lint`
+- [x] 4.5.9 Build passes: `npm run build`
+
+#### Manual
+
+- [x] 4.5.10 Challenger canvas fully read-only (no drag/connect/menu/role/delete/dbl-click); reads work
+
+  > **Agent-automatable**: No — requires a second browser session and visual confirmation.
+
+- [x] 4.5.11 Advocate frozen on invite send; Revoke re-opens editing; accept reflects without manual hard refresh (poll/focus)
+
+  > **Agent-automatable**: No — two-session visual confirmation of the lock + freshness behaviour.
+
+- [x] 4.5.12 Status line shows "@{user} for {n} rounds — awaiting response"; search lists 10 seed users self-excluded with no double fetch; inviting a seed user succeeds (no Invalid-UUID 400); pointer cursor on clickables
+
+  > **Agent-automatable**: Partially — the search/invite/UUID path is curl-checkable; cursor + status line need visual inspection.
 
 ### Phase 5: Integration smoke suite
 

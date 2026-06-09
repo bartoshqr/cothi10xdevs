@@ -23,16 +23,18 @@ const STATEMENT_ROLES: StatementRole[] = ["claim", "data", "source", "warrant", 
 export default function StatementNode({ id, data }: NodeProps<StatementNodeType>) {
   const { inProgress, toNode } = useConnection();
   const isActiveTarget = inProgress && toNode?.id === id;
-  const { inEditNodeId, setInEditNode, updateNodeFields, setRootNode, deleteNodes, tryExitNodeEdit } = useStore(
-    useShallow((s) => ({
-      inEditNodeId: s.inEditNodeId,
-      setInEditNode: s.setInEditNode,
-      updateNodeFields: s.updateNodeFields,
-      setRootNode: s.setRootNode,
-      deleteNodes: s.deleteNodes,
-      tryExitNodeEdit: s.tryExitNodeEdit,
-    })),
-  );
+  const { inEditNodeId, canEdit, setInEditNode, updateNodeFields, setRootNode, deleteNodes, tryExitNodeEdit } =
+    useStore(
+      useShallow((s) => ({
+        inEditNodeId: s.inEditNodeId,
+        canEdit: s.canEdit,
+        setInEditNode: s.setInEditNode,
+        updateNodeFields: s.updateNodeFields,
+        setRootNode: s.setRootNode,
+        deleteNodes: s.deleteNodes,
+        tryExitNodeEdit: s.tryExitNodeEdit,
+      })),
+    );
 
   const isEditing = inEditNodeId === id;
   const role = data.isRoot ? "claim" : (data.role ?? "claim");
@@ -87,6 +89,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   }, [isEditing, role]);
 
   function handleNodeDoubleClick(e: React.MouseEvent) {
+    if (!canEdit) return;
     e.stopPropagation();
     setInEditNode(id);
   }
@@ -146,7 +149,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   }
 
   function handleBadgeClick(e: React.MouseEvent) {
-    if (data.isRoot) return;
+    if (!canEdit || data.isRoot) return;
     e.stopPropagation();
     const rect = badgeRef.current?.getBoundingClientRect();
     if (rect) setBadgeAnchor({ x: rect.left, y: rect.bottom + 4, flipTop: rect.top - 4 });
@@ -295,9 +298,11 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
               {badge && (
                 <span
                   ref={badgeRef}
-                  className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-white uppercase select-none"
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-white uppercase select-none ${
+                    canEdit && !data.isRoot ? "cursor-pointer" : ""
+                  }`}
                   style={{ backgroundColor: descriptor.accent }}
-                  title="Click to change role"
+                  title={canEdit && !data.isRoot ? "Click to change role" : undefined}
                   onClick={handleBadgeClick}
                 >
                   {badge}

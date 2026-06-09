@@ -46,6 +46,14 @@ export interface RFState {
   inEditEdgeId: string | null;
   /** Set once the editor is mounted against a persisted debate. `null` = local-only (no autosave). */
   debateId: string | null;
+  /**
+   * When false the canvas is read-only: every mutator is a no-op and MapEditor
+   * disables React Flow's interaction affordances. The advocate is locked the
+   * moment an exchange exists; a challenger is always locked (S-02). Defaults to
+   * true so the local-only playground stays editable. Server RLS is the real
+   * boundary — this is the UX half so a frozen user isn't offered dead controls.
+   */
+  canEdit: boolean;
   /** Last non-blocking persistence error, surfaced as a dismissible banner. */
   error: string | null;
 
@@ -56,7 +64,7 @@ export interface RFState {
   cancelConnection: () => void;
   addPendingPreview: (dropX: number, dropY: number) => void;
 
-  hydrate: (debateId: string | null, graph: DebateGraph | null) => void;
+  hydrate: (debateId: string | null, graph: DebateGraph | null, canEdit?: boolean) => void;
   setGraph: (debate: DebateRow, nodes: NodeRow[], relations: RelationRow[]) => void;
   createStatementNode: (statementType: StatementRole, position: XYPosition) => string;
   createConnectiveNode: (op: ConnectiveOp, position: XYPosition) => string;
@@ -67,6 +75,8 @@ export interface RFState {
   setRootNode: (id: string) => Promise<void>;
   setInEditNode: (id: string | null) => void;
   setInEditEdgeId: (id: string | null) => void;
+  /** Flip read-only at runtime (advocate sends/revokes an invite in a sibling island). */
+  setCanEdit: (canEdit: boolean) => void;
   isInEditBlocked: () => boolean;
   tryExitNodeEdit: () => void;
   clearError: () => void;
@@ -310,12 +320,16 @@ export const useStore = create<RFState>()((set, get) => ({
   inEditNodeId: null,
   inEditEdgeId: null,
   debateId: null,
+  canEdit: true,
   error: null,
 
   onNodesChange: (changes) => {
     const next = applyNodeChanges(changes, get().nodes);
     set({ nodes: next });
-    if (!get().debateId) return;
+    // Read-only: never schedule a position patch. (The advocate still owns the
+    // debate, so a stray drag WOULD persist server-side — guard it here, not just
+    // via nodesDraggable in the UI.)
+    if (!get().debateId || !get().canEdit) return;
     for (const change of changes) {
       if (change.type === "position" && change.position) {
         const node = next.find((n) => n.id === change.id);
@@ -331,6 +345,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   stagePendingConnection: (connection) => {
+    if (!get().canEdit) return;
     set({ pendingConnection: connection });
   },
 
@@ -347,7 +362,8 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   commitConnection: (kind) => {
-    const { pendingConnection, nodes, debateId } = get();
+    const { pendingConnection, nodes, debateId, canEdit } = get();
+    if (!canEdit) return;
     if (!pendingConnection) return;
     const targetNode = nodes.find((n) => n.id === pendingConnection.target);
     const edgeId = crypto.randomUUID();
@@ -388,7 +404,7 @@ export const useStore = create<RFState>()((set, get) => ({
     set((state) => ({ pendingConnection: null, edges: state.edges.filter((e) => e.id !== "__pending__") }));
   },
 
-  hydrate: (debateId, graph) => {
+  hydrate: (debateId, graph, canEdit = true) => {
     patchTimers.forEach((t) => {
       clearTimeout(t);
     });
@@ -397,9 +413,18 @@ export const useStore = create<RFState>()((set, get) => ({
     unsavedEdgeIds.clear();
     if (graph) {
       const { nodes, edges } = rowsToGraph(graph.debate, graph.nodes, graph.relations);
-      set({ debateId, nodes, edges, pendingConnection: null, inEditNodeId: null, inEditEdgeId: null, error: null });
+      set({
+        debateId,
+        canEdit,
+        nodes,
+        edges,
+        pendingConnection: null,
+        inEditNodeId: null,
+        inEditEdgeId: null,
+        error: null,
+      });
     } else {
-      set({ debateId, error: null });
+      set({ debateId, canEdit, error: null });
     }
   },
 
@@ -409,6 +434,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   createStatementNode: (statementType, position) => {
+    if (!get().canEdit) return "";
     const id = crypto.randomUUID();
     const { debateId } = get();
     const title = statementType.charAt(0).toUpperCase() + statementType.slice(1);
@@ -446,6 +472,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   createConnectiveNode: (op, position) => {
+    if (!get().canEdit) return "";
     const id = crypto.randomUUID();
     const { debateId } = get();
     const node: ConnectiveNodeType = {
@@ -476,6 +503,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   updateNodeFields: (id, patch) => {
+    if (!get().canEdit) return;
     set((state) => ({
       nodes: state.nodes.map((n) => {
         if (n.id !== id) return n;
@@ -506,6 +534,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   deleteNodes: (ids) => {
+    if (!get().canEdit) return;
     const idSet = new Set(ids);
     const { debateId, nodes, edges } = get();
     // D3-3a: the root claim cannot be deleted — only re-designated via "Set as Root
@@ -540,6 +569,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   deleteEdge: (id) => {
+    if (!get().canEdit) return;
     set((state) => ({
       edges: state.edges.filter((e) => e.id !== id),
     }));
@@ -557,6 +587,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   updateRelationKind: (id, kind) => {
+    if (!get().canEdit) return;
     set((state) => ({
       edges: state.edges.map((e) => {
         if (e.id !== id) return e;
@@ -575,6 +606,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   setRootNode: async (id) => {
+    if (!get().canEdit) return;
     const { debateId } = get();
 
     // Apply all three effects together: the new root flips isRoot + role→claim
@@ -610,6 +642,7 @@ export const useStore = create<RFState>()((set, get) => ({
 
   setInEditNode: (id) => {
     if (id !== null) {
+      if (!get().canEdit) return;
       const { inEditNodeId } = get();
       if (inEditNodeId !== null && inEditNodeId !== id) {
         if (get().isInEditBlocked()) return;
@@ -620,6 +653,15 @@ export const useStore = create<RFState>()((set, get) => ({
 
   setInEditEdgeId: (id) => {
     set({ inEditEdgeId: id });
+  },
+
+  setCanEdit: (canEdit) => {
+    // Locking drops any in-progress edit/connection so no stale editor lingers.
+    if (canEdit) {
+      set({ canEdit: true });
+    } else {
+      set({ canEdit: false, inEditNodeId: null, inEditEdgeId: null, pendingConnection: null });
+    }
   },
 
   isInEditBlocked: () => {

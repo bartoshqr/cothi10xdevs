@@ -444,14 +444,14 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly: `npx supabase db reset`
-- [ ] 1.2 Types regenerated — `exchanges` row type present in `src/db/database.types.ts`
-- [ ] 1.3 Type checking passes: `npx astro check`
-- [ ] 1.4 Linting passes: `npm run lint`
+- [x] 1.1 Migration applies cleanly: `npx supabase db reset`
+- [x] 1.2 Types regenerated — `exchanges` row type present in `src/db/database.types.ts`
+- [x] 1.3 Type checking passes: `npx astro check`
+- [x] 1.4 Linting passes: `npm run lint`
 
 #### Manual
 
-- [ ] 1.5 RLS pair-visibility behaves (pending/accepted challenger reads; declined + non-participant denied)
+- [x] 1.5 RLS pair-visibility behaves (pending/accepted challenger reads; declined + non-participant denied)
 
   > **Agent-automatable**: Yes — two anon-key sessions via the password grant + SQL `set local role`.
 
@@ -468,7 +468,7 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
   -- Expected: RLS denies (0 rows / error) — challenger reads but cannot edit.
   ```
 
-- [ ] 1.6 Partial unique allows re-invite after decline, blocks a second open
+- [x] 1.6 Partial unique allows re-invite after decline, blocks a second open
 
   > **Agent-automatable**: Yes — direct inserts via service client.
 

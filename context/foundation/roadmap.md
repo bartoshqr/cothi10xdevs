@@ -3,7 +3,7 @@ project: WVMap
 version: 1
 status: draft
 created: 2026-05-25
-updated: 2026-06-08
+updated: 2026-06-09
 prd_version: 1
 main_goal: market-feedback
 top_blocker: capacity
@@ -48,7 +48,7 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 | S-00 | landing-page-refresh        | land on a page that clearly pitches WVMap and directs them to sign up | —           | —                                         | done     |
 | F-02 | map-visual-spike            | (design spike) see a static example Toulmin map rendered in React Flow — node/edge visual language | —  | US-01 (visual), FR-004, FR-006 (visual)   | done |
 | S-01 | advocate-map-builder        | build a debate: root Claim, typed statements, sources, relations    | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006     | done     |
-| S-02 | invite-and-open-exchange    | set round count, invite a challenger by username, they accept | S-01          | US-01, FR-007, FR-008, FR-009, FR-010     | proposed |
+| S-02 | invite-and-open-exchange    | set round count, invite a challenger by username, they accept | S-01          | US-01, FR-007, FR-008, FR-009, FR-010     | done     |
 | S-03 | challenger-first-turn       | mark every advocate statement and add own statements, submit turn   | S-02          | US-02, FR-011, FR-012, FR-013, FR-014     | proposed |
 | S-04 | first-divergence-summary    | respond, complete round 1, and view the divergence summary          | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | proposed |
 | S-05 | multiround-edit-invalidation| edit/delete across rounds with mark invalidation; close exchange    | S-04          | US-04, FR-019, FR-026, FR-027             | proposed |
@@ -146,7 +146,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Introduces the exchange + invite + round-config schema and the challenger-first/advocate-last turn ordering. The exchange-initiation gate (root Claim must exist) is the integrity boundary; get it wrong and thin maps reach challengers.
-- **Status:** proposed
+- **Status:** done
 
 ### S-03: Challenger audits the map and submits the first turn
 
@@ -261,3 +261,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-00: land on a page that clearly pitches WVMap and directs them to sign up** — Archived 2026-05-26 → `context/archive/2026-05-26-landing-page-refresh/`. Lesson: —.
 - **F-02: (design spike) a static, hardcoded example Toulmin map renders in a React Flow canvas — a root Claim plus Data/Warrant/Backing/Rebuttal nodes wired with supports/bridges/rebuts edges — establishing the node/edge visual language (per-type node design, per-kind edge styling, color palette, layout) before any schema or store is built.** — Archived 2026-05-27 → `context/archive/2026-05-27-map-visual-spike/`. Lesson: —.
 - **S-01: advocate builds a structured map** — Archived 2026-06-08 → `context/archive/2026-05-26-advocate-map-builder/`. Lesson: —.
+- **S-02: set round count, invite a challenger by username, they accept** — Archived 2026-06-09 → `context/archive/2026-06-08-invite-and-open-exchange/`. Lesson: —.

@@ -2,21 +2,69 @@
 import Layout from "@/layouts/Layout.astro";
 import MapEditor from "@/components/debate/MapEditor";
 import DebateHeader from "@/components/debate/DebateHeader.astro";
+import InviteChallenger from "@/components/debate/InviteChallenger";
 import { createClient } from "@/lib/supabase";
 import { getDebateGraph } from "@/lib/debate/repository";
 
-const { id } = Astro.params;
+const { id: debateId } = Astro.params;
 const { user } = Astro.locals;
 const supabase = createClient(Astro.request.headers, Astro.cookies);
 
-// RLS scopes the read to the owner — a non-owner (or unknown id) gets null.
-const graph = supabase && id ? await getDebateGraph(supabase, id) : null;
+// RLS scopes the read to participants (owner or pending/accepted challenger).
+const graph = supabase && debateId ? await getDebateGraph(supabase, debateId) : null;
 
 let username: string | null = null;
 if (graph && supabase && user) {
   const { data } = await supabase.from("profiles").select("username").eq("id", user.id).single();
   username = data?.username ?? null;
 }
+
+const isOwner = graph && user ? graph.debate.owner_id === user.id : false;
+
+// For a challenger (non-owner participant), resolve the owner's (advocate's)
+// username to show whose debate they're viewing. profiles_select_authenticated
+// lets any authed user read it.
+let ownerUsername: string | null = null;
+if (graph && supabase && !isOwner) {
+  const { data } = await supabase.from("profiles").select("username").eq("id", graph.debate.owner_id).maybeSingle();
+  ownerUsername = data?.username ?? null;
+}
+
+// Load the advocate's current open exchange (pending or accepted) for this debate,
+// resolving the challenger's username + round count for the status line.
+interface ExistingExchange {
+  id: string;
+  status: "pending" | "accepted";
+  challengerUsername: string | null;
+  roundCount: number;
+}
+let existingExchange: ExistingExchange | null = null;
+if (isOwner && supabase && debateId) {
+  const { data: exchange } = await supabase
+    .from("exchanges")
+    .select("id, status, round_count, challenger_id")
+    .eq("debate_id", debateId)
+    .in("status", ["pending", "accepted"])
+    .maybeSingle();
+  if (exchange) {
+    const { data: challenger } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", exchange.challenger_id)
+      .maybeSingle();
+    existingExchange = {
+      id: exchange.id,
+      status: exchange.status as "pending" | "accepted",
+      challengerUsername: challenger?.username ?? null,
+      roundCount: exchange.round_count,
+    };
+  }
+}
+
+// Editing is allowed ONLY for the advocate before any exchange is opened.
+// A challenger (non-owner participant) is always read-only; the advocate is
+// frozen the moment an invite exists (revoke re-opens it).
+const canEdit = isOwner && existingExchange === null;
 
 if (!graph) {
   Astro.response.status = 404;
@@ -27,9 +75,23 @@ if (!graph) {
   graph ? (
     <Layout title={`${graph.debate.title} — WVMap`}>
       <div class="flex h-screen flex-col">
-        <DebateHeader user={user} username={username} title={graph.debate.title} />
+        <DebateHeader user={user} username={username} title={graph.debate.title}>
+          {isOwner && (
+            <InviteChallenger
+              slot="header-actions"
+              client:load
+              debateId={graph.debate.id}
+              existingExchange={existingExchange}
+            />
+          )}
+          {!isOwner && ownerUsername && (
+            <span slot="header-actions" class="text-muted-foreground text-sm">
+              Advocate: @{ownerUsername}
+            </span>
+          )}
+        </DebateHeader>
         <div class="min-h-0 flex-1">
-          <MapEditor client:only="react" debateId={graph.debate.id} initialGraph={graph} />
+          <MapEditor client:only="react" debateId={graph.debate.id} initialGraph={graph} canEdit={canEdit} />
         </div>
       </div>
     </Layout>

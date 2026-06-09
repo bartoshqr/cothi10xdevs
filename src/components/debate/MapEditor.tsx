@@ -107,6 +107,7 @@ function MapEditorInner() {
     nodes,
     edges,
     debateId,
+    canEdit,
     error,
     clearError,
     onNodesChange,
@@ -128,6 +129,7 @@ function MapEditorInner() {
       nodes: s.nodes,
       edges: s.edges,
       debateId: s.debateId,
+      canEdit: s.canEdit,
       error: s.error,
       clearError: s.clearError,
       onNodesChange: s.onNodesChange,
@@ -167,6 +169,21 @@ function MapEditorInner() {
     },
     [closeAllMenus, closeConnectionPicker, tryExitNodeEdit, inEditNodeId],
   );
+
+  // Cross-island lock signal: the InviteChallenger island (a separate hydration
+  // root) dispatches `wvmap:set-can-edit` after the advocate sends or revokes an
+  // invite. Listening on `window` works regardless of whether the two islands
+  // share the store chunk, and avoids a full-page reload (no flicker).
+  useEffect(() => {
+    function onSetCanEdit(e: Event) {
+      const detail = (e as CustomEvent<{ canEdit: boolean }>).detail;
+      useStore.getState().setCanEdit(detail.canEdit);
+    }
+    window.addEventListener("wvmap:set-can-edit", onSetCanEdit);
+    return () => {
+      window.removeEventListener("wvmap:set-can-edit", onSetCanEdit);
+    };
+  }, []);
 
   // Local-only mode (no debate backing) bootstraps a root claim. Persisted debates
   // always load with their root node, so this never fires there.
@@ -225,30 +242,30 @@ function MapEditorInner() {
     (e: MouseEvent | React.MouseEvent) => {
       e.preventDefault();
       cleanupFlow();
-      if (isInEditBlocked()) return;
+      if (!canEdit || isInEditBlocked()) return;
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isInEditBlocked],
+    [cleanupFlow, isInEditBlocked, canEdit],
   );
 
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
     (e, node) => {
       e.preventDefault();
       cleanupFlow();
-      if (isInEditBlocked()) return;
+      if (!canEdit || isInEditBlocked()) return;
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isInEditBlocked],
+    [cleanupFlow, isInEditBlocked, canEdit],
   );
 
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
     (e, edge) => {
       e.preventDefault();
       cleanupFlow();
-      if (isInEditBlocked()) return;
+      if (!canEdit || isInEditBlocked()) return;
       setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isInEditBlocked],
+    [cleanupFlow, isInEditBlocked, canEdit],
   );
 
   const handleNodesDelete = useCallback(
@@ -302,9 +319,12 @@ function MapEditorInner() {
           isValidConnection={isValidConnection}
           connectionLineComponent={FloatingConnectionLine}
           onMouseMove={handleMouseMove}
+          nodesDraggable={canEdit}
+          nodesConnectable={canEdit}
+          elementsSelectable={canEdit}
           fitView
           fitViewOptions={{ padding: 0.2 }}
-          deleteKeyCode={inEditNodeId ? null : "Delete"}
+          deleteKeyCode={canEdit && !inEditNodeId ? "Delete" : null}
         >
           <Background />
           <Controls />
@@ -368,13 +388,15 @@ interface MapEditorProps {
   debateId?: string;
   /** Server-loaded graph to hydrate the canvas with (passed by the `/debates/[id]` page). */
   initialGraph?: DebateGraph;
+  /** When false the canvas is read-only (challenger, or advocate after an invite). Default true. */
+  canEdit?: boolean;
 }
 
-export default function MapEditor({ debateId, initialGraph }: MapEditorProps) {
+export default function MapEditor({ debateId, initialGraph, canEdit = true }: MapEditorProps) {
   // Hydrate the store synchronously, before the canvas first renders, so the local-only
   // auto-create effect sees the right debateId and there's no empty-canvas flash.
   useState(() => {
-    useStore.getState().hydrate(debateId ?? null, initialGraph ?? null);
+    useStore.getState().hydrate(debateId ?? null, initialGraph ?? null, canEdit);
     return null;
   });
 

@@ -20,8 +20,9 @@ const { user, username, title } = Astro.props;
     {title && <span class="text-muted-foreground truncate text-sm">{title}</span>}
   </div>
 
-  <!-- Right: username + sign out -->
+  <!-- Right: slot for extra actions (e.g. InviteChallenger) + username + sign out -->
   <div class="flex shrink-0 items-center gap-3">
+    <slot name="header-actions" />
     {user && <span class="text-muted-foreground hidden text-sm font-medium sm:inline">{username ?? user.email}</span>}
     <a
       href="/"

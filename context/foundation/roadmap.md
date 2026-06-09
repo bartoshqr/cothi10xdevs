@@ -156,9 +156,16 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Prerequisites:** S-02
 - **Parallel with:** S-06
 - **Blockers:** —
+- **UI requirements:**
+  - Statements must display three-state marks (Agree / Challenge / Abstain) adjacent to each statement.
+  - Challenger-authored nodes must be visually distinct from advocate-authored nodes — use a different background shade (light red, light gray, or light blue) instead of white to signal ownership.
+- **Store.ts requirements:**
+  - Extend statement/node schema to track authorship (`authorId` or `authorRole: 'advocate' | 'challenger'`).
+  - Enforce editing restrictions: challenger can only add/edit their own statements and edges; cannot edit advocate statements/edges (can only mark them). Symmetrically, advocate cannot edit challenger statements in S-04.
+  - Persist mark state (Agree/Challenge/Abstain) per statement per user per turn.
 - **Unknowns:**
   - Marking obligation is "every currently-unmarked statement" — confirm carry-over semantics are deferred to S-05 (multi-round) and round 1 simply requires marking all advocate statements. Owner: TBD. Block: no.
-- **Risk:** Adds the three-state mark schema and turn-submission gating (cannot submit until every advocate statement is marked). This is half the input to the summary algorithm; correctness of the mark model matters more than UI polish.
+- **Risk:** Adds the three-state mark schema and turn-submission gating (cannot submit until every advocate statement is marked). This is half the input to the summary algorithm; correctness of the mark model matters more than UI polish. Ownership tracking and edit-permission checks must be enforced consistently to prevent data corruption across rounds.
 - **Status:** proposed
 
 ### S-04: Advocate responds, round 1 completes, divergence summary appears  ⟵ north star

@@ -26,7 +26,7 @@ An advocate viewing their own debate (with a well-formed root map) opens a **sli
 
 - The hard part is **rewriting the membership predicate consistently** across `debates` + the `nodes`/`relations` subqueries (inline `EXISTS`, three copies kept in sync), not adding columns (`20260528000001:98-105,125-132`). The **read** predicate widens to owner-or-(pending-or-accepted challenger); the **write** predicates stay owner/author-scoped (S-02 grants no challenger writes — see comment: "pending challenger can read map, but can't edit it").
 - The FR-007 gate is now **two predicates**: `root_node_id IS NOT NULL` (`20260528000001:27`) **and** no connective with <2 operands — both enforced server-side (roadmap:148 "thin maps reach challengers" risk).
-- `create_debate_with_root` (`20260528000001:156-204`) and `set_debate_root` (`20260608000002:11-47`) are the `security definer` / `RETURNS SETOF` patterns to mirror if an RPC is used.
+- `create_debate_with_root` (`20260528000001:156-204`) and `set_debate_root` (`20260608000002:11-47` — the live definition; `…0002_strip_url` `create or replace`s the original `…0001`) are the `security definer` / `RETURNS SETOF` patterns to mirror if an RPC is used.
 - `findUserByUsername` (`src/lib/users.ts:9-20`) is the *exact-match* substrate; FR-009 here needs a **new** `searchUsersByUsername` (substring, list, self-excluded) alongside it — do not bend the exact helper.
 - `repository.ts` `createRelation` (`:188-223`) is the template for "pre-check app-side then insert, map SQLSTATE 23505 → ConflictError 409".
 
@@ -47,7 +47,11 @@ A new `exchanges` table carries the second participant (`challenger_id`), the in
 ## Critical Implementation Details
 
 - **Read access opens at invite time, not accept time.** Per the developer's instruction "pending challenger can read map, but can't edit it", the widened RLS *select* predicate keys off `status in ('pending','accepted')`. The challenger can read the graph the moment the invite is sent; `accept` does **not** open visibility (it was already open) — it only confirms participation for S-03's turn-taking. `decline` is the transition that *closes* read access (the row drops out of the `pending/accepted` set). The `*_insert`/`*_update`/`*_delete` policies on `nodes`/`relations` stay author/owner-scoped, so a pending or accepted challenger reads but cannot write — that is S-03.
-- **Two-part FR-007 gate, both server-side.** `openExchange` must reject when (a) `root_node_id IS NULL` **or** (b) any `connective` node in the debate has <2 inbound `link` relations. Both are `ValidationError` (422) with distinct messages. (b) is a single aggregate query: left-join each connective node to its inbound `link` relations and reject if any has `count < 2` — e.g. `select n.id from nodes n left join relations r on r.target_node_id = n.id and r.kind = 'link' where n.debate_id = $1 and n.kind = 'connective' group by n.id having count(r.id) < 2`. A malformed map is an integrity hole exactly like a missing root: it must not reach a challenger.
+- **Two-part FR-007 gate, both server-side.** `openExchange` must reject when (a) `root_node_id IS NULL` **or** (b) any `connective` node in the debate has <2 inbound `link` relations. Both are `ValidationError` (422) with distinct messages. **(b) is computed app-side, not as a raw aggregate** — supabase-js's PostgREST query builder cannot express a `LEFT JOIN … GROUP BY … HAVING`, and this repo routes anything beyond a flat select through an RPC, but `openExchange` deliberately stays app-side (mirroring `createRelation`, not an RPC). So fetch the inputs with two flat RLS-scoped selects (the same shape `getDebateGraph` already uses, `repository.ts:37-54`) and count in TypeScript:
+  - `select id from nodes where debate_id = $1 and kind = 'connective'` → the connective ids.
+  - `select target_node_id from relations where debate_id = $1 and kind = 'link'` → the inbound `link` targets.
+  - Reject if **any** connective id has fewer than 2 matching `target_node_id`s. Connectives with **zero** inbound links must be included (a `Map`/tally seeded from the connective ids, not derived from the relations alone, so empties aren't silently skipped).
+  Factor this into a **pure** `isMapWellFormed(nodes, relations): boolean` (or `findUnderwiredConnective`) helper so the same rule backs both this gate and the Phase-4 UI flag (no duplicated operand logic). A malformed map is an integrity hole exactly like a missing root: it must not reach a challenger.
 - **`current_round` + `current_turn` both live on the exchange.** Not just the party marker — the round counter is stateful too (FR-008). S-02 only *initializes* them (`current_round = 1`, `current_turn = 'challenger'`); S-03/S-04 advance them. A `check (current_round between 1 and round_count)` keeps them coherent.
 - **Re-invite after decline relies on a *partial* unique index.** "One open exchange per debate" must be `unique (debate_id) where status in ('pending','accepted')` — a plain unique on `debate_id` would block re-invite after a decline. Declined rows must not count toward the constraint.
 - **Self-invite is blocked in three places by design.** (1) The search endpoint **excludes the caller** so the advocate never sees themselves as a pick ("advocates can't even see themselves in usernames search"); (2) app-side `advocate_id === challenger_id` → `ValidationError` 422 guards a hand-crafted request; (3) a DB `CHECK (advocate_id <> challenger_id)` backstops a direct write. Defense in depth across UI, API, and DB.
@@ -116,6 +120,7 @@ For `debates` itself, `<debate_id_col>` is `debates.id`; for `nodes`/`relations`
 - `exchanges_select`: `using (advocate_id = (select auth.uid()) or challenger_id = (select auth.uid()))`.
 - `exchanges_insert`: `with check (advocate_id = (select auth.uid()) and exists(select 1 from public.debates d where d.id = debate_id and d.owner_id = (select auth.uid())))`.
 - `exchanges_update`: `using (challenger_id = (select auth.uid()) and status = 'pending') with check (status in ('accepted','declined'))` — confines the transition to the challenger responding once.
+- **Column-level write lock (defense in depth).** An RLS `with check` can only validate the *new* row, not compare it to the old, so it cannot stop a challenger from also rewriting `round_count` / `current_round` / `current_turn` / `debate_id` / `advocate_id` while flipping status. Lock those columns with a **column-level grant** instead: `revoke update on public.exchanges from authenticated;` then `grant update (status, responded_at) on public.exchanges to authenticated;`. Now Postgres physically permits an authenticated caller to update only those two columns — the respond transition still works, every other column is immutable from the challenger's session. (Not exploitable today since `SUPABASE_KEY` is server-only and `respondToInvite` controls the SQL, but the slice treats RLS as the boundary, so the grant makes that boundary actually hold. The advocate's `insert` is unaffected; future advocate-side writes, if any, get their own grant.)
 
 #### 4. Same migration — widen RLS on `debates` / `nodes` / `relations` (select)
 
@@ -205,7 +210,7 @@ Create `src/lib/exchange/` mirroring `src/lib/debate/`: centralized round-count 
 **Intent**: Encapsulate the gate check, self-invite block, insert, the respond transition, and the inbox query — returning `null`/throwing typed errors per house convention.
 
 **Contract** (`type DB = SupabaseClient<Database>`):
-- `openExchange(supabase, input, advocateId)`: (a) load debate by `input.debateId` (RLS-scoped) → null ⇒ `NotFoundError` (404); (b) `root_node_id == null` ⇒ `ValidationError` (422, FR-007 gate part 1); (c) **well-formedness gate (part 2)** — for this debate, find any `connective` node with <2 inbound `link` relations (`relations.kind='link' and target_node_id = connective.id`); if any exists ⇒ `ValidationError` (422, e.g. "Every AND/OR group needs at least two operands before you can invite a challenger."). One aggregate query: `select n.id from nodes n left join relations r on r.target_node_id = n.id and r.kind='link' where n.debate_id = $1 and n.kind='connective' group by n.id having count(r.id) < 2` (non-empty result ⇒ malformed). (d) `input.challengerId === advocateId` ⇒ `ValidationError` (422, self-invite); (e) insert the exchange row (status defaults `pending`, `current_round=1`, `current_turn='challenger'`); map SQLSTATE `23505` (partial-unique) ⇒ `ConflictError` (409, "An exchange is already open on this debate."). Mirror `createRelation` (`repository.ts:188-223`).
+- `openExchange(supabase, input, advocateId)`: (a) load debate by `input.debateId` (RLS-scoped) → null ⇒ `NotFoundError` (404); (b) `root_node_id == null` ⇒ `ValidationError` (422, FR-007 gate part 1); (c) **well-formedness gate (part 2)** — for this debate, find any `connective` node with <2 inbound `link` relations (`relations.kind='link' and target_node_id = connective.id`); if any exists ⇒ `ValidationError` (422, e.g. "Every AND/OR group needs at least two operands before you can invite a challenger."). **Computed app-side via a pure helper, not a raw SQL aggregate** (PostgREST can't express `LEFT JOIN … GROUP BY … HAVING`; `openExchange` stays app-side per `createRelation`): two flat selects — `nodes where debate_id=$1 and kind='connective'` (connective ids) and `relations where debate_id=$1 and kind='link'` (inbound link targets) — then tally inbound links per connective in TS and reject if any connective (including ones with **zero** inbound links) has `< 2`. Factor as a pure `isMapWellFormed(nodes, relations)` so the Phase-4 UI flag reuses the identical rule. (d) `input.challengerId === advocateId` ⇒ `ValidationError` (422, self-invite); (e) insert the exchange row (status defaults `pending`, `current_round=1`, `current_turn='challenger'`); map SQLSTATE `23505` (partial-unique) ⇒ `ConflictError` (409, "An exchange is already open on this debate."). Mirror `createRelation` (`repository.ts:188-223`).
 - `respondToInvite(supabase, exchangeId, accept)`: `update exchanges set status=<accepted|declined>, responded_at=now() where id=exchangeId and status='pending'` `.select().maybeSingle()` → null ⇒ `NotFoundError` (404; covers unknown id, already-responded, not-yours-via-RLS). RLS `exchanges_update` enforces challenger identity. (Direct table update, not an RPC — the SETOF trap does not apply.)
 - `listPendingInvites(supabase, userId)`: select pending exchanges where `challenger_id = userId`, joined to debate title for display. RLS already scopes to the challenger; `userId` filter is explicit.
 
@@ -307,8 +312,8 @@ Advocate-facing invite affordance on the debate page, and a minimal challenger i
 - A username **search box** driving a list of selectable users. On open (empty query) the list shows up to `USER_SEARCH_LIMIT` users **sorted alphabetically**; typing narrows it by substring via debounced `GET /api/users/search`. Each result row is clickable to select; **a query matching no user shows an empty list with nothing to click** (no error text needed). The advocate is never in the list (server-excluded).
 - A **round-count selector** defaulting to `ROUND_COUNT.default` (range from `ROUND_COUNT`).
 - A single **Send** action, enabled only once a user is selected; submits `{ debateId, challengerId, roundCount }` to `POST /api/exchanges`.
-- **Gate reflection:** disable/hide the affordance when the debate has no root Claim **or** the map is not well-formed (a connective with <2 operands) — the server still enforces both, but the UI should not invite a guaranteed 422. When an exchange already exists, show its status instead of the form.
-- Surface 409/422 via the existing `apiError` helper (`src/components/debate/apiError.ts`). The page already loads the graph (`[id].astro:13`) and root state — pass `hasRoot` / a `mapWellFormed` flag / existing-exchange status as props.
+- **Gate reflection:** the advocate **can** open the panel and click **Send** even when the map is not yet ready — the affordance is **not** hard-disabled on the gate. On a gate failure the server returns 422 and the UI **surfaces a clear message naming the specific cause** (no root Claim, or "Every AND/OR group needs at least two operands") so the advocate knows what to fix, rather than facing a silently-greyed button. (Compute `hasRoot` and a `mapWellFormed` flag from the already-loaded graph for optional inline hinting, but the server stays authoritative and its 422 message is what the user reads on failure.) When an exchange already exists, show its status instead of the form.
+- Surface 409/422 via the existing `apiError` helper (`src/components/debate/apiError.ts`). The page already loads the graph (`[id].astro:13`) and root state — derive `hasRoot` + the `mapWellFormed` flag **from that graph via the shared `isMapWellFormed(nodes, relations)` helper** (the same pure function the Phase-2 gate uses — no duplicated operand logic), and pass them plus existing-exchange status as props.
 
 #### 2. Minimal invites inbox page
 
@@ -329,7 +334,7 @@ Advocate-facing invite affordance on the debate page, and a minimal challenger i
 #### Manual Verification:
 
 - Two-session click-through: advocate searches + invites; challenger sees the invite, accepts, and can open the debate; decline hides it and allows re-invite.
-- Invite affordance is hidden/disabled when no root Claim exists.
+- Attempting to invite when no root Claim exists **or** a connective has <2 operands shows a clear UI message naming the cause (server 422 surfaced via `apiError`); the advocate is not silently blocked by a greyed button.
 
 **Implementation Note**: Pause for confirmation after automated verification before Phase 5.
 
@@ -417,7 +422,7 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 - Change identity: `context/changes/invite-and-open-exchange/change.md`
 - RLS to widen: `supabase/migrations/20260528000001_create_debate_graph.sql:84-149`
 - S-02 hole comment: `supabase/migrations/20260605000001_tighten_graph_write_policies.sql:1-4`
-- Atomic RPC / SETOF patterns: `20260528000001:156-204`, `20260608000002:11-47`
+- Atomic RPC / SETOF patterns: `20260528000001:156-204`, `20260608000002:11-47` (live `set_debate_root`)
 - Repository template (pre-check + 23505→409): `src/lib/debate/repository.ts:188-223`
 - Operand-gate source (`link` must target a connective): `src/lib/debate/relationRules.ts:11-14`, enforced `repository.ts:188-202`
 - Graph read path (the `get_debate_graph` scale-lever target): `src/lib/debate/repository.ts:37-54`
@@ -522,7 +527,7 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
   > **Agent-automatable**: No — requires two browser sessions and visual confirmation of the slide-over invite UI.
 
-- [ ] 4.5 Invite affordance hidden/disabled when no root Claim **or** a connective has <2 operands
+- [ ] 4.5 Clicking Send when no root Claim **or** a connective has <2 operands surfaces a clear UI message naming the cause (server 422 via `apiError`); advocate not silently blocked
 
   > **Agent-automatable**: No — visual inspection of the debate page UI state.
 

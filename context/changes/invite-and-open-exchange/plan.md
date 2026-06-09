@@ -638,17 +638,17 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [x] 4.1 Type checking passes: `npx astro check`
-- [x] 4.2 Linting passes: `npm run lint`
-- [x] 4.3 Build passes: `npm run build`
+- [x] 4.1 Type checking passes: `npx astro check` — 8bc88f1
+- [x] 4.2 Linting passes: `npm run lint` — 8bc88f1
+- [x] 4.3 Build passes: `npm run build` — 8bc88f1
 
 #### Manual
 
-- [x] 4.4 Slide-over panel: open shows alphabetical users (self excluded), substring narrows, no-match shows empty list; pick user + rounds in one box → invite → challenger reads map while pending → accept; decline → re-invite
+- [x] 4.4 Slide-over panel: open shows alphabetical users (self excluded), substring narrows, no-match shows empty list; pick user + rounds in one box → invite → challenger reads map while pending → accept; decline → re-invite — 8bc88f1
 
   > **Agent-automatable**: No — requires two browser sessions and visual confirmation of the slide-over invite UI.
 
-- [x] 4.5 Clicking Send when no root Claim **or** a connective has <2 operands surfaces a clear UI message naming the cause (server 422 via `apiError`); advocate not silently blocked
+- [x] 4.5 Clicking Send when no root Claim **or** a connective has <2 operands surfaces a clear UI message naming the cause (server 422 via `apiError`); advocate not silently blocked — 8bc88f1
 
   > **Agent-automatable**: No — visual inspection of the debate page UI state.
 
@@ -656,27 +656,27 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [x] 4.5.1 `canEdit` lock wired: store guards + MapEditor interaction props + node edit-entry gates; `[id].astro` computes `isOwner && existingExchange === null`; runtime flip via `setCanEdit` + cross-island `wvmap:set-can-edit` event (no reload)
-- [x] 4.5.2 Exchange read+revoke shipped: `exchanges_delete` policy migration, `getExchangeStatus` + `revokeInvite` repo fns, `GET`/`DELETE /api/exchanges/[id]`
-- [x] 4.5.3 InviteChallenger UX: status line names challenger + rounds, in-place Revoke, type-to-search (no on-open fetch, "Searching…"/hint states), visibility-gated freshness poll, outside-click dismiss
-- [x] 4.5.4 Seed overhaul: 10 users with valid v4 UUIDs + identities + profiles; `npx supabase db reset` applies cleanly
-- [x] 4.5.5 Global cursor affordance in `global.css` + existing shadcn `Button` adopted in invite/respond surfaces
-- [x] 4.5.6 `id` → `debateId` rename in `[id].astro`; challenger sees "Advocate: @{owner}" in the header
-- [x] 4.5.7 Type checking passes: `npx astro check`
-- [x] 4.5.8 Linting passes: `npm run lint`
-- [x] 4.5.9 Build passes: `npm run build`
+- [x] 4.5.1 `canEdit` lock wired: store guards + MapEditor interaction props + node edit-entry gates; `[id].astro` computes `isOwner && existingExchange === null`; runtime flip via `setCanEdit` + cross-island `wvmap:set-can-edit` event (no reload) — 8bc88f1
+- [x] 4.5.2 Exchange read+revoke shipped: `exchanges_delete` policy migration, `getExchangeStatus` + `revokeInvite` repo fns, `GET`/`DELETE /api/exchanges/[id]` — 8bc88f1
+- [x] 4.5.3 InviteChallenger UX: status line names challenger + rounds, in-place Revoke, type-to-search (no on-open fetch, "Searching…"/hint states), visibility-gated freshness poll, outside-click dismiss — 8bc88f1
+- [x] 4.5.4 Seed overhaul: 10 users with valid v4 UUIDs + identities + profiles; `npx supabase db reset` applies cleanly — 8bc88f1
+- [x] 4.5.5 Global cursor affordance in `global.css` + existing shadcn `Button` adopted in invite/respond surfaces — 8bc88f1
+- [x] 4.5.6 `id` → `debateId` rename in `[id].astro`; challenger sees "Advocate: @{owner}" in the header — 8bc88f1
+- [x] 4.5.7 Type checking passes: `npx astro check` — 8bc88f1
+- [x] 4.5.8 Linting passes: `npm run lint` — 8bc88f1
+- [x] 4.5.9 Build passes: `npm run build` — 8bc88f1
 
 #### Manual
 
-- [x] 4.5.10 Challenger canvas fully read-only (no drag/connect/menu/role/delete/dbl-click); reads work
+- [x] 4.5.10 Challenger canvas fully read-only (no drag/connect/menu/role/delete/dbl-click); reads work — 8bc88f1
 
   > **Agent-automatable**: No — requires a second browser session and visual confirmation.
 
-- [x] 4.5.11 Advocate frozen on invite send; Revoke re-opens editing; accept reflects without manual hard refresh (poll/focus)
+- [x] 4.5.11 Advocate frozen on invite send; Revoke re-opens editing; accept reflects without manual hard refresh (poll/focus) — 8bc88f1
 
   > **Agent-automatable**: No — two-session visual confirmation of the lock + freshness behaviour.
 
-- [x] 4.5.12 Status line shows "@{user} for {n} rounds — awaiting response"; search lists 10 seed users self-excluded with no double fetch; inviting a seed user succeeds (no Invalid-UUID 400); pointer cursor on clickables
+- [x] 4.5.12 Status line shows "@{user} for {n} rounds — awaiting response"; search lists 10 seed users self-excluded with no double fetch; inviting a seed user succeeds (no Invalid-UUID 400); pointer cursor on clickables — 8bc88f1
 
   > **Agent-automatable**: Partially — the search/invite/UUID path is curl-checkable; cursor + status line need visual inspection.
 

@@ -212,7 +212,7 @@ Create `src/lib/exchange/` mirroring `src/lib/debate/`: centralized round-count 
 **Contract** (`type DB = SupabaseClient<Database>`):
 - `openExchange(supabase, input, advocateId)`: (a) load debate by `input.debateId` (RLS-scoped) → null ⇒ `NotFoundError` (404); (b) `root_node_id == null` ⇒ `ValidationError` (422, FR-007 gate part 1); (c) **well-formedness gate (part 2)** — for this debate, find any `connective` node with <2 inbound `link` relations (`relations.kind='link' and target_node_id = connective.id`); if any exists ⇒ `ValidationError` (422, e.g. "Every AND/OR group needs at least two operands before you can invite a challenger."). **Computed app-side via a pure helper, not a raw SQL aggregate** (PostgREST can't express `LEFT JOIN … GROUP BY … HAVING`; `openExchange` stays app-side per `createRelation`): two flat selects — `nodes where debate_id=$1 and kind='connective'` (connective ids) and `relations where debate_id=$1 and kind='link'` (inbound link targets) — then tally inbound links per connective in TS and reject if any connective (including ones with **zero** inbound links) has `< 2`. Factor as a pure `isMapWellFormed(nodes, relations)` so the Phase-4 UI flag reuses the identical rule. (d) `input.challengerId === advocateId` ⇒ `ValidationError` (422, self-invite); (e) insert the exchange row (status defaults `pending`, `current_round=1`, `current_turn='challenger'`); map SQLSTATE `23505` (partial-unique) ⇒ `ConflictError` (409, "An exchange is already open on this debate."). Mirror `createRelation` (`repository.ts:188-223`).
 - `respondToInvite(supabase, exchangeId, accept)`: `update exchanges set status=<accepted|declined>, responded_at=now() where id=exchangeId and status='pending'` `.select().maybeSingle()` → null ⇒ `NotFoundError` (404; covers unknown id, already-responded, not-yours-via-RLS). RLS `exchanges_update` enforces challenger identity. (Direct table update, not an RPC — the SETOF trap does not apply.)
-- `listPendingInvites(supabase, userId)`: select pending exchanges where `challenger_id = userId`, joined to debate **id + title** for display (the inbox builds a "View debate" link to `/debates/:debate_id`, so `debate_id` must be in the result, not just the title). RLS already scopes to the challenger; `userId` filter is explicit.
+- `listInvites(supabase, userId)`: select `pending` **and** `accepted` exchanges where `challenger_id = userId`. Uses three flat queries: (1) exchanges, (2) debates for `id + title + root_node_id`, (3) root nodes for `metadata` (title + body). Returns `ChallengerInvite[]` with `status`, `debate_root_node_id`, `debate_root_claim_title`, and `debate_root_claim_body` so the inbox can show the root claim's content and render pending rows (Accept/Decline + View debate) vs accepted rows (Enter debate) without extra fetches. RLS already scopes to the challenger; `userId` filter is explicit.
 
 #### 4. Unit tests
 
@@ -321,11 +321,11 @@ Advocate-facing invite affordance on the debate page, and a minimal challenger i
 
 **Intent**: List the signed-in user's pending invites and let them Accept/Decline — making the slice acceptable end-to-end before S-06.
 
-**Contract**: server-side query via `listPendingInvites` (RLS-scoped) listing debate title + advocate. Each pending row has:
+**Contract**: server-side query via `listInvites` (RLS-scoped) listing debate title + advocate, returning both `pending` and `accepted` rows. Each pending row has:
 - A **"View debate"** link to `/debates/:id` — the challenger can already read the map *while the invite is pending* (that is the whole point of opening reads at `pending`, not at accept), so they can inspect the argument **before** deciding. This is the primary reason the link must be on the pending invite, not gated behind Accept.
 - **Accept / Decline** actions that `POST` to `/api/exchanges/:id/respond` and refresh.
 
-`listPendingInvites` must therefore return `debate_id` (not just the title) so the link can be built. Keep deliberately minimal — S-06 replaces it.
+Accepted rows show an **Enter debate** link to `/debates/:id` instead of Accept/Decline. `debate_id` and `status` are in the result so both link and action rendering work without extra fetches. Keep deliberately minimal — S-06 replaces it.
 
 ### Success Criteria:
 
@@ -444,14 +444,14 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [x] 1.1 Migration applies cleanly: `npx supabase db reset`
-- [x] 1.2 Types regenerated — `exchanges` row type present in `src/db/database.types.ts`
-- [x] 1.3 Type checking passes: `npx astro check`
-- [x] 1.4 Linting passes: `npm run lint`
+- [x] 1.1 Migration applies cleanly: `npx supabase db reset` — 2504fff
+- [x] 1.2 Types regenerated — `exchanges` row type present in `src/db/database.types.ts` — 2504fff
+- [x] 1.3 Type checking passes: `npx astro check` — 2504fff
+- [x] 1.4 Linting passes: `npm run lint` — 2504fff
 
 #### Manual
 
-- [x] 1.5 RLS pair-visibility behaves (pending/accepted challenger reads; declined + non-participant denied)
+- [x] 1.5 RLS pair-visibility behaves (pending/accepted challenger reads; declined + non-participant denied) — 2504fff
 
   > **Agent-automatable**: Yes — two anon-key sessions via the password grant + SQL `set local role`.
 
@@ -468,7 +468,7 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
   -- Expected: RLS denies (0 rows / error) — challenger reads but cannot edit.
   ```
 
-- [x] 1.6 Partial unique allows re-invite after decline, blocks a second open
+- [x] 1.6 Partial unique allows re-invite after decline, blocks a second open — 2504fff
 
   > **Agent-automatable**: Yes — direct inserts via service client.
 
@@ -481,9 +481,9 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [ ] 2.1 Type checking passes: `npx astro check`
-- [ ] 2.2 Unit tests pass: `npm run test:unit`
-- [ ] 2.3 Linting passes: `npm run lint`
+- [x] 2.1 Type checking passes: `npx astro check`
+- [x] 2.2 Unit tests pass: `npm run test:unit`
+- [x] 2.3 Linting passes: `npm run lint`
 
 ### Phase 3: API endpoints + middleware
 

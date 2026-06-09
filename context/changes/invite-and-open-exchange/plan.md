@@ -212,7 +212,7 @@ Create `src/lib/exchange/` mirroring `src/lib/debate/`: centralized round-count 
 **Contract** (`type DB = SupabaseClient<Database>`):
 - `openExchange(supabase, input, advocateId)`: (a) load debate by `input.debateId` (RLS-scoped) → null ⇒ `NotFoundError` (404); (b) `root_node_id == null` ⇒ `ValidationError` (422, FR-007 gate part 1); (c) **well-formedness gate (part 2)** — for this debate, find any `connective` node with <2 inbound `link` relations (`relations.kind='link' and target_node_id = connective.id`); if any exists ⇒ `ValidationError` (422, e.g. "Every AND/OR group needs at least two operands before you can invite a challenger."). **Computed app-side via a pure helper, not a raw SQL aggregate** (PostgREST can't express `LEFT JOIN … GROUP BY … HAVING`; `openExchange` stays app-side per `createRelation`): two flat selects — `nodes where debate_id=$1 and kind='connective'` (connective ids) and `relations where debate_id=$1 and kind='link'` (inbound link targets) — then tally inbound links per connective in TS and reject if any connective (including ones with **zero** inbound links) has `< 2`. Factor as a pure `isMapWellFormed(nodes, relations)` so the Phase-4 UI flag reuses the identical rule. (d) `input.challengerId === advocateId` ⇒ `ValidationError` (422, self-invite); (e) insert the exchange row (status defaults `pending`, `current_round=1`, `current_turn='challenger'`); map SQLSTATE `23505` (partial-unique) ⇒ `ConflictError` (409, "An exchange is already open on this debate."). Mirror `createRelation` (`repository.ts:188-223`).
 - `respondToInvite(supabase, exchangeId, accept)`: `update exchanges set status=<accepted|declined>, responded_at=now() where id=exchangeId and status='pending'` `.select().maybeSingle()` → null ⇒ `NotFoundError` (404; covers unknown id, already-responded, not-yours-via-RLS). RLS `exchanges_update` enforces challenger identity. (Direct table update, not an RPC — the SETOF trap does not apply.)
-- `listPendingInvites(supabase, userId)`: select pending exchanges where `challenger_id = userId`, joined to debate title for display. RLS already scopes to the challenger; `userId` filter is explicit.
+- `listPendingInvites(supabase, userId)`: select pending exchanges where `challenger_id = userId`, joined to debate **id + title** for display (the inbox builds a "View debate" link to `/debates/:debate_id`, so `debate_id` must be in the result, not just the title). RLS already scopes to the challenger; `userId` filter is explicit.
 
 #### 4. Unit tests
 
@@ -321,7 +321,11 @@ Advocate-facing invite affordance on the debate page, and a minimal challenger i
 
 **Intent**: List the signed-in user's pending invites and let them Accept/Decline — making the slice acceptable end-to-end before S-06.
 
-**Contract**: server-side query via `listPendingInvites` (RLS-scoped) listing debate title + advocate. Each row has Accept/Decline that `POST`s to `/api/exchanges/:id/respond` and refreshes. On accept, link to `/debates/:id` (now readable). Keep deliberately minimal — S-06 replaces it.
+**Contract**: server-side query via `listPendingInvites` (RLS-scoped) listing debate title + advocate. Each pending row has:
+- A **"View debate"** link to `/debates/:id` — the challenger can already read the map *while the invite is pending* (that is the whole point of opening reads at `pending`, not at accept), so they can inspect the argument **before** deciding. This is the primary reason the link must be on the pending invite, not gated behind Accept.
+- **Accept / Decline** actions that `POST` to `/api/exchanges/:id/respond` and refresh.
+
+`listPendingInvites` must therefore return `debate_id` (not just the title) so the link can be built. Keep deliberately minimal — S-06 replaces it.
 
 ### Success Criteria:
 
@@ -333,7 +337,7 @@ Advocate-facing invite affordance on the debate page, and a minimal challenger i
 
 #### Manual Verification:
 
-- Two-session click-through: advocate searches + invites; challenger sees the invite, accepts, and can open the debate; decline hides it and allows re-invite.
+- Two-session click-through: advocate searches + invites; challenger sees the invite, **opens "View debate" while still pending to read the map**, then accepts; decline hides it and allows re-invite.
 - Attempting to invite when no root Claim exists **or** a connective has <2 operands shows a clear UI message naming the cause (server 422 surfaced via `apiError`); the advocate is not silently blocked by a greyed button.
 
 **Implementation Note**: Pause for confirmation after automated verification before Phase 5.

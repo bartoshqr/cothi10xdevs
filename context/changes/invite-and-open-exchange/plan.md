@@ -489,13 +489,13 @@ Extend the fixtures with a second user + an as-user (anon) client, then smoke-te
 
 #### Automated
 
-- [x] 3.1 Type checking passes: `npx astro check`
-- [x] 3.2 Linting passes: `npm run lint`
-- [x] 3.3 Build passes: `npm run build`
+- [x] 3.1 Type checking passes: `npx astro check` — 0b7aadf
+- [x] 3.2 Linting passes: `npm run lint` — 0b7aadf
+- [x] 3.3 Build passes: `npm run build` — 0b7aadf
 
 #### Manual
 
-- [x] 3.4 Endpoints return expected status codes (happy + edge)
+- [x] 3.4 Endpoints return expected status codes (happy + edge) — 0b7aadf
 
   > **Agent-automatable**: Yes — bearer token via `/auth/v1/token?grant_type=password`, then curl.
 

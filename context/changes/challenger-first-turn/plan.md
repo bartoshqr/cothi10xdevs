@@ -78,8 +78,7 @@ row per (node, marker)** — re-marking updates stance in place; the submit gate
 (`distinct marked advocate-statement nodes = count of advocate statements`). The turn flip + gate live
 **server-side** in a single `submit_turn()` SECURITY DEFINER RPC (`RETURNS SETOF exchanges`), matching the
 codebase's "atomic multi-effect → RPC" and "SETOF for not-found" conventions and sidestepping the column
-grant lock. `author_role` is **stored** (denormalized) on `nodes`/`relations` and backfilled for existing
-rows. Challenger writes are unlocked by widening node/relation **INSERT** to "owner OR accepted challenger"
+grant lock. Author role is **inferred** at runtime — `node.author_id === debate.owner_id → advocate, else challenger` — no extra column; the frontend receives `advocateId` from the page, and the DB gate uses a single join to `debates`. Challenger writes are unlocked by widening node/relation **INSERT** to "owner OR accepted challenger"
 (via `is_accepted_challenger()` definer helper to avoid 42P17) while **keeping `author_id = auth.uid()`** on
 UPDATE/DELETE — that clause alone yields "edit only your own."
 
@@ -94,9 +93,9 @@ UPDATE/DELETE — that clause alone yields "edit only your own."
   through `submit_turn()` (definer), so the lock stays maximally tight.
 - **SETOF**: `submit_turn()` must be `RETURNS SETOF public.exchanges` so an unknown/forbidden exchange id
   yields `[]` → real `null` → 404, per the lesson. A bare composite would return an all-NULL row and 200.
-- **`author_role` backfill**: existing `nodes`/`relations` were all authored by the advocate (owner). Backfill
-  `author_role = 'advocate'` for every existing row in the same migration that adds the column (`not null`
-  with a backfill, or add nullable → backfill → set not null).
+- **No `author_role` column**: role is inferred from `author_id` vs `debate.owner_id` — no backfill, no
+  new enum, no extra insert param. The frontend page passes `advocateId` (= `debate.owner_id`) into the store;
+  the DB gate in `submit_turn` uses `JOIN debates d ON d.id = n.debate_id AND d.owner_id = n.author_id`.
 
 ---
 
@@ -104,9 +103,8 @@ UPDATE/DELETE — that clause alone yields "edit only your own."
 
 ### Overview
 
-Add the `marks` table + `mark_stance` enum, the `author_role` column (backfilled), the
-`is_accepted_challenger()` helper, widen node/relation INSERT to accepted challengers, and add mark RLS +
-column grant. Regenerate `database.types.ts`.
+Add the `marks` table + `mark_stance` enum, the `is_accepted_challenger()` helper, widen node/relation
+INSERT to accepted challengers, and add mark RLS + column grant. Regenerate `database.types.ts`.
 
 ### Changes Required:
 
@@ -125,9 +123,6 @@ changes that let an accepted challenger contribute without being able to edit th
   `marker_id uuid not null references auth.users on delete cascade`, `stance public.mark_stance not null`,
   `created_at`, `updated_at`. **Unique `(node_id, marker_id)`** — one mutable mark per node per marker.
   Index on `(debate_id)` for gate counts.
-- `author_role` column added to `public.nodes` and `public.relations`: a new enum
-  `public.author_role as enum ('advocate', 'challenger')` (or reuse `turn_actor` — prefer a dedicated enum
-  for clarity). Backfill all existing rows to `'advocate'`, then `set not null`.
 - `is_accepted_challenger(p_debate_id uuid) returns boolean` — SECURITY DEFINER, `stable`,
   `set search_path = public`; body mirrors `is_debate_owner`: `exists (select 1 from exchanges e where
   e.debate_id = p_debate_id and e.challenger_id = (select auth.uid()) and e.status = 'accepted')`. Revoke
@@ -167,7 +162,7 @@ changes that let an accepted challenger contribute without being able to edit th
 **Intent**: Keep generated types in sync so Zod enums and repositories type-check against the new table/enum.
 
 **Contract**: Run the project's type-generation (MCP `generate_typescript_types` or
-`npx supabase gen types`). New `marks` row/insert/update types, `mark_stance` + `author_role` enums, and the
+`npx supabase gen types`). New `marks` row/insert/update types, `mark_stance` enum, and the
 `is_accepted_challenger` / `submit_turn` function signatures appear. File is in the ESLint ignore list, so no
 lint impact.
 
@@ -182,8 +177,7 @@ lint impact.
 
 #### Manual Verification:
 
-- `marks` table, `mark_stance`/`author_role` enums, and `is_accepted_challenger` exist with correct RLS.
-- Existing seed nodes/relations are backfilled `author_role='advocate'`.
+- `marks` table, `mark_stance` enum, and `is_accepted_challenger` exist with correct RLS.
 - An accepted challenger can INSERT a node but cannot UPDATE an advocate node (RLS).
 
 ---
@@ -209,14 +203,15 @@ turn can never be submitted (closes the race the app layer can't).
 
 - Resolve the exchange; if the caller is not its challenger, or `current_turn <> 'challenger'`, or
   `status <> 'accepted'` → return empty set (no row) so the handler maps to 404/409 appropriately.
-- **Gate**: count advocate-authored **statement** nodes in the debate; count distinct `(node_id)` marks by
-  `auth.uid()` on those nodes. If marked < total → raise a typed error (SQLSTATE mapped to `ConflictError`/422)
-  with message naming the unmarked count. (Connective nodes excluded from the count — `kind = 'statement'`.)
+- **Gate**: count advocate-authored **statement** nodes in the debate (identified by
+  `JOIN debates d ON d.id = n.debate_id AND d.owner_id = n.author_id` — no `author_role` column needed);
+  count distinct `(node_id)` marks by `auth.uid()` on those nodes. If marked < total → raise a typed error
+  (SQLSTATE mapped to `ConflictError`/422) with message naming the unmarked count. (Connective nodes excluded —
+  `kind = 'statement'`.)
 - On pass: `update exchanges set current_turn = 'advocate' where id = p_exchange_id returning *`.
 - Revoke EXECUTE from public/anon; grant to authenticated.
 
-> The advocate-statement count uses `kind = 'statement'` and `author_role = 'advocate'` (or the owner join);
-> the connective exclusion is load-bearing — marking is per Statement only.
+> The connective exclusion (`kind = 'statement'`) is load-bearing — marking is per Statement only.
 
 ### Success Criteria:
 
@@ -239,7 +234,7 @@ turn can never be submitted (closes the race the app layer can't).
 ### Overview
 
 Thin backend: a new `src/lib/mark/` module (constants, Zod schema, repository) plus two endpoints (mark
-upsert, submit-turn), all via `withAuth`. Extend node/relation creation to set `author_role`.
+upsert, submit-turn), all via `withAuth`.
 
 ### Changes Required:
 
@@ -284,16 +279,6 @@ repository fn that wraps the `submit_turn` RPC, `.maybeSingle()` null → `NotFo
 SQLSTATE → `ConflictError` (→ 409) or `ValidationError` (→ 422). Add `submitTurn` to
 `src/lib/exchange/repository.ts`.
 
-#### 5. Set `author_role` on node/relation creation
-
-**File**: `src/lib/debate/repository.ts`
-
-**Intent**: Populate the new denormalized column on insert so shading and the gate have it without a join.
-
-**Contract**: `createStatementNode` / `createConnectiveNode` / `createRelation` set `author_role` based on
-whether the author is the debate owner (advocate) or the accepted challenger. Derive once (single owner/role
-lookup) and pass into the insert. Existing positional/object call sites unchanged except the added field.
-
 ### Success Criteria:
 
 #### Automated Verification:
@@ -306,7 +291,6 @@ lookup) and pass into the insert. Existing positional/object call sites unchange
 
 - `POST /api/debates/<id>/marks` upserts a mark (200) and is idempotent on re-mark (stance updates).
 - `POST /api/exchanges/<id>/submit-turn` returns 409/422 when incomplete, 200 + flipped turn when complete.
-- A challenger-created node row has `author_role='challenger'`.
 
 ---
 
@@ -329,9 +313,9 @@ submit-turn action.
 are correct.
 
 **Contract**: Page passes `viewerId` (`Astro.locals.user.id`), `viewerRole` ('advocate'|'challenger'|null),
-and `isMyTurn` (derived from the exchange's `current_turn` vs role) into `MapEditor` props. Store holds a
-`viewer` context. `rowsToGraph` (`store.ts:103-129`) **keeps** `author_id`/`author_role` and puts them on node
-`data`.
+`advocateId` (`debate.owner_id`), and `isMyTurn` (derived from the exchange's `current_turn` vs role) into
+`MapEditor` props. Store holds a `viewer` context. `rowsToGraph` (`store.ts:103-129`) **keeps** `author_id`
+on node `data`; author role is derived at render time as `node.data.author_id === advocateId ? 'advocate' : 'challenger'`.
 
 #### 2. Capability model replaces `canEdit` boolean
 
@@ -353,10 +337,11 @@ must keep working (owner full edit when no exchange).
 **Intent**: Surface the three-state mark affordance (mirroring the existing role-badge dropdown pattern) and
 shade challenger-authored nodes distinctly.
 
-**Contract**: When `canMarkNode`, render an Agree/Challenge/Abstain control (mirror the badge + portal
-dropdown at `StatementNode.tsx:298-310,167-237`; add `nodrag nopan`). Current stance read from node `data`.
-Background paint (`StatementNode.tsx:269`) conditions on `author_role` — challenger nodes get a distinct shade
-(light gray/blue) instead of `var(--card)`. Add a `markStanceDescriptors` record to `mapVisualLanguage.ts`
+**Contract**: When `canMarkNode`, render an Agree/Challenge/Abstain control **inline inside the card,
+below the body** — a slim bar with three buttons (`nodrag nopan`), no portal/dropdown. Current stance
+highlighted; clicking calls `setMark`. Background paint (`StatementNode.tsx:269`) conditions on inferred
+author role (`node.data.author_id === advocateId`) — challenger nodes get a distinct shade (light
+gray/blue) instead of `var(--card)`. Add a `markStanceDescriptors` record to `mapVisualLanguage.ts`
 (stance → label/color) consumed by node + legend. Connective nodes get **no** mark control.
 
 #### 4. Optimistic persistence wrappers + submit button
@@ -459,8 +444,7 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 ## Migration Notes
 
-- `author_role` is backfilled `'advocate'` for all existing rows (every pre-S-03 node/relation was authored by
-  the owner). New migrations only — no destructive change to existing columns.
+- No `author_role` column — role is inferred from `author_id` vs `debate.owner_id`. No backfill needed.
 - Two new migrations (Phase 1 schema, Phase 2 RPC); apply via `npx supabase db reset` locally and
   `npx supabase db push` for cloud.
 
@@ -489,7 +473,7 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Manual
 
-- [ ] 1.5 `marks` table, enums, and `is_accepted_challenger` exist with correct RLS
+- [ ] 1.5 `marks` table, `mark_stance` enum, and `is_accepted_challenger` exist with correct RLS
 
   > **Agent-automatable**: Yes — pure SQL via the local DB.
 
@@ -497,23 +481,11 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   -- Run against local Supabase (postgres superuser or service role).
   -- Expected: one row per object, RLS enabled on marks.
   select 'enum_stance' as obj, count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='mark_stance';
-  select 'enum_role'   as obj, count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='author_role';
   select 'marks_rls'   as obj, relrowsecurity from pg_class where relname='marks';
   select 'fn_helper'   as obj, proname, prosecdef from pg_proc where proname='is_accepted_challenger';
   ```
 
-- [ ] 1.6 Existing seed nodes/relations backfilled `author_role='advocate'`
-
-  > **Agent-automatable**: Yes — SQL count.
-
-  ```sql
-  -- Expected: zero rows with NULL author_role; all seed rows = 'advocate'.
-  select count(*) filter (where author_role is null) as null_roles,
-         count(*) filter (where author_role = 'advocate') as advocate_roles
-  from public.nodes;
-  ```
-
-- [ ] 1.7 Accepted challenger can INSERT a node but cannot UPDATE an advocate node (RLS, DB layer)
+- [ ] 1.6 Accepted challenger can INSERT a node but cannot UPDATE an advocate node (RLS, DB layer)
 
   > **Agent-automatable**: Yes — `set local role` + `request.jwt.claims` simulation, or via the integration fixture. The block below uses the seed users; user02 must be an accepted challenger of debate `…010` (create the exchange first via SQL).
 
@@ -531,8 +503,8 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
 
   -- Expected: SUCCEEDS (challenger inserts their own statement).
-  insert into public.nodes (debate_id, author_id, author_role, kind, position_x, position_y, metadata)
-  values ('00000000-0000-4000-8000-000000000010','00000000-0000-4000-8000-000000000002','challenger',
+  insert into public.nodes (debate_id, author_id, kind, position_x, position_y, metadata)
+  values ('00000000-0000-4000-8000-000000000010','00000000-0000-4000-8000-000000000002',
           'statement', 100, 100, '{"statement_type":"data","title":"Challenger data"}');
 
   -- Expected: AFFECTS 0 ROWS (cannot edit advocate's root node …011).
@@ -553,22 +525,24 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 - [ ] 2.4 `submit_turn` rejects an incomplete mark set; flips turn on a complete one; SETOF on unknown id
 
-  > **Agent-automatable**: Yes — SQL as the challenger (JWT-claims impersonation). Assumes the accepted exchange from 1.7 exists and no marks yet.
+  > **Agent-automatable**: Yes — SQL as the challenger (JWT-claims impersonation). Assumes the accepted exchange from 1.6 exists and no marks yet.
 
   ```sql
   set local role authenticated;
   set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
 
   -- (a) No/partial marks → gate fails (raises error OR returns no flip — assert current_turn unchanged).
-  select * from public.submit_turn('<exchange_id_from_1.7>');  -- replace with the exchange id created in 1.7
+  select * from public.submit_turn('<exchange_id_from_1.6>');  -- replace with the exchange id created in 1.6
 
   -- (b) Mark all 5 advocate statements, then submit → flips to 'advocate'.
+  -- Advocate statements = nodes where author_id matches debate.owner_id.
   insert into public.marks (debate_id, node_id, marker_id, stance)
   select '00000000-0000-4000-8000-000000000010', n.id,
          '00000000-0000-4000-8000-000000000002', 'agree'
   from public.nodes n
+  join public.debates d on d.id = n.debate_id and d.owner_id = n.author_id
   where n.debate_id='00000000-0000-4000-8000-000000000010'
-    and n.kind='statement' and n.author_role='advocate'
+    and n.kind='statement'
   on conflict (node_id, marker_id) do update set stance=excluded.stance;
 
   select current_turn from public.submit_turn('<exchange_id_from_1.7>');  -- Expected: 'advocate'
@@ -629,18 +603,6 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   # After marking all 5 advocate statements: expect 200 and current_turn='advocate'.
   curl -s -X POST "http://localhost:4321/api/exchanges/<exchange_id>/submit-turn" \
     -H "Authorization: Bearer $TOKEN" | jq .current_turn
-  ```
-
-- [ ] 3.6 Challenger-created node row has `author_role='challenger'`
-
-  > **Agent-automatable**: Yes — SQL after creating a node through the app/API as user02.
-
-  ```sql
-  -- Expected: challenger-authored rows carry author_role='challenger'.
-  select author_role, count(*) from public.nodes
-  where debate_id='00000000-0000-4000-8000-000000000010'
-    and author_id='00000000-0000-4000-8000-000000000002'
-  group by author_role;
   ```
 
 ### Phase 4: Frontend — identity, capability model, mark UI & shading

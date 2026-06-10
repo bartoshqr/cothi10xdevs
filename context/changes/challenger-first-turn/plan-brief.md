@@ -32,7 +32,7 @@ board for the challenger.
 | Mark grain                       | One mutable row per `(node, marker)`               | Simplest gate (count check); S-05 invalidation = clear/flag the row, no migration | Plan     |
 | Turn-submit mechanism            | `SECURITY DEFINER submit_turn()` RPC, `RETURNS SETOF` | Atomic gate + flip server-side; matches RPC + SETOF lessons; sidesteps grant lock | Plan     |
 | Mark persistence timing          | Incremental, optimistic per-click                  | Marks survive refresh mid-audit; reuses store's apply→API→reconcile pattern        | Plan     |
-| `author_role`                    | **Stored** (denormalized) + backfilled to advocate | One-column read for shading and the gate; no join (user override of derive rec)    | Plan     |
+| `author_role`                    | **Inferred** (`author_id === debate.owner_id`)     | No column, no backfill, no insert obligation; join in `submit_turn` is trivial     | Plan     |
 | Frontend permission model        | Capability flags from a viewer context             | Encodes the real per-node rules; one source of truth; extends to S-04             | Plan     |
 | Challenger write RLS recursion   | `is_accepted_challenger()` SECURITY DEFINER helper | Pre-empts the 42P17 loop that bit S-02; read predicates stay inline EXISTS         | Plan     |
 | Scope edge                       | Stop at advocate's turn activated                  | Smallest coherent vertical; advocate marking/summary = S-04, carry-over = S-05    | Plan     |
@@ -40,28 +40,30 @@ board for the challenger.
 
 ## Scope
 
-**In scope:** mark schema + enum + RLS + grant; `author_role` column + backfill; `is_accepted_challenger`
-helper; widened node/relation INSERT (keep `author_id` on UPDATE/DELETE); `submit_turn` RPC; mark + submit-turn
-endpoints; frontend identity/capability model, mark UI, challenger shading, submit action; integration tests.
+**In scope:** mark schema + enum + RLS + grant; `is_accepted_challenger` helper; widened node/relation INSERT
+(keep `author_id` on UPDATE/DELETE); `submit_turn` RPC; mark + submit-turn endpoints; frontend
+identity/capability model, mark UI (inline below node body), challenger shading, submit action; integration
+tests.
 
 **Out of scope:** advocate marking (FR-015, S-04); divergence summary (S-04); carry-over / invalidation /
 mini-turn / orphaning (S-05); 7-day close path; Source URL validation.
 
 ## Architecture / Approach
 
-Bottom-up vertical. **DB first** (the authorization layer): `marks` table + `mark_stance`/`author_role`
-enums, the definer membership helper, widened insert / narrowed update-delete policies, mark RLS. Then the
-atomic **`submit_turn()` RPC** that validates "all advocate statements marked" and flips the turn. Then a thin
-**`src/lib/mark/`** module + two `withAuth` endpoints (mark upsert, submit-turn). Finally the **frontend**:
-thread viewer id/role/isMyTurn + per-node author into the Zustand store, replace the single `canEdit` boolean
-with derived per-node capabilities, add the mark control + challenger shading to `StatementNode`, and wire
-optimistic mark persistence + the submit button.
+Bottom-up vertical. **DB first** (the authorization layer): `marks` table + `mark_stance` enum, the definer
+membership helper, widened insert / narrowed update-delete policies, mark RLS. Then the atomic
+**`submit_turn()` RPC** that validates "all advocate statements marked" (identified via a join to `debates`,
+not a stored column) and flips the turn. Then a thin **`src/lib/mark/`** module + two `withAuth` endpoints
+(mark upsert, submit-turn). Finally the **frontend**: thread `viewerId`, `viewerRole`, `advocateId`, and
+`isMyTurn` into the Zustand store; replace the single `canEdit` boolean with derived per-node capabilities;
+add an inline Agree/Challenge/Abstain bar **below the node body** to `StatementNode`; shade challenger nodes;
+wire optimistic mark persistence + the submit button.
 
 ## Phases at a Glance
 
 | Phase                                    | What it delivers                                     | Key risk                                          |
 | ---------------------------------------- | ---------------------------------------------------- | ------------------------------------------------- |
-| 1. Mark schema, authorship & write RLS   | marks table/enums, author_role + backfill, helper, RLS | 42P17 recursion on the widened insert check       |
+| 1. Mark schema & write RLS               | marks table/enum, helper, widened RLS                | 42P17 recursion on the widened insert check       |
 | 2. `submit_turn()` RPC                   | Atomic gate + turn flip                              | SETOF not-found; correct statement-count gate     |
 | 3. Backend module + endpoints            | mark/submit-turn API via `withAuth`                  | Error→status mapping (409/422/404) for the gate   |
 | 4. Frontend identity, capability, mark UI | viewer context, per-node caps, mark control, shading | Replacing `canEdit` without breaking advocate edit |
@@ -73,8 +75,6 @@ manual verification.
 
 ## Open Risks & Assumptions
 
-- `author_role` is stored against the derive recommendation — must be populated on every insert and kept
-  consistent; backfill covers existing rows.
 - The client-side submit gate is a mirror; the server RPC remains the source of truth (avoid a vibe mirror
   test — assert the gate against the oracle "5 advocate statements," not against the implementation count).
 - Manual app-layer steps need the local anon key (`npx supabase status`) and an accepted exchange seeded

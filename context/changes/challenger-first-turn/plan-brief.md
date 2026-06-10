@@ -29,19 +29,22 @@ board for the challenger.
 
 | Decision                         | Choice                                             | Why (1 sentence)                                                                 | Source   |
 | -------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------- | -------- |
-| Mark grain                       | One mutable row per `(node, marker)`               | Simplest gate (count check); S-05 invalidation = clear/flag the row, no migration | Plan     |
+| Mark grain                       | One mutable row per `(node, marker)`, no round col | Simplest gate; S-05 adds `valid boolean` flipped by the **counterpart** — column-add, no delete/overwrite | Plan |
 | Turn-submit mechanism            | `SECURITY DEFINER submit_turn()` RPC, `RETURNS SETOF` | Atomic gate + flip server-side; matches RPC + SETOF lessons; sidesteps grant lock | Plan     |
 | Mark persistence timing          | Incremental, optimistic per-click                  | Marks survive refresh mid-audit; reuses store's apply→API→reconcile pattern        | Plan     |
 | `author_role`                    | **Inferred** (`author_id === debate.owner_id`)     | No column, no backfill, no insert obligation; join in `submit_turn` is trivial     | Plan     |
 | Frontend permission model        | Capability flags from a viewer context             | Encodes the real per-node rules; one source of truth; extends to S-04             | Plan     |
 | Challenger write RLS recursion   | `is_accepted_challenger()` SECURITY DEFINER helper | Pre-empts the 42P17 loop that bit S-02; read predicates stay inline EXISTS         | Plan     |
+| Turn enforcement                 | `can_write_as_challenger()` (membership + `current_turn='challenger'`) gates writes | Turn is an RLS boundary, not just a UI lock — blocks out-of-turn writes after submit (F1) | Plan |
+| Connective marking               | `kind='statement'` enforced in marks RLS           | Connectives carry no mark per PRD; RLS rejects it, not just the hidden UI control (F3) | Plan |
 | Scope edge                       | Stop at advocate's turn activated                  | Smallest coherent vertical; advocate marking/summary = S-04, carry-over = S-05    | Plan     |
 | Primary test layer               | Integration against real RLS/DB                    | Only real RLS catches 42P17 + the grant lock; the gate is a DB-shaped rule         | Plan     |
 
 ## Scope
 
-**In scope:** mark schema + enum + RLS + grant; `is_accepted_challenger` helper; widened node/relation INSERT
-(keep `author_id` on UPDATE/DELETE); `submit_turn` RPC; mark + submit-turn endpoints; frontend
+**In scope:** mark schema + enum + RLS + grant; `is_accepted_challenger` (read) + `can_write_as_challenger`
+(turn-gated write) helpers; widened node/relation INSERT (keep `author_id` on UPDATE/DELETE); statement-only
+marks RLS; `submit_turn` RPC; mark + submit-turn endpoints; frontend
 identity/capability model, mark UI (inline below node body), challenger shading, submit action; integration
 tests.
 
@@ -51,7 +54,8 @@ mini-turn / orphaning (S-05); 7-day close path; Source URL validation.
 ## Architecture / Approach
 
 Bottom-up vertical. **DB first** (the authorization layer): `marks` table + `mark_stance` enum, the definer
-membership helper, widened insert / narrowed update-delete policies, mark RLS. Then the atomic
+helpers (`is_accepted_challenger` for read scope, `can_write_as_challenger` for turn-gated writes), widened
+insert / narrowed update-delete policies, statement-only mark RLS. Then the atomic
 **`submit_turn()` RPC** that validates "all advocate statements marked" (identified via a join to `debates`,
 not a stored column) and flips the turn. Then a thin **`src/lib/mark/`** module + two `withAuth` endpoints
 (mark upsert, submit-turn). Finally the **frontend**: thread `viewerId`, `viewerRole`, `advocateId`, and
@@ -79,6 +83,8 @@ manual verification.
   test — assert the gate against the oracle "5 advocate statements," not against the implementation count).
 - Manual app-layer steps need the local anon key (`npx supabase status`) and an accepted exchange seeded
   between user01 (advocate) and user02 (challenger).
+- Turn enforcement lives in `can_write_as_challenger`; the integration suite must assert an off-turn
+  challenger write is RLS-rejected (not just that the UI locks).
 
 ## Success Criteria (Summary)
 

@@ -88,12 +88,13 @@ UPDATE/DELETE — that clause alone yields "edit only your own."
   reads `exchanges` from within `nodes`/`relations` RLS while `exchanges`/`debates` read back — the same
   loop that threw 42P17 in S-02. Wrap the membership test in a SECURITY DEFINER helper
   (`stable`, `set search_path = public`, EXECUTE revoked from public/anon, granted to authenticated):
-  `is_accepted_challenger` for read scope, `can_write_as_challenger` (same body + `current_turn='challenger'`)
-  for the write checks. Keep the read predicates as inline EXISTS.
+  `is_accepted_challenger` for read scope, `can_write_as_current_actor` (generic turn gate — also covers S-04
+  advocate side, no policy change needed) for the write checks. Keep the read predicates as inline EXISTS.
 - **Server-side turn gate (F1)**: node/relation INSERT and mark INSERT/UPDATE all gate on
-  `can_write_as_challenger`, so a challenger physically cannot write after submitting (turn flipped to
-  `'advocate'`). Turn enforcement is an RLS boundary, not just a UI lock — this prevents out-of-turn
-  corruption when S-04 (the advocate's turn) ships.
+  `can_write_as_current_actor` (during-exchange branch). Neither party can write after their turn has
+  passed. The advocate is also blocked from inserting nodes/relations during the challenger's turn (symmetric
+  enforcement). Turn enforcement is an RLS boundary, not just a UI lock. S-04 needs no policy change for
+  any of these tables.
 - **Column grant lock**: do **not** add `current_turn`/`current_round` to the `grant update` — the flip goes
   through `submit_turn()` (definer), so the lock stays maximally tight.
 - **SETOF**: `submit_turn()` must be `RETURNS SETOF public.exchanges` so an unknown/forbidden exchange id
@@ -133,34 +134,33 @@ changes that let an accepted challenger contribute without being able to edit th
     (the only round S-03 covers) because there is no prior turn to preserve; the gate is a simple count.
     This is sound **only if** S-04's divergence summary reads current mark state, not per-round history —
     confirm when S-04's summary input contract is pinned.
-  - **S-05 forward path (do not build now)**: invalidation will **not** delete or overwrite a mark. S-05
-    adds a `valid boolean not null default true` column; when one party changes a statement, the **other
-    party's** mark on it is flipped `valid = false` (the counterpart invalidates, never the author), leaving
-    the stance row intact for history/audit. The submit gate then becomes "every advocate statement has a
-    `valid = true` mark." Designing the row as mutable-but-not-deleted keeps that a pure column-add migration.
+  - **Invalidation column (included in S-03)**: the table includes `valid boolean not null default true`.
+    When one party changes a statement, the **other party's** mark on it is flipped `valid = false` (the
+    counterpart invalidates, never the author), leaving the stance row intact for history/audit. The submit
+    gate (S-03) already filters on `valid = true` marks. S-05 wires up the flip trigger — no schema change needed.
 - `is_accepted_challenger(p_debate_id uuid) returns boolean` — SECURITY DEFINER, `stable`,
   `set search_path = public`; body mirrors `is_debate_owner`: `exists (select 1 from exchanges e where
   e.debate_id = p_debate_id and e.challenger_id = (select auth.uid()) and e.status = 'accepted')`. Revoke
-  EXECUTE from public/anon; grant to authenticated. **This is the membership predicate (read scope) — turn-agnostic.**
-- `can_write_as_challenger(p_debate_id uuid) returns boolean` — SECURITY DEFINER, `stable`,
-  `set search_path = public`; same body as `is_accepted_challenger` **plus `and e.current_turn = 'challenger'`**.
-  This is the **write** predicate: a challenger may add nodes/relations and mark statements only while it is
-  their turn. Revoke EXECUTE from public/anon; grant to authenticated. (Kept separate from
-  `is_accepted_challenger` so read membership and turn-gated write stay distinct concerns — see F1.)
-- **Widen `nodes_insert` / `relations_insert`**: `with check (author_id = (select auth.uid()) and (
-  <existing owner EXISTS> or public.can_write_as_challenger(debate_id)))`. (Drop & recreate the existing
-  policies.) Turn-gating here means a challenger cannot insert content after they have submitted (turn flipped
-  to `'advocate'`); the advocate branch is the unchanged owner EXISTS.
+  EXECUTE from public/anon; grant to authenticated. **Membership predicate (read scope) — turn-agnostic.**
+- `can_write_as_current_actor(p_debate_id uuid) returns boolean` — SECURITY DEFINER, `stable`,
+  `set search_path = public`; checks `status = 'accepted'` AND `(challenger_id = uid AND current_turn =
+  'challenger') OR (advocate_id = uid AND current_turn = 'advocate')`. **Generic turn-gated write predicate
+  used for both nodes/relations INSERT (during-exchange branch) and marks INSERT/UPDATE.** Covers S-03 and
+  S-04 without any policy change. Revoke EXECUTE from public/anon; grant to authenticated.
+- **Widen `nodes_insert` / `relations_insert`**: two-branch gate — `(owner EXISTS AND NOT EXISTS accepted
+  exchange) OR can_write_as_current_actor(debate_id)`. Branch 1 preserves the advocate's pre-exchange
+  map-building flow. Branch 2 enforces the turn boundary symmetrically for both parties once an exchange is
+  active: advocate is blocked during the challenger's turn; challenger is blocked during the advocate's turn.
+  S-04 needs no policy change. (Drop & recreate the existing policies.)
 - **`nodes_update`/`nodes_delete`, `relations_update`/`relations_delete`**: drop the debate-owner gate, keep
   `author_id = (select auth.uid())`. This yields "edit only your own" for both parties.
 - **Marks RLS** (`alter table marks enable row level security; revoke select on marks from anon`):
   - `marks_select`: a debate **member** (owner OR accepted challenger) can read all marks in the debate.
-  - `marks_insert` / `marks_update`: `marker_id = (select auth.uid())` AND the marker may write **on their
-    turn** AND the marked node is a **`kind = 'statement'`** node belonging to the **other** party (a marker
-    marks the counterpart's statements, not their own, and never a connective — F3). Use
-    `can_write_as_challenger` (turn-gated) / owner EXISTS to stay recursion-safe — marking is a turn action,
-    so it uses the write predicate, not the membership one. The statement-only rule is enforced here via
-    `exists (select 1 from nodes n where n.id = marks.node_id and n.kind = 'statement' and <other-party>)`,
+  - `marks_insert` / `marks_update`: `marker_id = (select auth.uid())` AND `can_write_as_current_actor`
+    (generic turn-gate, covers both S-03 and S-04 without a policy change) AND the marked node is a
+    **`kind = 'statement'`** node with `author_id <> auth.uid()` (counterpart's content only — connectives
+    and own-party nodes excluded, F3). The statement-only + other-party rule is enforced via
+    `exists (select 1 from nodes n where n.id = marks.node_id and n.kind = 'statement' and n.author_id <> uid)`,
     not just by the frontend hiding the control.
   - Column grant: `grant insert, update (stance, updated_at) on marks to authenticated` as appropriate;
     `marker_id`/`node_id` immutable after insert.
@@ -173,9 +173,13 @@ changes that let an accepted challenger contribute without being able to edit th
 > with check (
 >   author_id = (select auth.uid())
 >   and (
->     exists (select 1 from public.debates d
->             where d.id = nodes.debate_id and d.owner_id = (select auth.uid()))
->     or public.can_write_as_challenger(nodes.debate_id)  -- turn-gated: current_turn='challenger'
+>     -- Pre-exchange: owner builds map freely
+>     (exists (select 1 from public.debates d
+>              where d.id = nodes.debate_id and d.owner_id = (select auth.uid()))
+>      and not exists (select 1 from public.exchanges e
+>                      where e.debate_id = nodes.debate_id and e.status = 'accepted'))
+>     -- During exchange: current turn actor
+>     or public.can_write_as_current_actor(nodes.debate_id)
 >   )
 > )
 > ```
@@ -202,10 +206,10 @@ lint impact.
 
 #### Manual Verification:
 
-- `marks` table, `mark_stance` enum, `is_accepted_challenger`, and `can_write_as_challenger` exist with correct RLS.
+- `marks` table, `mark_stance` enum, `is_accepted_challenger`, and `can_write_as_current_actor` exist with correct RLS.
 - An accepted challenger can INSERT a node but cannot UPDATE an advocate node (RLS).
 - After `current_turn` is flipped off `'challenger'`, an accepted challenger can no longer INSERT a node or
-  upsert a mark (RLS via `can_write_as_challenger`).
+  upsert a mark (RLS via `can_write_as_current_actor`).
 
 ---
 
@@ -423,7 +427,7 @@ yet" assertions. Update the test-plan cookbook.
 - Challenger cannot mark a connective node (RLS rejects it via the `kind='statement'` check — F3) and
   cannot mark their own node.
 - **Turn gate (F1)**: after `submit_turn` flips the turn to `'advocate'`, the challenger's node INSERT and
-  mark upsert are rejected by RLS (`can_write_as_challenger` returns false off-turn).
+  mark upsert are rejected by RLS (`can_write_as_current_actor` returns false off-turn).
 - `submit_turn` with an incomplete mark set fails (gate); with all advocate statements marked, flips
   `current_turn` → `'advocate'`.
 - `submit_turn` on an unknown exchange id → empty set (not an all-NULL row).
@@ -475,8 +479,8 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 ## Migration Notes
 
 - No `author_role` column — role is inferred from `author_id` vs `debate.owner_id`. No backfill needed.
-- No round/turn column on `marks` (F2): one mutable row per `(node, marker)`. S-05 adds `valid boolean
-  default true` (counterpart flips to false on invalidation) — a column-add, no backfill, no data loss.
+- No round/turn column on `marks` (F2): one mutable row per `(node, marker)`. `valid boolean not null
+  default true` is included in the S-03 schema; S-05 wires up the flip trigger — no further schema change needed.
 - Two new migrations (Phase 1 schema, Phase 2 RPC); apply via `npx supabase db reset` locally and
   `npx supabase db push` for cloud.
 
@@ -498,14 +502,14 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly: `npx supabase db reset`
-- [ ] 1.2 Types regenerate without drift: `npx supabase gen types typescript --local` matches committed file
-- [ ] 1.3 Type checking passes: `npx astro check`
-- [ ] 1.4 Linting passes: `npm run lint`
+- [x] 1.1 Migration applies cleanly: `npx supabase db reset`
+- [x] 1.2 Types regenerate without drift: `npx supabase gen types typescript --local` matches committed file
+- [x] 1.3 Type checking passes: `npx astro check`
+- [x] 1.4 Linting passes: `npm run lint`
 
 #### Manual
 
-- [ ] 1.5 `marks` table, `mark_stance` enum, and `is_accepted_challenger` exist with correct RLS
+- [x] 1.5 `marks` table, `mark_stance` enum, and `is_accepted_challenger` exist with correct RLS
 
   > **Agent-automatable**: Yes — pure SQL via the local DB.
 
@@ -514,10 +518,10 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   -- Expected: one row per object, RLS enabled on marks.
   select 'enum_stance' as obj, count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='mark_stance';
   select 'marks_rls'   as obj, relrowsecurity from pg_class where relname='marks';
-  select 'fn_helper'   as obj, proname, prosecdef from pg_proc where proname in ('is_accepted_challenger','can_write_as_challenger');
+  select 'fn_helper'   as obj, proname, prosecdef from pg_proc where proname in ('is_accepted_challenger','can_write_as_current_actor');
   ```
 
-- [ ] 1.6 Accepted challenger can INSERT a node but cannot UPDATE an advocate node (RLS, DB layer)
+- [x] 1.6 Accepted challenger can INSERT a node but cannot UPDATE an advocate node (RLS, DB layer)
 
   > **Agent-automatable**: Yes — `set local role` + `request.jwt.claims` simulation, or via the integration fixture. The block below uses the seed users; user02 must be an accepted challenger of debate `…010` (create the exchange first via SQL).
 
@@ -542,6 +546,72 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   -- Expected: AFFECTS 0 ROWS (cannot edit advocate's root node …011).
   update public.nodes set metadata = metadata || '{"title":"hacked"}'
   where id = '00000000-0000-4000-8000-000000000011';
+  reset role;
+  ```
+
+- [x] 1.7 Marks INSERT / SELECT / UPDATE respect RLS and column grant
+
+  > **Agent-automatable**: Yes — JWT-claims impersonation. Assumes exchange from 1.6 setup exists (`current_turn='challenger'`). Run each block as a separate MCP/SQL call — (b) and (f) are expected to raise an error, which would abort any surrounding transaction.
+
+  ```sql
+  -- (a) INSERT mark on advocate statement …011 as challenger — Expected: 1 row inserted.
+  set local role authenticated;
+  set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
+  insert into public.marks (debate_id, node_id, marker_id, stance)
+  values ('00000000-0000-4000-8000-000000000010',
+          '00000000-0000-4000-8000-000000000011',
+          '00000000-0000-4000-8000-000000000002', 'agree');
+  reset role;
+  ```
+
+  ```sql
+  -- (b) INSERT mark on connective node …016 — Expected: ERROR (RLS kind='statement' check rejects).
+  set local role authenticated;
+  set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
+  insert into public.marks (debate_id, node_id, marker_id, stance)
+  values ('00000000-0000-4000-8000-000000000010',
+          '00000000-0000-4000-8000-000000000016',
+          '00000000-0000-4000-8000-000000000002', 'agree');
+  reset role;
+  ```
+
+  ```sql
+  -- (c) SELECT as challenger — Expected: sees mark from (a), stance='agree'.
+  set local role authenticated;
+  set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
+  select node_id, marker_id, stance from public.marks
+  where debate_id = '00000000-0000-4000-8000-000000000010';
+  reset role;
+  ```
+
+  ```sql
+  -- (d) SELECT as non-member (user03) — Expected: 0 rows.
+  set local role authenticated;
+  set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000003","role":"authenticated"}';
+  select node_id, stance from public.marks
+  where debate_id = '00000000-0000-4000-8000-000000000010';
+  reset role;
+  ```
+
+  ```sql
+  -- (e) UPDATE stance to 'challenge' (re-mark) — Expected: 1 row updated; verify stance flipped.
+  set local role authenticated;
+  set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
+  update public.marks set stance = 'challenge', updated_at = now()
+  where node_id   = '00000000-0000-4000-8000-000000000011'
+    and marker_id = '00000000-0000-4000-8000-000000000002';
+  select node_id, stance from public.marks
+  where node_id   = '00000000-0000-4000-8000-000000000011'
+    and marker_id = '00000000-0000-4000-8000-000000000002';
+  reset role;
+  ```
+
+  ```sql
+  -- (f) UPDATE marker_id (not in column grant) — Expected: ERROR (RLS WITH CHECK marker_id = auth.uid() fires before column grant; same result).
+  set local role authenticated;
+  set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
+  update public.marks set marker_id = '00000000-0000-4000-8000-000000000001'
+  where node_id = '00000000-0000-4000-8000-000000000011';
   reset role;
   ```
 

@@ -113,6 +113,54 @@ export type Database = {
           },
         ]
       }
+      marks: {
+        Row: {
+          created_at: string
+          debate_id: string
+          id: string
+          marker_id: string
+          node_id: string
+          stance: Database["public"]["Enums"]["mark_stance"]
+          updated_at: string
+          valid: boolean
+        }
+        Insert: {
+          created_at?: string
+          debate_id: string
+          id?: string
+          marker_id: string
+          node_id: string
+          stance: Database["public"]["Enums"]["mark_stance"]
+          updated_at?: string
+          valid?: boolean
+        }
+        Update: {
+          created_at?: string
+          debate_id?: string
+          id?: string
+          marker_id?: string
+          node_id?: string
+          stance?: Database["public"]["Enums"]["mark_stance"]
+          updated_at?: string
+          valid?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marks_debate_id_fkey"
+            columns: ["debate_id"]
+            isOneToOne: false
+            referencedRelation: "debates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marks_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nodes: {
         Row: {
           author_id: string
@@ -229,10 +277,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_write_as_current_actor: {
+        Args: { p_debate_id: string }
+        Returns: boolean
+      }
       create_debate_with_root: {
         Args: { p_root_body?: string; p_root_title: string; p_title: string }
         Returns: string
       }
+      is_accepted_challenger: {
+        Args: { p_debate_id: string }
+        Returns: boolean
+      }
+      is_debate_owner: { Args: { p_debate_id: string }; Returns: boolean }
       patch_node: {
         Args: {
           p_metadata_patch?: Json
@@ -278,6 +335,7 @@ export type Database = {
     Enums: {
       connective_op: "and" | "or"
       exchange_status: "pending" | "accepted" | "declined"
+      mark_stance: "agree" | "challenge" | "abstain"
       node_kind: "statement" | "connective"
       relation_kind: "supports" | "link" | "rephrases" | "rebuts"
       statement_type:
@@ -420,6 +478,7 @@ export const Constants = {
     Enums: {
       connective_op: ["and", "or"],
       exchange_status: ["pending", "accepted", "declined"],
+      mark_stance: ["agree", "challenge", "abstain"],
       node_kind: ["statement", "connective"],
       relation_kind: ["supports", "link", "rephrases", "rebuts"],
       statement_type: [

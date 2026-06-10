@@ -1,7 +1,7 @@
 ---
 change_id: challenger-first-turn
 title: Challenger marks statements and submits first turn
-status: plan_reviewed
+status: implementing
 created: 2026-06-09
 updated: 2026-06-10
 archived_at: null

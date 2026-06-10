@@ -155,6 +155,19 @@ export interface ChallengerInvite {
 
 // Returns the challenger's pending and accepted exchanges so the inbox can show
 // both "awaiting response" rows (with Accept/Decline) and "enter debate" rows.
+export async function submitTurn(supabase: DB, exchangeId: string): Promise<ExchangeRow> {
+  const { data, error } = await supabase.rpc("submit_turn", { p_exchange_id: exchangeId }).maybeSingle();
+  if (error) {
+    // submit_turn raises a typed error when the mark gate fails (incomplete mark set).
+    // The RPC uses SQLSTATE P0001 (raise_exception) with a message naming the unmarked count.
+    // Map to ConflictError so withAuth returns 409.
+    if (error.code === "P0001") throw new ConflictError(error.message);
+    throw error;
+  }
+  if (!data) throw new NotFoundError();
+  return data;
+}
+
 export async function listInvites(supabase: DB, userId: string): Promise<ChallengerInvite[]> {
   const { data: exchanges, error } = await supabase
     .from("exchanges")

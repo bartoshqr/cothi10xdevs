@@ -85,6 +85,12 @@ begin
 
   -- All marks present — flip the turn atomically.
   -- SECURITY DEFINER bypasses the column-level grant lock on current_turn.
+  --
+  -- TODO (S-04): when the advocate submits, also increment current_round:
+  --   current_round = current_round + 1
+  -- The UPDATE below only flips current_turn; adding the increment here (guarded
+  -- by `when v_next_turn = 'challenger'`) is the only change S-04 needs in this
+  -- RPC. Do it in a new migration that drops and recreates this function.
   update public.exchanges
   set current_turn = v_next_turn
   where id = p_exchange_id

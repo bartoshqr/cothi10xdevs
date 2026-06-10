@@ -483,6 +483,11 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   default true` is included in the S-03 schema; S-05 wires up the flip trigger — no further schema change needed.
 - Two new migrations (Phase 1 schema, Phase 2 RPC); apply via `npx supabase db reset` locally and
   `npx supabase db push` for cloud.
+- **S-04 must extend `submit_turn`**: the current RPC only flips `current_turn`. When the advocate
+  submits, `current_round` must also increment (`current_round = current_round + 1`). Add this in a
+  new S-04 migration that drops and recreates the function — the UPDATE needs
+  `current_round = current_round + 1` guarded by `when v_next_turn = 'challenger'`. See the TODO
+  comment in `20260610000002_submit_turn_rpc.sql`.
 
 ## References
 
@@ -619,13 +624,13 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Automated
 
-- [x] 2.1 Migration applies cleanly: `npx supabase db reset`
-- [x] 2.2 Type checking passes: `npx astro check`
-- [x] 2.3 Linting passes: `npm run lint`
+- [x] 2.1 Migration applies cleanly: `npx supabase db reset` — 72ce2c8
+- [x] 2.2 Type checking passes: `npx astro check` — 72ce2c8
+- [x] 2.3 Linting passes: `npm run lint` — 72ce2c8
 
 #### Manual
 
-- [x] 2.4 `submit_turn` rejects an incomplete mark set; flips turn on a complete one; SETOF on unknown id
+- [x] 2.4 `submit_turn` rejects an incomplete mark set; flips turn on a complete one; SETOF on unknown id — 72ce2c8
 
   > **Agent-automatable**: Yes — SQL as the challenger (JWT-claims impersonation). Assumes the accepted exchange from 1.6 exists and no marks yet.
 
@@ -658,13 +663,13 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Automated
 
-- [ ] 3.1 Type checking passes: `npx astro check`
-- [ ] 3.2 Linting passes: `npm run lint`
-- [ ] 3.3 Build passes: `npm run build`
+- [x] 3.1 Type checking passes: `npx astro check`
+- [x] 3.2 Linting passes: `npm run lint`
+- [x] 3.3 Build passes: `npm run build`
 
 #### Manual
 
-- [ ] 3.4 `POST /api/debates/<id>/marks` upserts a mark and is idempotent on re-mark
+- [x] 3.4 `POST /api/debates/<id>/marks` upserts a mark and is idempotent on re-mark
 
   > **Agent-automatable**: Yes — bearer token via the local auth endpoint + curl. Grab the local anon key once with `npx supabase status` (field `anon key`) and export it as `ANON`.
 
@@ -692,7 +697,7 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
     and marker_id='00000000-0000-4000-8000-000000000002';
   ```
 
-- [ ] 3.5 `POST /api/exchanges/<id>/submit-turn` returns 409/422 incomplete, 200 + flip when complete
+- [x] 3.5 `POST /api/exchanges/<id>/submit-turn` returns 409/422 incomplete, 200 + flip when complete
 
   > **Agent-automatable**: Yes — reuse `$TOKEN` from 3.4. Reset marks first to test the incomplete branch.
 

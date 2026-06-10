@@ -2,7 +2,10 @@ export const MENU_VIEWPORT_MARGIN = 16;
 
 export type StatementRole = "claim" | "source" | "data" | "warrant" | "backing" | "rebuttal";
 
-export type MarkStance = "agree" | "challenge" | "abstain";
+// Re-exported from the mark schema so the stance union follows the generated DB enum
+// (Constants.public.Enums.mark_stance) instead of drifting as a hand-typed copy.
+import type { MarkStance } from "@/lib/mark/schemas";
+export type { MarkStance };
 
 export type ConnectiveOp = "and" | "or";
 

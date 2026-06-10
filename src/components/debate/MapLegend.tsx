@@ -54,7 +54,7 @@ const CONNECTIVES: { op: ConnectiveOp; description: string }[] = [
 const MARKS: { stance: MarkStance; description: string }[] = [
   { stance: "agree", description: "You agree with this statement" },
   { stance: "challenge", description: "You challenge this statement" },
-  { stance: "abstain", description: "You abstain — unresolved, blocks turn submit" },
+  { stance: "abstain", description: "You abstain on this statement — unresolved" },
 ];
 
 const RELATIONS: { kind: RelationKind; description: string }[] = [

@@ -501,7 +501,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 borderColor: "var(--border)",
                 // The tint reads as "challenger touched this" only on an advocate (white)
                 // card; a challenger card is already tinted, so the bar blends in there.
-                backgroundColor: isChallenger ? undefined : CHALLENGER_TINT,
+                backgroundColor: isChallenger ? "var(--card)" : CHALLENGER_TINT,
                 padding: 2,
                 gap: 2,
               }}

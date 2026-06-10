@@ -2,6 +2,8 @@ export const MENU_VIEWPORT_MARGIN = 16;
 
 export type StatementRole = "claim" | "source" | "data" | "warrant" | "backing" | "rebuttal";
 
+export type MarkStance = "agree" | "challenge" | "abstain";
+
 export type ConnectiveOp = "and" | "or";
 
 export type RelationKind = "supports" | "link" | "rephrases" | "rebuts" | "pending";
@@ -56,6 +58,24 @@ export const connectiveDescriptors: Record<ConnectiveOp, ConnectiveDescriptor> =
     text: "var(--foreground)",
   },
 };
+
+export interface MarkStanceDescriptor {
+  label: string;
+  color: string;
+}
+
+export const markStanceDescriptors: Record<MarkStance, MarkStanceDescriptor> = {
+  agree: { label: "Agree", color: "var(--chart-2)" },
+  challenge: { label: "Challenge", color: "var(--destructive)" },
+  abstain: { label: "Abstain", color: "var(--muted-foreground)" },
+};
+
+/**
+ * Light-red tint for challenger-side content — their own statement cards, and the
+ * mark bar on an advocate statement they have marked. Matches the Challenge stance
+ * hue (`var(--destructive)` at 12%, the same mix the Challenge button uses).
+ */
+export const CHALLENGER_TINT = "color-mix(in srgb, var(--destructive) 12%, var(--card))";
 
 export const relationDescriptors: Record<RelationKind, RelationDescriptor> = {
   supports: {

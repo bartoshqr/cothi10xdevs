@@ -65,3 +65,10 @@
 - **Problem**: Designing only for the current slice hard-codes actor-specific details (ids, directions, literals) that the next slice must rewrite or revoke entirely — wasted work and migration churn.
 - **Rule**: Before writing any RPC, policy, or module, scan the roadmap for the mirror slice. If a symmetric counterpart exists, parameterise the current implementation to cover both sides from the start (e.g. derive other-party id and next-turn from data rather than hard-coding them). Note the look-ahead decision explicitly in the plan so it is not mistaken for over-engineering.
 - **Applies to**: plan, implement, impl-review
+
+## Keep all Supabase calls in a repository — pages and endpoints never query directly
+
+- **Context**: Anywhere outside `src/lib/<domain>/repository.ts` — `.astro` page frontmatter, API route handlers, React components, middleware. Any file reaching for `supabase.from()` / `supabase.rpc()` directly.
+- **Problem**: Inline Supabase queries scatter data-access across the UI layer, duplicate the same query in multiple pages/endpoints (which then silently diverge), and leak DB schema knowledge into components. They also tend to use the `const { data } = await supabase...` idiom that drops the `error` — masking a real DB failure as an empty/"not found" result instead of throwing. (Seen in the debate page: four raw `exchanges`/`profiles`/`marks` queries in `[id].astro`, errors swallowed.)
+- **Rule**: Never call `supabase.from()` / `supabase.rpc()` outside `src/lib/<domain>/repository.ts`. Pages, endpoints, and components call a typed repository function that returns a domain type and surfaces failures with `if (error) throw error` — never the silent `const { data } = ...` destructure. Functions with 3+ params use the object-destructuring arg convention.
+- **Applies to**: all

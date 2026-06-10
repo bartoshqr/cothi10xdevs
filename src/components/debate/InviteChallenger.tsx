@@ -12,6 +12,7 @@ interface ExistingExchange {
   status: "pending" | "accepted";
   challengerUsername: string | null;
   roundCount: number;
+  currentRound: number;
 }
 
 interface Props {
@@ -171,7 +172,14 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
       // Reflect the pending invite + freeze the canvas in place (no reload). The
       // challenger username + rounds are known from the selection, so the status
       // line is correct immediately.
-      setActiveExchange({ id: json.id, status: "pending", challengerUsername: selected.username, roundCount });
+      // A fresh exchange starts at round 1.
+      setActiveExchange({
+        id: json.id,
+        status: "pending",
+        challengerUsername: selected.username,
+        roundCount,
+        currentRound: 1,
+      });
       signalCanEdit(false);
       setOpen(false);
     } catch {
@@ -217,7 +225,7 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
           </>
         ) : (
           <span className="text-muted-foreground text-sm">
-            {who} accepted · {activeExchange.roundCount} rounds
+            Challenger {who} {activeExchange.currentRound}/{activeExchange.roundCount} round
           </span>
         )}
         {error && <span className="text-xs text-red-500">{error}</span>}

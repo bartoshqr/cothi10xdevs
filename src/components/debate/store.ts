@@ -20,12 +20,22 @@ import {
   apiDeleteRelation,
   apiSetDebateRoot,
   apiGetGraph,
+  apiUpsertMark,
+  apiSubmitTurn,
 } from "./persistence";
 import { ApiError } from "./apiError";
+import type { MarkStance } from "./mapVisualLanguage";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
 type DebateRow = Database["public"]["Tables"]["debates"]["Row"];
+
+export interface ViewerContext {
+  viewerId: string;
+  viewerRole: "advocate" | "challenger";
+  advocateId: string;
+  isMyTurn: boolean;
+}
 
 export type DebateNode = StatementNodeType | ConnectiveNodeType;
 export type DebateEdge = Edge<RelationEdgeData, "relation">;
@@ -56,6 +66,16 @@ export interface RFState {
   canEdit: boolean;
   /** Last non-blocking persistence error, surfaced as a dismissible banner. */
   error: string | null;
+  /** Set when an active exchange exists (challenger's turn or advocate's turn). null = pre-exchange or local-only. */
+  viewer: ViewerContext | null;
+  /** Exchange id, set when viewer is set. Needed to call submit_turn. */
+  exchangeId: string | null;
+  /** Every mark in the debate: nodeId → stance. Loaded from server and updated
+   * optimistically. Round 1 has a single marker (the challenger), so one map serves both
+   * views — the challenger's own marks (interactive on their turn) and, for the advocate,
+   * the challenger's marks shown read-only. Interactivity is gated by `canMarkNode`, not
+   * by mark authorship. The two-stance case (both parties marking) is S-04. */
+  marks: Partial<Record<string, MarkStance>>;
 
   onNodesChange: OnNodesChange<DebateNode>;
   onEdgesChange: OnEdgesChange<DebateEdge>;
@@ -64,7 +84,14 @@ export interface RFState {
   cancelConnection: () => void;
   addPendingPreview: (dropX: number, dropY: number) => void;
 
-  hydrate: (debateId: string | null, graph: DebateGraph | null, canEdit?: boolean) => void;
+  hydrate: (
+    debateId: string | null,
+    graph: DebateGraph | null,
+    canEdit?: boolean,
+    viewer?: ViewerContext | null,
+    exchangeId?: string | null,
+    initialMarks?: Partial<Record<string, MarkStance>>,
+  ) => void;
   setGraph: (debate: DebateRow, nodes: NodeRow[], relations: RelationRow[]) => void;
   createStatementNode: (statementType: StatementRole, position: XYPosition) => string;
   createConnectiveNode: (op: ConnectiveOp, position: XYPosition) => string;
@@ -82,6 +109,21 @@ export interface RFState {
   clearError: () => void;
   /** Target node of the connection currently being chosen: the edited edge's target, or the pending connection's target. */
   getTargetNode: () => DebateNode | undefined;
+  /** Whether the board is writable for the viewer right now — their turn during an
+   * exchange, or the advocate's free-edit phase pre-exchange. Gates every structural
+   * mutation (add/move/connect/delete); per-node edit rights are `canEditNode`. */
+  myTurnOrPreExchange: () => boolean;
+  /** Whether the viewer can edit/delete a specific node (own node && my turn, or all nodes pre-exchange). */
+  canEditNode: (nodeId: string) => boolean;
+  /** Whether the viewer can mark a specific node (challenger: other party's statement && my turn). */
+  canMarkNode: (nodeId: string) => boolean;
+  /** Whether a node can carry a mark from this viewer (other party's statement) — turn-agnostic,
+   * so the mark bar stays visible read-only after the turn is submitted. */
+  isMarkableNode: (nodeId: string) => boolean;
+  /** Optimistically upsert a mark on a node; rolls back on server error. */
+  setMark: (nodeId: string, stance: MarkStance) => void;
+  /** Submit the challenger's turn; locks the board on success. */
+  submitTurn: () => Promise<void>;
 }
 
 /**
@@ -99,7 +141,14 @@ function rowsToGraph(
   debate: DebateRow,
   nodeRows: NodeRow[],
   relationRows: RelationRow[],
+  viewer: ViewerContext | null = null,
 ): { nodes: DebateNode[]; edges: DebateEdge[] } {
+  // The per-node `draggable` value. During an exchange a node owned by the other party
+  // gets `false` — pinned, overriding React Flow's global `nodesDraggable`. Own nodes are
+  // left `undefined` so they inherit the global flag — which is the turn lock — keeping
+  // them frozen once the turn is submitted. Pre-exchange (no viewer) everything inherits.
+  const draggableForViewer = (authorId: string): false | undefined =>
+    viewer && authorId !== viewer.viewerId ? false : undefined;
   const nodes: DebateNode[] = nodeRows.map((row) => {
     if (row.kind === "statement") {
       const meta = row.metadata as { statement_type: StatementRole; title: string; body?: string; url?: string };
@@ -109,20 +158,23 @@ function rowsToGraph(
         body: meta.body ?? "",
         url: meta.url ?? undefined,
         isRoot: row.id === debate.root_node_id,
+        authorId: row.author_id,
       };
       return {
         id: row.id,
         type: "statement" as const,
         position: { x: row.position_x, y: row.position_y },
+        draggable: draggableForViewer(row.author_id),
         data,
       } satisfies StatementNodeType;
     } else {
       const meta = row.metadata as { op: ConnectiveOp };
-      const data: ConnectiveNodeData = { op: meta.op };
+      const data: ConnectiveNodeData = { op: meta.op, authorId: row.author_id };
       return {
         id: row.id,
         type: "connective" as const,
         position: { x: row.position_x, y: row.position_y },
+        draggable: draggableForViewer(row.author_id),
         data,
       } satisfies ConnectiveNodeType;
     }
@@ -322,15 +374,25 @@ export const useStore = create<RFState>()((set, get) => ({
   debateId: null,
   canEdit: true,
   error: null,
+  viewer: null,
+  exchangeId: null,
+  marks: {},
 
   onNodesChange: (changes) => {
-    const next = applyNodeChanges(changes, get().nodes);
+    // Drop position changes the viewer isn't allowed to make — the other party's
+    // nodes during an exchange, or anything when it isn't their turn — so a foreign
+    // node can't be moved on the canvas at all (not just left un-persisted). The
+    // per-node `draggable: false` flag stops the drag gesture; this is the backstop
+    // for any change that still slips through. Non-position changes (select/remove)
+    // pass through untouched.
+    const allowed = changes.filter((c) => c.type !== "position" || get().canEditNode(c.id));
+    const next = applyNodeChanges(allowed, get().nodes);
     set({ nodes: next });
     // Read-only: never schedule a position patch. (The advocate still owns the
     // debate, so a stray drag WOULD persist server-side — guard it here, not just
     // via nodesDraggable in the UI.)
-    if (!get().debateId || !get().canEdit) return;
-    for (const change of changes) {
+    if (!get().debateId || !get().myTurnOrPreExchange()) return;
+    for (const change of allowed) {
       if (change.type === "position" && change.position) {
         const node = next.find((n) => n.id === change.id);
         if (node && !node.data.pending) {
@@ -345,7 +407,12 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   stagePendingConnection: (connection) => {
-    if (!get().canEdit) return;
+    if (!get().myTurnOrPreExchange()) return;
+    // An edge may only originate from a node the viewer owns: you connect FROM your
+    // own node TO any existing one. Blocks starting a relation off the other party's
+    // node. (`canEditNode` is true pre-exchange, so the advocate's free-build flow is
+    // unaffected.) RLS backstops the persisted write.
+    if (!get().canEditNode(connection.source)) return;
     set({ pendingConnection: connection });
   },
 
@@ -362,9 +429,12 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   commitConnection: (kind) => {
-    const { pendingConnection, nodes, debateId, canEdit } = get();
-    if (!canEdit) return;
+    const { pendingConnection, nodes, debateId } = get();
+    if (!get().myTurnOrPreExchange()) return;
     if (!pendingConnection) return;
+    // Backstop the source-ownership rule here too (the connection could have been
+    // staged before a turn flip).
+    if (!get().canEditNode(pendingConnection.source)) return;
     const targetNode = nodes.find((n) => n.id === pendingConnection.target);
     const edgeId = crypto.randomUUID();
     const newEdge: DebateEdge = {
@@ -404,7 +474,7 @@ export const useStore = create<RFState>()((set, get) => ({
     set((state) => ({ pendingConnection: null, edges: state.edges.filter((e) => e.id !== "__pending__") }));
   },
 
-  hydrate: (debateId, graph, canEdit = true) => {
+  hydrate: (debateId, graph, canEdit = true, viewer = null, exchangeId = null, initialMarks = {}) => {
     patchTimers.forEach((t) => {
       clearTimeout(t);
     });
@@ -412,10 +482,13 @@ export const useStore = create<RFState>()((set, get) => ({
     patchBuffers.clear();
     unsavedEdgeIds.clear();
     if (graph) {
-      const { nodes, edges } = rowsToGraph(graph.debate, graph.nodes, graph.relations);
+      const { nodes, edges } = rowsToGraph(graph.debate, graph.nodes, graph.relations, viewer);
       set({
         debateId,
         canEdit,
+        viewer,
+        exchangeId,
+        marks: initialMarks,
         nodes,
         edges,
         pendingConnection: null,
@@ -424,19 +497,20 @@ export const useStore = create<RFState>()((set, get) => ({
         error: null,
       });
     } else {
-      set({ debateId, canEdit, error: null });
+      // Local-only canvas: no persisted graph means no nodes, so there are no marks.
+      set({ debateId, canEdit, viewer, exchangeId, marks: {}, error: null });
     }
   },
 
   setGraph: (debate, nodeRows, relationRows) => {
-    const { nodes, edges } = rowsToGraph(debate, nodeRows, relationRows);
+    const { nodes, edges } = rowsToGraph(debate, nodeRows, relationRows, get().viewer);
     set({ nodes, edges, pendingConnection: null });
   },
 
   createStatementNode: (statementType, position) => {
-    if (!get().canEdit) return "";
+    if (!get().myTurnOrPreExchange()) return "";
     const id = crypto.randomUUID();
-    const { debateId } = get();
+    const { debateId, viewer } = get();
     const title = statementType.charAt(0).toUpperCase() + statementType.slice(1);
     const node: StatementNodeType = {
       id,
@@ -447,6 +521,7 @@ export const useStore = create<RFState>()((set, get) => ({
         title,
         body: "",
         pending: debateId ? true : undefined,
+        authorId: viewer?.viewerId,
       },
     };
     set((state) => ({ nodes: [...state.nodes, node] as DebateNode[] }));
@@ -472,14 +547,14 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   createConnectiveNode: (op, position) => {
-    if (!get().canEdit) return "";
+    if (!get().myTurnOrPreExchange()) return "";
     const id = crypto.randomUUID();
-    const { debateId } = get();
+    const { debateId, viewer } = get();
     const node: ConnectiveNodeType = {
       id,
       type: "connective",
       position,
-      data: { op, pending: debateId ? true : undefined },
+      data: { op, pending: debateId ? true : undefined, authorId: viewer?.viewerId },
     };
     set((state) => ({ nodes: [...state.nodes, node] as DebateNode[] }));
 
@@ -503,7 +578,7 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   updateNodeFields: (id, patch) => {
-    if (!get().canEdit) return;
+    if (!get().canEditNode(id)) return;
     set((state) => ({
       nodes: state.nodes.map((n) => {
         if (n.id !== id) return n;
@@ -534,7 +609,8 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   deleteNodes: (ids) => {
-    if (!get().canEdit) return;
+    // Gate: all nodes being deleted must be editable by the current viewer.
+    if (ids.some((id) => !get().canEditNode(id))) return;
     const idSet = new Set(ids);
     const { debateId, nodes, edges } = get();
     // D3-3a: the root claim cannot be deleted — only re-designated via "Set as Root
@@ -569,7 +645,10 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   deleteEdge: (id) => {
-    if (!get().canEdit) return;
+    if (!get().myTurnOrPreExchange()) return;
+    // An edge is owned by its source node's author — only that party may delete it.
+    const edge = get().edges.find((e) => e.id === id);
+    if (edge && !get().canEditNode(edge.source)) return;
     set((state) => ({
       edges: state.edges.filter((e) => e.id !== id),
     }));
@@ -587,7 +666,10 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   updateRelationKind: (id, kind) => {
-    if (!get().canEdit) return;
+    if (!get().myTurnOrPreExchange()) return;
+    // Same ownership rule as deletion: only the source node's author may re-kind the edge.
+    const edge = get().edges.find((e) => e.id === id);
+    if (edge && !get().canEditNode(edge.source)) return;
     set((state) => ({
       edges: state.edges.map((e) => {
         if (e.id !== id) return e;
@@ -606,7 +688,10 @@ export const useStore = create<RFState>()((set, get) => ({
   },
 
   setRootNode: async (id) => {
-    if (!get().canEdit) return;
+    if (!get().canEditNode(id)) return;
+    // The root claim is locked once an exchange is open — no re-designating the debate's
+    // central claim mid-exchange. UI/store-only gate for now (not enforced by RLS yet).
+    if (get().viewer !== null) return;
     const { debateId } = get();
 
     // Apply all three effects together: the new root flips isRoot + role→claim
@@ -642,7 +727,7 @@ export const useStore = create<RFState>()((set, get) => ({
 
   setInEditNode: (id) => {
     if (id !== null) {
-      if (!get().canEdit) return;
+      if (!get().canEditNode(id)) return;
       const { inEditNodeId } = get();
       if (inEditNodeId !== null && inEditNodeId !== id) {
         if (get().isInEditBlocked()) return;
@@ -681,6 +766,61 @@ export const useStore = create<RFState>()((set, get) => ({
 
   clearError: () => {
     set({ error: null });
+  },
+
+  myTurnOrPreExchange: () => {
+    const { viewer, canEdit } = get();
+    if (!viewer) return canEdit; // pre-exchange: use the old canEdit flag
+    return viewer.isMyTurn;
+  },
+
+  canEditNode: (nodeId) => {
+    const { viewer, canEdit, nodes } = get();
+    if (!viewer) return canEdit; // pre-exchange: all nodes editable if canEdit
+    if (!viewer.isMyTurn) return false;
+    const node = nodes.find((n) => n.id === nodeId);
+    return node?.data.authorId === viewer.viewerId;
+  },
+
+  canMarkNode: (nodeId) => {
+    // Interactive marking also requires it to be the viewer's turn.
+    return get().isMarkableNode(nodeId) && (get().viewer?.isMyTurn ?? false);
+  },
+
+  isMarkableNode: (nodeId) => {
+    const { viewer, nodes } = get();
+    if (!viewer) return false;
+    const node = nodes.find((n) => n.id === nodeId);
+    if (node?.type !== "statement") return false;
+    // Only the other party's statements carry a mark — symmetric for challenger (S-03) and advocate (S-04).
+    return node.data.authorId !== viewer.viewerId;
+  },
+
+  setMark: (nodeId, stance) => {
+    const { debateId, viewer, marks } = get();
+    if (!debateId || !viewer) return;
+    const prevStance = marks[nodeId];
+    // Optimistic update
+    set({ marks: { ...get().marks, [nodeId]: stance } });
+    apiUpsertMark(debateId, nodeId, stance).catch((e: unknown) => {
+      // Roll back the optimistic update for this node only: restore the previous
+      // stance, or drop the entry entirely if this was its first (unsaved) mark.
+      const { [nodeId]: _discarded, ...rest } = get().marks;
+      set({ marks: prevStance === undefined ? rest : { ...rest, [nodeId]: prevStance } });
+      reportError(e instanceof Error ? e.message : "Failed to save mark");
+    });
+  },
+
+  submitTurn: async () => {
+    const { exchangeId, viewer } = get();
+    if (!exchangeId || !viewer) return;
+    try {
+      await apiSubmitTurn(exchangeId);
+      // Turn flipped — lock the board for the challenger
+      set({ viewer: { ...viewer, isMyTurn: false } });
+    } catch (e) {
+      reportError(e instanceof Error ? e.message : "Failed to submit turn");
+    }
   },
 
   getTargetNode: () => {

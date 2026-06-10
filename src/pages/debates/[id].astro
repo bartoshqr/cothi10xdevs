@@ -3,8 +3,13 @@ import Layout from "@/layouts/Layout.astro";
 import MapEditor from "@/components/debate/MapEditor";
 import DebateHeader from "@/components/debate/DebateHeader.astro";
 import InviteChallenger from "@/components/debate/InviteChallenger";
+import TurnBar from "@/components/debate/TurnBar";
 import { createClient } from "@/lib/supabase";
 import { getDebateGraph } from "@/lib/debate/repository";
+import { getDebateExchange } from "@/lib/exchange/repository";
+import { deriveViewer } from "@/lib/debate/viewer";
+import { getDebateMarks } from "@/lib/mark/repository";
+import type { MarkStance } from "@/components/debate/mapVisualLanguage";
 
 const { id: debateId } = Astro.params;
 const { user } = Astro.locals;
@@ -21,50 +26,27 @@ if (graph && supabase && user) {
 
 const isOwner = graph && user ? graph.debate.owner_id === user.id : false;
 
-// For a challenger (non-owner participant), resolve the owner's (advocate's)
-// username to show whose debate they're viewing. profiles_select_authenticated
-// lets any authed user read it.
-let ownerUsername: string | null = null;
-if (graph && supabase && !isOwner) {
-  const { data } = await supabase.from("profiles").select("username").eq("id", graph.debate.owner_id).maybeSingle();
-  ownerUsername = data?.username ?? null;
+// The debate's single open exchange (pending or accepted), with both usernames
+// resolved. Drives the advocate's invite line, the challenger's header, and the
+// viewer context below.
+const exchange = graph && supabase && debateId ? await getDebateExchange(supabase, debateId) : null;
+
+// Who is looking, and is it their turn? (viewer/exchangeId are non-null only once accepted.)
+const { viewer, viewerExchangeId } = deriveViewer({ user, graph, isOwner, exchange });
+
+// Pre-load every mark in the debate so the board hydrates correctly for either viewer:
+// the challenger sees their own marks (interactive), the advocate sees the challenger's
+// marks read-only on their statements once the turn flips. Round 1 has a single marker, so
+// one node→stance map suffices.
+let initialMarks: Partial<Record<string, MarkStance>> = {};
+if (viewer && supabase && debateId) {
+  initialMarks = await getDebateMarks({ supabase, debateId });
 }
 
-// Load the advocate's current open exchange (pending or accepted) for this debate,
-// resolving the challenger's username + round count for the status line.
-interface ExistingExchange {
-  id: string;
-  status: "pending" | "accepted";
-  challengerUsername: string | null;
-  roundCount: number;
-}
-let existingExchange: ExistingExchange | null = null;
-if (isOwner && supabase && debateId) {
-  const { data: exchange } = await supabase
-    .from("exchanges")
-    .select("id, status, round_count, challenger_id")
-    .eq("debate_id", debateId)
-    .in("status", ["pending", "accepted"])
-    .maybeSingle();
-  if (exchange) {
-    const { data: challenger } = await supabase
-      .from("profiles")
-      .select("username")
-      .eq("id", exchange.challenger_id)
-      .maybeSingle();
-    existingExchange = {
-      id: exchange.id,
-      status: exchange.status as "pending" | "accepted",
-      challengerUsername: challenger?.username ?? null,
-      roundCount: exchange.round_count,
-    };
-  }
-}
-
-// Editing is allowed ONLY for the advocate before any exchange is opened.
-// A challenger (non-owner participant) is always read-only; the advocate is
-// frozen the moment an invite exists (revoke re-opens it).
-const canEdit = isOwner && existingExchange === null;
+// Editing is allowed for the advocate before any exchange is opened, OR when it's the advocate's turn.
+// A challenger (non-owner participant) had always been read-only (S-02); now they can add their own nodes.
+// canEdit (the old pre-exchange flag): true only for the advocate before any exchange exists.
+const canEdit = isOwner && exchange === null;
 
 if (!graph) {
   Astro.response.status = 404;
@@ -76,22 +58,56 @@ if (!graph) {
     <Layout title={`${graph.debate.title} — WVMap`}>
       <div class="flex h-screen flex-col">
         <DebateHeader user={user} username={username} title={graph.debate.title}>
-          {isOwner && (
-            <InviteChallenger
-              slot="header-actions"
-              client:load
-              debateId={graph.debate.id}
-              existingExchange={existingExchange}
-            />
-          )}
-          {!isOwner && ownerUsername && (
-            <span slot="header-actions" class="text-muted-foreground text-sm">
-              Advocate: @{ownerUsername}
-            </span>
-          )}
+          {isOwner &&
+            (exchange?.status === "accepted" ? (
+              <TurnBar
+                slot="header-actions"
+                client:only="react"
+                viewerRole="advocate"
+                isMyTurn={viewer?.isMyTurn ?? exchange.currentTurn === "advocate"}
+                currentRound={exchange.currentRound}
+                roundCount={exchange.roundCount}
+                counterpartUsername={exchange.challengerUsername}
+              />
+            ) : (
+              <InviteChallenger
+                slot="header-actions"
+                client:load
+                debateId={graph.debate.id}
+                existingExchange={exchange}
+              />
+            ))}
+          {!isOwner &&
+            exchange?.advocateUsername &&
+            (exchange.status === "accepted" ? (
+              <TurnBar
+                slot="header-actions"
+                client:only="react"
+                viewerRole="challenger"
+                isMyTurn={viewer?.isMyTurn ?? exchange.currentTurn === "challenger"}
+                currentRound={exchange.currentRound}
+                roundCount={exchange.roundCount}
+                counterpartUsername={exchange.advocateUsername}
+              />
+            ) : (
+              <span slot="header-actions" class="text-muted-foreground text-sm">
+                Advocate @{exchange.advocateUsername} —{" "}
+                <a href="/invites" class="text-primary underline-offset-4 hover:underline">
+                  respond on your invites
+                </a>
+              </span>
+            ))}
         </DebateHeader>
         <div class="min-h-0 flex-1">
-          <MapEditor client:only="react" debateId={graph.debate.id} initialGraph={graph} canEdit={canEdit} />
+          <MapEditor
+            client:only="react"
+            debateId={graph.debate.id}
+            initialGraph={graph}
+            canEdit={canEdit}
+            viewer={viewer}
+            exchangeId={viewerExchangeId}
+            initialMarks={initialMarks}
+          />
         </div>
       </div>
     </Layout>

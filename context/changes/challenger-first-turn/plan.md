@@ -38,14 +38,21 @@ An accepted challenger, on their turn (`current_turn='challenger'`), can:
 
 1. Mark every advocate **Statement** node Agree / Challenge / Abstain (connective AND/OR nodes carry **no**
    mark — `prd.md:190`). Marks persist incrementally as each is clicked.
-2. Add their own Statements (any type), Source nodes, AND/OR connectives, and directed relations to any
-   existing Statement — visually distinct (shaded) from advocate nodes.
-3. **Not** edit or delete the advocate's nodes/relations (can only mark them).
+2. Add their own Statements (any type), Source nodes, AND/OR connectives, and directed relations from their
+   own nodes to any existing Statement — visually distinct (shaded) from advocate nodes.
+3. **Not** edit or delete the advocate's nodes/relations (can only mark them) — and, as-built, also cannot
+   *move* the advocate's nodes, draw an edge *from* them, or edit/delete the advocate's edges (UI/store
+   enforcement; RLS backs the persisted writes). The root claim is also frozen once an exchange is open
+   (UI-only).
 4. Submit their turn only when **every advocate Statement is marked**; submission flips `current_turn` to
    `'advocate'` atomically.
 
-Verify: integration suite asserts all four; manual curl + SQL confirm the gate rejects an incomplete mark
-set and the turn flips on a complete one.
+As-built, the advocate side also gained a **read-only** view of the challenger's marks (shown on the
+advocate's own statements once the turn flips) and both parties see a turn/submit status bar. See the
+**Phase 4 → As-built notes** for the full divergence list; the advocate read-only display is round-1-only.
+
+Verify: integration suite asserts the four challenger-side rules; manual curl + SQL confirm the gate rejects
+an incomplete mark set and the turn flips on a complete one.
 
 ### Key Discoveries:
 
@@ -63,7 +70,9 @@ set and the turn flips on a complete one.
 
 ## What We're NOT Doing
 
-- **No advocate marking** (FR-015) — that is S-04 (symmetric advocate side).
+- **No advocate marking** (FR-015) — that is S-04 (symmetric advocate side). (As-built: the advocate *can*
+  see the challenger's marks **read-only** on their own statements after the flip; that's display, not
+  marking, and is round-1-only — see Phase 4 As-built notes.)
 - **No divergence summary** (FR-018/FR-020) — forbidden before one complete round; S-04.
 - **No carry-over / invalidation / mini-turn / orphaning** (FR-019, FR-026, US-04) — S-05.
 - **No multi-round progression** beyond flipping to the advocate's turn — the advocate acting on that turn is S-04.
@@ -81,6 +90,14 @@ codebase's "atomic multi-effect → RPC" and "SETOF for not-found" conventions a
 grant lock. Author role is **inferred** at runtime — `node.author_id === debate.owner_id → advocate, else challenger` — no extra column; the frontend receives `advocateId` from the page, and the DB gate uses a single join to `debates`. Challenger writes are unlocked by widening node/relation **INSERT** to "owner OR accepted challenger"
 (via `is_accepted_challenger()` definer helper to avoid 42P17) while **keeping `author_id = auth.uid()`** on
 UPDATE/DELETE — that clause alone yields "edit only your own."
+
+On the frontend (as-built), the single `canEdit` boolean became a derived capability model
+(`myTurnOrPreExchange` / `canEditNode` / `canMarkNode` / `isMarkableNode`); ownership locks extend past
+edit/delete to *moving* and *connecting* (you can only drag your own nodes and draw edges from them), the
+root claim is frozen mid-exchange (UI-only), all debate marks are loaded so the advocate sees the
+challenger's marks read-only, and the submit action ships as a cross-island header `TurnBar` (turn status +
+Submit→"Submitted", mirrored as a disabled placeholder on the advocate side). Full list: **Phase 4 →
+As-built notes**.
 
 ## Critical Implementation Details
 
@@ -403,6 +420,50 @@ on success the turn flips and the board becomes read-only for the challenger.
 - Challenger can add a node but the advocate's nodes show no edit/delete controls to them.
 - Submit button is disabled until all advocate Statements are marked; after submit, the board locks.
 
+### As-built notes (deviations from the plan above — reviewed & accepted)
+
+General outcome matches the plan. These are the points where the shipped code diverged from or went
+beyond Phase 4's contract. The current state is accepted in terms of behaviour; performance and finer
+details are to be reviewed later.
+
+- **Capability model naming**: `canAddNodes` shipped as `myTurnOrPreExchange()`; per-node rights are
+  `canEditNode` / `canMarkNode` / `isMarkableNode` (the last is turn-agnostic, so a submitted mark bar
+  stays visible read-only). The old `canEdit` / `setCanEdit` / `wvmap:set-can-edit` path was **kept and
+  generalized** (still drives the advocate's pre-exchange invite-lock), not removed. Viewer derivation
+  was extracted to `src/lib/debate/viewer.ts` (`deriveViewer`).
+
+- **Per-node movement & connection locks (UI/store, beyond "no edit/delete controls")**: other-party
+  nodes are pinned (`draggable: false` in `rowsToGraph`, plus an `onNodesChange` position-drop
+  backstop); an edge can only be drawn **from** a node you own (`stagePendingConnection` /
+  `commitConnection` / `isValidConnection`); editing/deleting an edge is gated on owning its **source**
+  node (edge context menu, `deleteEdge`, `updateRelationKind`). RLS already blocks the persisted writes
+  — these are the UX half.
+
+- **Root claim frozen once an exchange is open** (UI/store only — *not* RLS yet): `setRootNode` no-ops
+  when `viewer !== null` and "Set as Root Claim" is hidden. A UX guard, not a security boundary.
+
+- **Advocate sees the challenger's marks read-only** (extends Desired-End-State item 1): marks are
+  loaded for the whole debate via `getDebateMarks` (not just the viewer's), and `store.marks` now means
+  "every mark in the debate". A single `nodeId → stance` map serves both views because round 1 has one
+  marker; interactivity stays gated by `canMarkNode`, and the bar shows when `canMarkThisNode || a mark
+  exists`. **Round-1-only** — two stances per node (both parties marking) is S-04.
+
+- **Stance list single-sourced from the DB enum**: `MARK_STANCES` derives from
+  `Constants.public.Enums.mark_stance`, and `StatementNode` iterates it (no hardcoded
+  `["agree","challenge","abstain"]`).
+
+- **Submit affordance shipped as a cross-island `TurnBar`** (`src/components/debate/TurnBar.tsx`,
+  replacing the interim `SubmitTurnButton.tsx`), living in the page header — not an in-canvas button. It
+  talks to `MapEditor` over `wvmap:turn-gate` / `wvmap:request-turn-gate` / `wvmap:submit-turn`. Layout:
+  `[turn label] [submit button] [round, counterpart @user]`. After the challenger submits, the button
+  becomes a disabled **"Submitted"** (it no longer disappears) and the label flips to "Advocate's turn".
+  **Mirrored on the advocate side** with a *disabled placeholder* submit button (advocate submission is
+  S-04); a pending (pre-accept) challenger instead sees an "Advocate @user — respond on your invites"
+  link.
+
+- **Mark-bar tint** is applied only on advocate (white) cards (`isChallenger ? undefined :
+  CHALLENGER_TINT`) — a challenger card is already tinted, so the bar blends there.
+
 ---
 
 ## Phase 5: Integration tests + cookbook/plan sync
@@ -663,13 +724,13 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Automated
 
-- [x] 3.1 Type checking passes: `npx astro check`
-- [x] 3.2 Linting passes: `npm run lint`
-- [x] 3.3 Build passes: `npm run build`
+- [x] 3.1 Type checking passes: `npx astro check` — a7fc1b1
+- [x] 3.2 Linting passes: `npm run lint` — a7fc1b1
+- [x] 3.3 Build passes: `npm run build` — a7fc1b1
 
 #### Manual
 
-- [x] 3.4 `POST /api/debates/<id>/marks` upserts a mark and is idempotent on re-mark
+- [x] 3.4 `POST /api/debates/<id>/marks` upserts a mark and is idempotent on re-mark — a7fc1b1
 
   > **Agent-automatable**: Yes — bearer token via the local auth endpoint + curl. Grab the local anon key once with `npx supabase status` (field `anon key`) and export it as `ANON`.
 
@@ -697,7 +758,7 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
     and marker_id='00000000-0000-4000-8000-000000000002';
   ```
 
-- [x] 3.5 `POST /api/exchanges/<id>/submit-turn` returns 409/422 incomplete, 200 + flip when complete
+- [x] 3.5 `POST /api/exchanges/<id>/submit-turn` returns 409/422 incomplete, 200 + flip when complete — a7fc1b1
 
   > **Agent-automatable**: Yes — reuse `$TOKEN` from 3.4. Reset marks first to test the incomplete branch.
 
@@ -716,25 +777,25 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Automated
 
-- [ ] 4.1 Type checking passes: `npx astro check`
-- [ ] 4.2 Linting passes: `npm run lint`
-- [ ] 4.3 Build passes: `npm run build`
+- [x] 4.1 Type checking passes: `npx astro check`
+- [x] 4.2 Linting passes: `npm run lint`
+- [x] 4.3 Build passes: `npm run build`
 
 #### Manual
 
-- [ ] 4.4 Challenger sees mark controls on advocate Statements (not connectives); marks persist on refresh
+- [x] 4.4 Challenger sees mark controls on advocate Statements (not connectives); marks persist on refresh
 
   > **Agent-automatable**: No — requires a browser session signed in as user02 viewing the debate, visual inspection of the mark control on Statement nodes (and its absence on the AND node …016), and a page reload to confirm persistence.
 
-- [ ] 4.5 Challenger-authored nodes render with a distinct background shade
+- [x] 4.5 Challenger-authored nodes render with a distinct background shade
 
   > **Agent-automatable**: No — visual inspection: a challenger-added node renders in the distinct shade vs advocate white/`var(--card)`.
 
-- [ ] 4.6 Challenger sees no edit/delete controls on advocate nodes; can add their own
+- [x] 4.6 Challenger sees no edit/delete controls on advocate nodes; can add their own
 
   > **Agent-automatable**: No — visual/interaction check in the browser as user02 on their turn.
 
-- [ ] 4.7 Submit button disabled until all advocate Statements marked; board locks after submit
+- [x] 4.7 Submit button disabled until all advocate Statements marked; board locks after submit
 
   > **Agent-automatable**: No — interactive: mark 4/5, confirm button disabled; mark the 5th, confirm enabled; submit, confirm read-only.
 

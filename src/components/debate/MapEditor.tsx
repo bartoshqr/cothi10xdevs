@@ -30,8 +30,39 @@ import NodeContextMenu from "./NodeContextMenu";
 import EdgeContextMenu from "./EdgeContextMenu";
 import ConnectKindPicker from "./ConnectKindPicker";
 import { useStore, useShallow } from "./store";
-import type { DebateNode } from "./store";
+import type { DebateNode, ViewerContext } from "./store";
 import type { DebateGraph } from "@/lib/debate/repository";
+import type { MarkStance } from "./mapVisualLanguage";
+
+// Cross-island contract for the "Submit turn" button, which lives in the page
+// header (a separate hydration root that cannot read this store). MapEditor pushes
+// the gate state over `wvmap:turn-gate`; the header button asks for a re-send on
+// mount via `wvmap:request-turn-gate` and triggers the action via `wvmap:submit-turn`.
+// Mirrors the `wvmap:set-can-edit` pattern used by InviteChallenger.
+export interface TurnGateDetail {
+  /** Whether it's the viewer's turn — drives "Submit turn" vs the disabled "Submitted". */
+  isMyTurn: boolean;
+  markedCount: number;
+  total: number;
+}
+
+function computeTurnGate(
+  nodes: DebateNode[],
+  marks: Partial<Record<string, MarkStance>>,
+  viewer: ViewerContext | null,
+): TurnGateDetail {
+  // Only the challenger has a marking-driven, live gate; the advocate's bar is static.
+  if (viewer?.viewerRole !== "challenger") {
+    return { isMyTurn: false, markedCount: 0, total: 0 };
+  }
+  const advocateStatements = nodes.filter((n) => n.type === "statement" && n.data.authorId === viewer.advocateId);
+  const markedCount = advocateStatements.filter((n) => marks[n.id] !== undefined).length;
+  return { isMyTurn: viewer.isMyTurn, markedCount, total: advocateStatements.length };
+}
+
+function broadcastTurnGate(detail: TurnGateDetail) {
+  window.dispatchEvent(new CustomEvent<TurnGateDetail>("wvmap:turn-gate", { detail }));
+}
 
 // Per-instance screen-coord cursor ref, provided by MapEditorInner. The connection
 // line stays a module-level component (stable identity — no React Flow remount) and
@@ -84,10 +115,6 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
   markerEnd: { type: MarkerType.ArrowClosed },
 };
 
-const isValidConnection: IsValidConnection = (connection) => {
-  return connection.source !== connection.target;
-};
-
 function MapEditorInner() {
   // Screen-coord cursor, used only in event handlers (never read during render) to
   // place the kind picker when re-dragging an existing edge — impl-review F5.
@@ -107,7 +134,6 @@ function MapEditorInner() {
     nodes,
     edges,
     debateId,
-    canEdit,
     error,
     clearError,
     onNodesChange,
@@ -124,12 +150,15 @@ function MapEditorInner() {
     setInEditEdgeId,
     isInEditBlocked,
     tryExitNodeEdit,
+    myTurnOrPreExchange,
+    canEditNode,
+    viewer,
+    marks,
   } = useStore(
     useShallow((s) => ({
       nodes: s.nodes,
       edges: s.edges,
       debateId: s.debateId,
-      canEdit: s.canEdit,
       error: s.error,
       clearError: s.clearError,
       onNodesChange: s.onNodesChange,
@@ -146,8 +175,15 @@ function MapEditorInner() {
       setInEditEdgeId: s.setInEditEdgeId,
       isInEditBlocked: s.isInEditBlocked,
       tryExitNodeEdit: s.tryExitNodeEdit,
+      myTurnOrPreExchange: s.myTurnOrPreExchange,
+      canEditNode: s.canEditNode,
+      viewer: s.viewer,
+      marks: s.marks,
     })),
   );
+
+  // Derived: whether the board is writable for the viewer right now (their turn, or pre-exchange advocate).
+  const canAdd = myTurnOrPreExchange();
 
   const closeConnectionPicker = useCallback(() => {
     setInEditEdgeId(null);
@@ -185,6 +221,31 @@ function MapEditorInner() {
     };
   }, []);
 
+  // Push the turn-submit gate state to the header's "Submit turn" button (separate
+  // hydration root). Re-fires whenever the challenger marks a node so the count
+  // stays live; after submit, `viewer.isMyTurn` flips false and the button hides.
+  useEffect(() => {
+    broadcastTurnGate(computeTurnGate(nodes, marks, viewer));
+  }, [nodes, marks, viewer]);
+
+  // Answer the button's mount-time request (handshake closes the island start-order
+  // race) and run the submit action it asks for.
+  useEffect(() => {
+    function onRequest() {
+      const s = useStore.getState();
+      broadcastTurnGate(computeTurnGate(s.nodes, s.marks, s.viewer));
+    }
+    function onSubmit() {
+      void useStore.getState().submitTurn();
+    }
+    window.addEventListener("wvmap:request-turn-gate", onRequest);
+    window.addEventListener("wvmap:submit-turn", onSubmit);
+    return () => {
+      window.removeEventListener("wvmap:request-turn-gate", onRequest);
+      window.removeEventListener("wvmap:submit-turn", onSubmit);
+    };
+  }, []);
+
   // Local-only mode (no debate backing) bootstraps a root claim. Persisted debates
   // always load with their root node, so this never fires there.
   useEffect(() => {
@@ -200,6 +261,14 @@ function MapEditorInner() {
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     screenCursorRef.current = { x: e.clientX, y: e.clientY };
   }, []);
+
+  // An edge must start from a node the viewer owns (you connect FROM your own node).
+  // Mirrors the store's `stagePendingConnection` gate so the connection line reads as
+  // invalid while dragging off the other party's node.
+  const isValidConnection: IsValidConnection = useCallback(
+    (connection) => connection.source !== connection.target && canEditNode(connection.source),
+    [canEditNode],
+  );
 
   // connection
   const handleConnect: OnConnect = useCallback(
@@ -242,30 +311,35 @@ function MapEditorInner() {
     (e: MouseEvent | React.MouseEvent) => {
       e.preventDefault();
       cleanupFlow();
-      if (!canEdit || isInEditBlocked()) return;
+      if (!canAdd || isInEditBlocked()) return;
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isInEditBlocked, canEdit],
+    [cleanupFlow, isInEditBlocked, canAdd],
   );
 
   const handleNodeContextMenu: NodeMouseHandler<DebateNode> = useCallback(
     (e, node) => {
       e.preventDefault();
       cleanupFlow();
-      if (!canEdit || isInEditBlocked()) return;
+      // Only show the node context menu for nodes the viewer can edit.
+      if (!canEditNode(node.id) || isInEditBlocked()) return;
       setNodeContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isInEditBlocked, canEdit],
+    [cleanupFlow, isInEditBlocked, canEditNode],
   );
 
   const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
     (e, edge) => {
       e.preventDefault();
       cleanupFlow();
-      if (!canEdit || isInEditBlocked()) return;
+      // Edit/delete on an edge belongs to whoever owns its SOURCE node — you can only
+      // draw relations FROM your own nodes. Don't offer the menu for the other party's
+      // edges (symmetric for advocate and challenger). `canEditNode` also folds in the
+      // turn check, so this subsumes the old `canAdd` gate.
+      if (!canEditNode(edge.source) || isInEditBlocked()) return;
       setEdgeContextMenu({ edgeId: edge.id, x: e.clientX, y: e.clientY });
     },
-    [cleanupFlow, isInEditBlocked, canEdit],
+    [cleanupFlow, isInEditBlocked, canEditNode],
   );
 
   const handleNodesDelete = useCallback(
@@ -319,12 +393,12 @@ function MapEditorInner() {
           isValidConnection={isValidConnection}
           connectionLineComponent={FloatingConnectionLine}
           onMouseMove={handleMouseMove}
-          nodesDraggable={canEdit}
-          nodesConnectable={canEdit}
-          elementsSelectable={canEdit}
+          nodesDraggable={canAdd}
+          nodesConnectable={canAdd}
+          elementsSelectable={canAdd || viewer !== null}
           fitView
           fitViewOptions={{ padding: 0.2 }}
-          deleteKeyCode={canEdit && !inEditNodeId ? "Delete" : null}
+          deleteKeyCode={canAdd && !inEditNodeId ? "Delete" : null}
         >
           <Background />
           <Controls />
@@ -390,13 +464,26 @@ interface MapEditorProps {
   initialGraph?: DebateGraph;
   /** When false the canvas is read-only (challenger, or advocate after an invite). Default true. */
   canEdit?: boolean;
+  /** Viewer identity: set when an active exchange exists. null = pre-exchange or local-only. */
+  viewer?: ViewerContext | null;
+  /** Exchange id, required when viewer is set. */
+  exchangeId?: string | null;
+  /** Pre-loaded marks for the debate (server-side hydration). */
+  initialMarks?: Partial<Record<string, MarkStance>>;
 }
 
-export default function MapEditor({ debateId, initialGraph, canEdit = true }: MapEditorProps) {
+export default function MapEditor({
+  debateId,
+  initialGraph,
+  canEdit = true,
+  viewer = null,
+  exchangeId = null,
+  initialMarks = {},
+}: MapEditorProps) {
   // Hydrate the store synchronously, before the canvas first renders, so the local-only
   // auto-create effect sees the right debateId and there's no empty-canvas flash.
   useState(() => {
-    useStore.getState().hydrate(debateId ?? null, initialGraph ?? null, canEdit);
+    useStore.getState().hydrate(debateId ?? null, initialGraph ?? null, canEdit, viewer, exchangeId, initialMarks);
     return null;
   });
 

@@ -6,6 +6,7 @@ import type { ConnectiveOp } from "../mapVisualLanguage";
 export interface ConnectiveNodeData extends Record<string, unknown> {
   op: ConnectiveOp;
   pending?: boolean;
+  authorId?: string;
 }
 
 export type ConnectiveNodeType = Node<ConnectiveNodeData, "connective">;

@@ -2,10 +2,11 @@ import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { useRef, useState, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { roleDescriptors, MENU_VIEWPORT_MARGIN } from "../mapVisualLanguage";
-import type { StatementRole } from "../mapVisualLanguage";
+import { roleDescriptors, markStanceDescriptors, CHALLENGER_TINT, MENU_VIEWPORT_MARGIN } from "../mapVisualLanguage";
+import type { StatementRole, MarkStance } from "../mapVisualLanguage";
 import { useStore, useShallow } from "../store";
 import { NODE_CONSTRAINTS, isValidUrl } from "@/lib/debate/nodeConstraints";
+import { MARK_STANCES } from "@/lib/mark/constants";
 
 export interface StatementNodeData extends Record<string, unknown> {
   role?: StatementRole;
@@ -14,6 +15,8 @@ export interface StatementNodeData extends Record<string, unknown> {
   url?: string;
   isRoot?: boolean;
   pending?: boolean;
+  /** DB author_id — kept on node data to derive author role at render time. */
+  authorId?: string;
 }
 
 export type StatementNodeType = Node<StatementNodeData, "statement">;
@@ -23,20 +26,45 @@ const STATEMENT_ROLES: StatementRole[] = ["claim", "data", "source", "warrant", 
 export default function StatementNode({ id, data }: NodeProps<StatementNodeType>) {
   const { inProgress, toNode } = useConnection();
   const isActiveTarget = inProgress && toNode?.id === id;
-  const { inEditNodeId, canEdit, setInEditNode, updateNodeFields, setRootNode, deleteNodes, tryExitNodeEdit } =
-    useStore(
-      useShallow((s) => ({
-        inEditNodeId: s.inEditNodeId,
-        canEdit: s.canEdit,
-        setInEditNode: s.setInEditNode,
-        updateNodeFields: s.updateNodeFields,
-        setRootNode: s.setRootNode,
-        deleteNodes: s.deleteNodes,
-        tryExitNodeEdit: s.tryExitNodeEdit,
-      })),
-    );
+  const {
+    inEditNodeId,
+    setInEditNode,
+    updateNodeFields,
+    setRootNode,
+    deleteNodes,
+    tryExitNodeEdit,
+    canEditNode,
+    canMarkNode,
+    marks,
+    setMark,
+    viewer,
+  } = useStore(
+    useShallow((s) => ({
+      inEditNodeId: s.inEditNodeId,
+      setInEditNode: s.setInEditNode,
+      updateNodeFields: s.updateNodeFields,
+      setRootNode: s.setRootNode,
+      deleteNodes: s.deleteNodes,
+      tryExitNodeEdit: s.tryExitNodeEdit,
+      canEditNode: s.canEditNode,
+      canMarkNode: s.canMarkNode,
+      marks: s.marks,
+      setMark: s.setMark,
+      viewer: s.viewer,
+    })),
+  );
 
   const isEditing = inEditNodeId === id;
+  const canEditThisNode = canEditNode(id);
+  const canMarkThisNode = canMarkNode(id);
+  const currentMark: MarkStance | undefined = marks[id];
+  // Show the mark bar when the viewer can mark this node now, OR a mark already exists on
+  // it. The latter keeps a mark visible read-only after the challenger submits, and also
+  // surfaces the challenger's mark to the advocate on the advocate's own statement once the
+  // turn flips. In round 1 only one party marks, so any present mark is unambiguous; the
+  // bar is interactive only while `canMarkThisNode`.
+  const showMarkBar = canMarkThisNode || currentMark !== undefined;
+  const isChallenger = data.authorId !== undefined && viewer !== null && data.authorId !== viewer.advocateId;
   const role = data.isRoot ? "claim" : (data.role ?? "claim");
   const descriptor = roleDescriptors[role];
   const badge = data.isRoot ? "ROOT" : descriptor.badge;
@@ -89,7 +117,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   }, [isEditing, role]);
 
   function handleNodeDoubleClick(e: React.MouseEvent) {
-    if (!canEdit) return;
+    if (!canEditThisNode) return;
     e.stopPropagation();
     setInEditNode(id);
   }
@@ -149,7 +177,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   }
 
   function handleBadgeClick(e: React.MouseEvent) {
-    if (!canEdit || data.isRoot) return;
+    if (!canEditThisNode || data.isRoot) return;
     e.stopPropagation();
     const rect = badgeRef.current?.getBoundingClientRect();
     if (rect) setBadgeAnchor({ x: rect.left, y: rect.bottom + 4, flipTop: rect.top - 4 });
@@ -216,20 +244,27 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   </button>
                 );
               })}
-              <div style={{ borderTop: "1px solid var(--border)" }} />
-              <button
-                className="flex w-full items-center px-3 py-1.5 text-left text-xs font-semibold transition-colors hover:bg-[var(--muted)]"
-                style={{ color: "var(--primary)" }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Single persisted, atomic re-designation (D3-3c): the store awaits
-                  // the server, then applies role→claim, isRoot, and edge-strip on success.
-                  void setRootNode(id);
-                  setBadgeAnchor(null);
-                }}
-              >
-                Set as Root Claim
-              </button>
+              {/* The root claim is frozen once an exchange is open — the debate's central
+                  claim can't be re-designated mid-exchange. UI-only gate for now (no RLS);
+                  the store backstops it. */}
+              {viewer === null && (
+                <>
+                  <div style={{ borderTop: "1px solid var(--border)" }} />
+                  <button
+                    className="flex w-full items-center px-3 py-1.5 text-left text-xs font-semibold transition-colors hover:bg-[var(--muted)]"
+                    style={{ color: "var(--primary)" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Single persisted, atomic re-designation (D3-3c): the store awaits
+                      // the server, then applies role→claim, isRoot, and edge-strip on success.
+                      void setRootNode(id);
+                      setBadgeAnchor(null);
+                    }}
+                  >
+                    Set as Root Claim
+                  </button>
+                </>
+              )}
             </div>
           </>,
           document.body,
@@ -266,7 +301,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
         style={{
           border: `1px solid ${isEditing ? descriptor.accent : isActiveTarget ? "var(--primary)" : "var(--border)"}`,
           boxShadow: isActiveTarget ? "0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent)" : undefined,
-          backgroundColor: "var(--card)",
+          backgroundColor: isChallenger ? CHALLENGER_TINT : "var(--card)",
           color: "var(--card-foreground)",
           opacity: data.pending ? 0.6 : 1,
         }}
@@ -275,7 +310,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
         {/* D3-3a: the root claim has no delete affordance — re-designate via the
             badge menu's "Set as Root Claim" instead. Other delete paths (keyboard,
             context menu) are blocked in the store, and the server backstops with a 409. */}
-        {isEditing && !data.isRoot && (
+        {isEditing && !data.isRoot && canEditThisNode && (
           <button
             className="nodrag nopan absolute top-1 right-1 z-10 flex h-4 w-4 items-center justify-center rounded text-xs leading-none transition-colors hover:bg-[var(--muted)]"
             style={{ color: "var(--muted-foreground)" }}
@@ -299,10 +334,10 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                 <span
                   ref={badgeRef}
                   className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-white uppercase select-none ${
-                    canEdit && !data.isRoot ? "cursor-pointer" : ""
+                    canEditThisNode && !data.isRoot ? "cursor-pointer" : ""
                   }`}
                   style={{ backgroundColor: descriptor.accent }}
-                  title={canEdit && !data.isRoot ? "Click to change role" : undefined}
+                  title={canEditThisNode && !data.isRoot ? "Click to change role" : undefined}
                   onClick={handleBadgeClick}
                 >
                   {badge}
@@ -454,6 +489,52 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
               </p>
             )}
           </div>
+
+          {/* Mark control — inline bar for the challenger to mark advocate statements.
+              Stays visible read-only after the turn is submitted (interactive only while
+              `canMarkThisNode`). A marked statement gets the light-red challenger tint +
+              a little padding behind the bar so it reads as "touched by the challenger". */}
+          {showMarkBar && (
+            <div
+              className="nodrag nopan flex border-t"
+              style={{
+                borderColor: "var(--border)",
+                // The tint reads as "challenger touched this" only on an advocate (white)
+                // card; a challenger card is already tinted, so the bar blends in there.
+                backgroundColor: isChallenger ? undefined : CHALLENGER_TINT,
+                padding: 2,
+                gap: 2,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              {MARK_STANCES.map((stance) => {
+                const d = markStanceDescriptors[stance];
+                const active = currentMark === stance;
+                return (
+                  <button
+                    key={stance}
+                    className="flex flex-1 items-center justify-center rounded py-1 text-[10px] font-semibold transition-colors"
+                    style={{
+                      // Inactive buttons sit on white so only the padding/gap shows the
+                      // light-red tint as thin "quasi-borders"; the active one is tinted.
+                      color: active ? d.color : "var(--muted-foreground)",
+                      backgroundColor: active ? `color-mix(in srgb, ${d.color} 18%, var(--card))` : "var(--card)",
+                      cursor: canMarkThisNode ? "pointer" : "default",
+                    }}
+                    title={d.label}
+                    disabled={!canMarkThisNode}
+                    onClick={() => {
+                      setMark(id, stance);
+                    }}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
       <Handle

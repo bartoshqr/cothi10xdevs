@@ -803,12 +803,12 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Automated
 
-- [ ] 5.1 Integration tests pass with local Supabase up: `npm run test:integration` (or project equivalent)
-- [ ] 5.2 Type/lint pass: `npx astro check && npm run lint`
+- [x] 5.1 Integration tests pass with local Supabase up: `npm run test:integration` (or project equivalent)
+- [x] 5.2 Type/lint pass: `npx astro check && npm run lint`
 
 #### Manual
 
-- [ ] 5.3 Cookbook §6 entry names the two guarded regressions (42P17 helper; SETOF not-found)
+- [x] 5.3 Cookbook §6 entry names the two guarded regressions (42P17 helper; SETOF not-found)
 
   > **Agent-automatable**: Yes — read back `context/foundation/test-plan.md` §6 and confirm the entry exists.
 

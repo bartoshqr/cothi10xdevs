@@ -6,7 +6,7 @@
 >
 > Refresh: re-run `/10x-test-plan --refresh` when stale (see §8).
 >
-> Last updated: 2026-06-08 (Phase 1 complete — cookbook §6.1/§6.2/§6.6 filled)
+> Last updated: 2026-06-10 (S-03 marks/turn — cookbook §6.4 filled)
 
 ## 1. Strategy
 
@@ -307,7 +307,40 @@ further edits and producing phantom saves.
 
 ### 6.4 Adding a turn / mark-invalidation integrity test
 
-- TBD — see §3 Phase 4 (gated on roadmap S-03 / S-05 — Risks #4, #5).
+Recipe used by `tests/integration/marks.test.ts` (S-03). Mark/turn rules live in
+RLS and a SECURITY DEFINER RPC — the only layer that catches the two regressions
+this slice guards, so they are asserted **integration-against-real-RLS**, never
+mocked:
+
+1. **Two real users, RLS-applied client.** Reuse the `getClientAsUser` /
+   `requireSeedingUser` (advocate/owner) / `requireChallengerUser` fixture. Drive
+   writes through the **anon-key** client so RLS applies exactly as in the app;
+   use the service client only to seed advocate content and read back assertions.
+2. **Land an accepted exchange.** `seedDebate` → `openExchange` (advocate) →
+   `respondToInvite(accept)` (challenger) leaves `status='accepted',
+   current_turn='challenger'` — the state where the challenger may write.
+3. **Assert the write boundary, both directions.** Challenger INSERT of own
+   node/relation/mark **succeeds**; UPDATE/DELETE of advocate content returns
+   **0 rows** (author-scoped USING); marking a connective or own node is
+   **rejected** (the `kind='statement' AND author_id <> uid()` WITH CHECK).
+4. **Assert the turn gate is an RLS boundary, not a UI lock (Regression #1 —
+   42P17 helper).** After `submit_turn` flips the turn off the challenger, the
+   same challenger INSERT/mark is now **rejected** by `can_write_as_current_actor`.
+   This is the regression the `can_write_as_current_actor` /
+   `is_accepted_challenger` SECURITY DEFINER helpers exist for — without them the
+   widened node/relation INSERT WITH CHECK would recurse cross-table and throw
+   42P17 at runtime (invisible to `lint`/`build`).
+5. **Assert the FR-011 completeness gate + SETOF not-found (Regression #2).**
+   `submit_turn` with an incomplete mark set throws `ConflictError` (SQLSTATE
+   P0001) and leaves `current_turn` unchanged; marking every advocate statement
+   then flips it to `'advocate'`. `submit_turn` on an unknown exchange id resolves
+   to `NotFoundError` — proving the RPC's `RETURNS SETOF` yields `[]` → real
+   `null` → 404, not a truthy all-NULL row that would 200.
+
+**Two guarded regressions** (name them in any new mark/turn test): (1) the **42P17
+cross-table RLS recursion** broken by the SECURITY DEFINER turn/membership helpers,
+and (2) the **SETOF not-found** contract on `submit_turn` (bare composite would
+200 on an unknown id). Both are runtime-only — `lint`/`build` never see them.
 
 ### 6.5 Adding an e2e test for the critical flow
 

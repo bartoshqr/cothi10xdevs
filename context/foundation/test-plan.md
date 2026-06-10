@@ -147,17 +147,22 @@ The full set of gates that must pass before a change reaches production.
 "Required after §3 Phase `<N>`" means the gate is enforced once that rollout
 phase lands; before that, the gate is `planned`.
 
-| Gate | Where | Required? | Catches |
-|------|-------|-----------|---------|
-| lint + typecheck | local + CI | required (already wired: `npm run lint`, `astro check`, CI on push/PR) | syntactic / type drift |
-| unit + integration | local + CI | required after §3 Phase 1 | persistence + graph-shape logic regressions (#2, #3, #6) |
-| RLS / authorization integration | CI on PR | required after §3 Phase 2 | cross-pair data leaks (#1) |
-| e2e on the critical flow | CI on PR | required after §3 Phase 5 (waits for S-04) | a broken build → invite → mark → summary path |
-| post-edit hook | local (agent loop) | recommended after §3 Phase 1 | regressions at edit time (re-runs unit on save) — local only, not a CI substitute |
+| Gate | Layer | Where | Status | Catches |
+|------|-------|-------|--------|---------|
+| lint fix (ESLint `--fix`) | per-edit agent hook (`PostToolUse`) | local — agent loop only | **active** (wired 2026-06-10) | formatting + fixable lint errors on every `.ts/.tsx/.astro` edit; feeds back to agent via exit 2 |
+| scoped unit tests (`vitest related`) | per-edit agent hook (`PostToolUse`) | local — agent loop only | **active** (wired 2026-06-10) | regressions on risk-area files (`src/components/debate/`, `src/pages/api/debates/`, `src/lib/debate/`) at edit time |
+| lint + format (lint-staged) | pre-commit git hook (Husky) | local | **active** | ESLint fix + Prettier on all staged files before every commit; catches manual edits that bypassed the agent hook |
+| unit tests (`npm run test:unit`) | pre-commit git hook (Husky) | local | **active** (wired 2026-06-10) | full unit suite before every commit; no infra required |
+| integration tests (`npm run test:integration`) | pre-push git hook (Husky) | local | **active** (wired 2026-06-10) | full integration suite before every push; requires `supabase start` |
+| typecheck (`astro check`) | CI on push/PR | CI | required | type drift not caught by lint |
+| RLS / authorization integration | CI on PR | CI | required after §3 Phase 2 | cross-pair data leaks (#1) |
+| e2e on the critical flow | CI on PR | CI | required after §3 Phase 5 (waits for S-04) | a broken build → invite → mark → summary path |
 
-Husky pre-commit (lint-staged) already runs ESLint/Prettier locally; it is
-not a test gate. CI currently runs lint + build only — Phase 1 adds the test
-step, Phase 5 adds e2e.
+**Local layer summary (wired 2026-06-10):**
+- Every agent edit → lint fix; risk-area edits also run `vitest related`.
+- Every `git commit` → lint-staged (ESLint/Prettier on staged files) + full unit suite.
+- Every `git push` → full integration suite (needs Supabase running locally).
+- CI stays the authoritative gate for shared repo state; local layers catch regressions before a CI round-trip.
 
 ## 6. Cookbook Patterns
 

@@ -58,3 +58,10 @@
 - **Problem**: Deleting or overwriting the stale row destroys history needed for audit and for diffing across rounds, and a delete-based design forces a heavier migration + risks losing data. It also blurs *who* is allowed to invalidate.
 - **Rule**: Store one mutable row and add a `valid boolean not null default true` column for invalidation. When a party changes their content, the **other** party's row about it is flipped `valid = false` (the counterpart invalidates, never the author); the stance/value stays intact. Gates then read `valid = true`. Designing the row as mutable-but-not-deleted keeps invalidation a pure column-add migration with no backfill and no data loss.
 - **Applies to**: plan, implement, impl-review
+
+## Look ahead during planning — design for extension, not replacement
+
+- **Context**: Any implementation slice that is one half of a symmetric or multi-phase flow (e.g. one actor in a two-actor exchange, one direction of a bidirectional operation, one round of a multi-round sequence).
+- **Problem**: Designing only for the current slice hard-codes actor-specific details (ids, directions, literals) that the next slice must rewrite or revoke entirely — wasted work and migration churn.
+- **Rule**: Before writing any RPC, policy, or module, scan the roadmap for the mirror slice. If a symmetric counterpart exists, parameterise the current implementation to cover both sides from the start (e.g. derive other-party id and next-turn from data rather than hard-coding them). Note the look-ahead decision explicitly in the plan so it is not mistaken for over-engineering.
+- **Applies to**: plan, implement, impl-review

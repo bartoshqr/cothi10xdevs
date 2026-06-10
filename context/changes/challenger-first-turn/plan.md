@@ -619,13 +619,13 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
 
 #### Automated
 
-- [ ] 2.1 Migration applies cleanly: `npx supabase db reset`
-- [ ] 2.2 Type checking passes: `npx astro check`
-- [ ] 2.3 Linting passes: `npm run lint`
+- [x] 2.1 Migration applies cleanly: `npx supabase db reset`
+- [x] 2.2 Type checking passes: `npx astro check`
+- [x] 2.3 Linting passes: `npm run lint`
 
 #### Manual
 
-- [ ] 2.4 `submit_turn` rejects an incomplete mark set; flips turn on a complete one; SETOF on unknown id
+- [x] 2.4 `submit_turn` rejects an incomplete mark set; flips turn on a complete one; SETOF on unknown id
 
   > **Agent-automatable**: Yes — SQL as the challenger (JWT-claims impersonation). Assumes the accepted exchange from 1.6 exists and no marks yet.
 

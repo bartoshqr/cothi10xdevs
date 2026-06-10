@@ -44,3 +44,17 @@
 - **Problem**: Evaluating the WITH CHECK on B triggers A's SELECT policy, which triggers B's policy again while B's RLS is mid-evaluation — Postgres fires its cycle detector and aborts with SQLSTATE 42P17 (infinite recursion). The plan's pure inline-EXISTS approach is correct for the *read* predicates but cannot be used unchanged on the *write* check that closes the loop. `lint`/`build` never see this — it only surfaces at runtime against real RLS (the integration suite or a manual insert).
 - **Rule**: When an RLS WITH CHECK (or USING) must read another table whose own policy reads back into the first, wrap that cross-table check in a `SECURITY DEFINER` SQL function (`stable`, `set search_path = public`, EXECUTE revoked from public/anon and granted to authenticated). The definer reads as the function owner, bypassing the other table's RLS and breaking the cycle. `auth.uid()` still works inside the definer (PostgREST sets request.jwt.claims at session level). Keep the *read* predicates inline EXISTS — apply the definer only to the policy that closes the loop, not everywhere.
 - **Applies to**: plan, implement, impl-review
+
+## Enforce turn/phase as an RLS predicate, not just a UI lock
+
+- **Context**: Multi-actor flows where only one party may write at a time (turn-based: challenger turn vs advocate turn in S-03/S-04). Write policies gated on a long-lived membership flag (e.g. `is_accepted_challenger` → `status='accepted'`).
+- **Problem**: Membership stays true for the whole debate, so an RLS check that only verifies membership lets a party write *out of turn* — e.g. a challenger keeps inserting nodes/marks after submitting and the turn flips to the advocate. The client "locks the board" but the server doesn't; any direct API call bypasses it. `lint`/`build`/happy-path UI never see this — it surfaces only as cross-round data corruption once the other side's turn ships.
+- **Rule**: Keep the membership predicate (read scope, turn-agnostic) separate from the **write** predicate (turn-gated). Add a second SECURITY DEFINER helper — same body **plus** `and current_turn = '<actor>'` — and use it in the INSERT/UPDATE WITH CHECK for that actor's content (nodes, relations, marks). Turn enforcement is an authorization boundary, not a UI convention. Assert the off-turn write is RLS-rejected in the integration suite.
+- **Applies to**: plan, implement, impl-review
+
+## Model invalidation as a flag the counterpart flips — never delete or overwrite
+
+- **Context**: State that one party records about another party's content and that becomes stale when the content changes (e.g. marks: challenger's Agree/Challenge/Abstain on an advocate statement; round carry-over / invalidation in S-05).
+- **Problem**: Deleting or overwriting the stale row destroys history needed for audit and for diffing across rounds, and a delete-based design forces a heavier migration + risks losing data. It also blurs *who* is allowed to invalidate.
+- **Rule**: Store one mutable row and add a `valid boolean not null default true` column for invalidation. When a party changes their content, the **other** party's row about it is flipped `valid = false` (the counterpart invalidates, never the author); the stance/value stays intact. Gates then read `valid = true`. Designing the row as mutable-but-not-deleted keeps invalidation a pure column-add migration with no backfill and no data loss.
+- **Applies to**: plan, implement, impl-review

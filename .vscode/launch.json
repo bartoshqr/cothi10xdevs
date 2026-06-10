@@ -2,10 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "command": "./node_modules/.bin/astro dev",
-      "name": "Development server",
-      "request": "launch",
-      "type": "node-terminal"
+      "name": "Attach to workerd (astro dev)",
+      "type": "node",
+      "request": "attach",
+      "websocketAddress": "ws://localhost:9229/cothi10xdevs",
+      "resolveSourceMapLocations": null,
+      "attachExistingChildren": false,
+      "autoAttachChildProcesses": false,
+      "sourceMaps": true
     }
   ]
 }

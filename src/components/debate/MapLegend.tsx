@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Panel } from "@xyflow/react";
-import { roleDescriptors, connectiveDescriptors, relationDescriptors } from "./mapVisualLanguage";
-import type { ConnectiveOp, RelationKind } from "./mapVisualLanguage";
+import {
+  roleDescriptors,
+  connectiveDescriptors,
+  relationDescriptors,
+  markStanceDescriptors,
+} from "./mapVisualLanguage";
+import type { ConnectiveOp, RelationKind, MarkStance } from "./mapVisualLanguage";
 
 const ROLES: { badge: string | null; accent: string; description: string }[] = [
   {
@@ -44,6 +49,12 @@ const ROLES: { badge: string | null; accent: string; description: string }[] = [
 const CONNECTIVES: { op: ConnectiveOp; description: string }[] = [
   { op: "and", description: "All operands required" },
   { op: "or", description: "Any operand suffices" },
+];
+
+const MARKS: { stance: MarkStance; description: string }[] = [
+  { stance: "agree", description: "You agree with this statement" },
+  { stance: "challenge", description: "You challenge this statement" },
+  { stance: "abstain", description: "You abstain on this statement — unresolved" },
 ];
 
 const RELATIONS: { kind: RelationKind; description: string }[] = [
@@ -220,6 +231,31 @@ export default function MapLegend() {
               <strong style={{ color: "var(--foreground)" }}>link</strong> feeds connectives ·{" "}
               <strong style={{ color: "var(--foreground)" }}>others</strong> land on claims.
             </p>
+
+            <hr style={{ borderColor: "var(--border)", margin: "8px 0" }} />
+
+            <p
+              className="mb-2 font-bold tracking-wider uppercase"
+              style={{ fontSize: 10, color: "var(--muted-foreground)" }}
+            >
+              Statement marks
+            </p>
+            <div className="mb-3 space-y-1">
+              {MARKS.map(({ stance, description }) => {
+                const d = markStanceDescriptors[stance];
+                return (
+                  <div key={stance} className="flex items-center gap-2">
+                    <span
+                      className="w-16 shrink-0 rounded px-1.5 py-0.5 text-center text-[9px] font-semibold"
+                      style={{ backgroundColor: `color-mix(in srgb, ${d.color} 12%, transparent)`, color: d.color }}
+                    >
+                      {d.label}
+                    </span>
+                    <span style={{ color: "var(--foreground)" }}>{description}</span>
+                  </div>
+                );
+              })}
+            </div>
 
             <hr style={{ borderColor: "var(--border)", margin: "8px 0" }} />
 

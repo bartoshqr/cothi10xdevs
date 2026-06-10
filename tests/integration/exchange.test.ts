@@ -170,7 +170,7 @@ describeIntegration("S-02 exchange — gate, RLS pair-visibility, invite lifecyc
     expect(outsiderNodes.data ?? []).toHaveLength(0);
   });
 
-  it("accepted challenger still reads (and still cannot write); declined challenger loses read access", async () => {
+  it("accepted challenger reads and can now write on their turn; declined challenger loses read access", async () => {
     // Accept path: read survives the transition.
     const accepted = await freshDebate();
     const acceptedExchange = await openExchange(
@@ -181,12 +181,15 @@ describeIntegration("S-02 exchange — gate, RLS pair-visibility, invite lifecyc
     await respondToInvite(challengerClient, acceptedExchange.id, true);
     const afterAccept = await challengerClient.from("debates").select("id").eq("id", accepted.debateId);
     expect(afterAccept.data).toHaveLength(1);
-    // Still no write after accept (challenger writes are S-03).
+    // S-03 widened the INSERT policy: an accepted challenger on their turn
+    // (current_turn='challenger' right after accept) may now add their own nodes.
+    // The full mark/turn write boundaries are asserted in marks.test.ts.
     const writeAfterAccept = await challengerClient
       .from("nodes")
       .insert({ debate_id: accepted.debateId, author_id: challengerId, kind: "statement", metadata: { title: "x" } })
       .select("id");
-    expect(writeAfterAccept.error).not.toBeNull();
+    expect(writeAfterAccept.error).toBeNull();
+    expect(writeAfterAccept.data).toHaveLength(1);
 
     // Decline path (separate fresh exchange): read access closes.
     const declined = await freshDebate();

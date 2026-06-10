@@ -3,6 +3,9 @@ import type { CreateNodeInput, CreateRelationInput, UpdateNodeInput, UpdateRelat
 import type { DebateGraph } from "@/lib/debate/repository";
 import { ApiError } from "./apiError";
 
+type MarkRow = Database["public"]["Tables"]["marks"]["Row"];
+type ExchangeRow = Database["public"]["Tables"]["exchanges"]["Row"];
+
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
 type DebateRow = Database["public"]["Tables"]["debates"]["Row"];
@@ -99,4 +102,20 @@ export async function apiGetGraph(debateId: string): Promise<DebateGraph> {
   const res = await fetch(`/api/debates/${debateId}`);
   await expectOk(res, "Load debate");
   return res.json() as Promise<DebateGraph>;
+}
+
+export async function apiUpsertMark(debateId: string, nodeId: string, stance: string): Promise<MarkRow> {
+  const res = await fetch(`/api/debates/${debateId}/marks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nodeId, stance }),
+  });
+  await expectOk(res, "Save mark");
+  return res.json() as Promise<MarkRow>;
+}
+
+export async function apiSubmitTurn(exchangeId: string): Promise<ExchangeRow> {
+  const res = await fetch(`/api/exchanges/${exchangeId}/submit-turn`, { method: "POST" });
+  await expectOk(res, "Submit turn");
+  return res.json() as Promise<ExchangeRow>;
 }

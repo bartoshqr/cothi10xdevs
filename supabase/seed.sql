@@ -185,3 +185,23 @@ begin
   on conflict do nothing;
 end;
 $$;
+
+-- ─── Exchange (user01 advocate ⇄ user02 challenger, accepted) ─────────────────
+-- An accepted exchange so the S-03 challenger first-turn flow can be exercised by
+-- hand: sign in as user02, open debate …010, mark the advocate's statements, submit.
+-- A fresh accepted exchange opens on the challenger's turn (current_turn defaults to
+-- 'challenger', current_round to 1); responded_at is set because user02 accepted.
+-- Fixed id keeps it idempotent; the partial unique index (one open exchange per
+-- debate) is respected since this is the debate's only exchange.
+insert into public.exchanges (
+  id, debate_id, advocate_id, challenger_id,
+  status, round_count, current_round, current_turn, responded_at
+)
+values (
+  '00000000-0000-4000-8000-000000000020',
+  '00000000-0000-4000-8000-000000000010',  -- debate (owned by user01)
+  '00000000-0000-4000-8000-000000000001',  -- advocate  = user01
+  '00000000-0000-4000-8000-000000000002',  -- challenger = user02
+  'accepted', 3, 1, 'challenger', now()
+)
+on conflict (id) do nothing;

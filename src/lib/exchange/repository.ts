@@ -124,6 +124,55 @@ export async function getExchangeStatus(supabase: DB, exchangeId: string): Promi
   };
 }
 
+export interface DebateExchange {
+  id: string;
+  status: "pending" | "accepted";
+  roundCount: number;
+  currentRound: number;
+  currentTurn: Database["public"]["Enums"]["turn_actor"];
+  advocateId: string;
+  advocateUsername: string | null;
+  challengerId: string;
+  challengerUsername: string | null;
+}
+
+// Load a debate's single open exchange (pending or accepted) with both participant
+// usernames resolved — serves the advocate's invite status line and the challenger's
+// header alike. There is at most one open exchange per debate (partial-unique
+// constraint), so a debate id is enough. RLS scopes the row to participants; null =
+// no open exchange (or RLS-scoped out). Each caller reads the side it needs.
+export async function getDebateExchange(supabase: DB, debateId: string): Promise<DebateExchange | null> {
+  const { data: exchange, error } = await supabase
+    .from("exchanges")
+    .select("id, status, round_count, current_round, current_turn, advocate_id, challenger_id")
+    .eq("debate_id", debateId)
+    .in("status", ["pending", "accepted"])
+    .maybeSingle();
+  if (error) throw error;
+  if (!exchange) return null;
+
+  // Resolve both usernames in one read. profiles_select_authenticated lets any
+  // authed user read these, so both rows come back regardless of viewer role.
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, username")
+    .in("id", [exchange.advocate_id, exchange.challenger_id]);
+  if (profileError) throw profileError;
+
+  const usernameById = new Map(profiles.map((p) => [p.id, p.username]));
+  return {
+    id: exchange.id,
+    status: exchange.status as "pending" | "accepted",
+    roundCount: exchange.round_count,
+    currentRound: exchange.current_round,
+    currentTurn: exchange.current_turn,
+    advocateId: exchange.advocate_id,
+    advocateUsername: usernameById.get(exchange.advocate_id) ?? null,
+    challengerId: exchange.challenger_id,
+    challengerUsername: usernameById.get(exchange.challenger_id) ?? null,
+  };
+}
+
 // Advocate revokes a still-pending invite. Deletes the row (re-opening the
 // one-open-exchange slot so the advocate can re-invite). RLS exchanges_delete
 // enforces advocate identity AND status='pending'; the explicit filters here
@@ -155,6 +204,19 @@ export interface ChallengerInvite {
 
 // Returns the challenger's pending and accepted exchanges so the inbox can show
 // both "awaiting response" rows (with Accept/Decline) and "enter debate" rows.
+export async function submitTurn(supabase: DB, exchangeId: string): Promise<ExchangeRow> {
+  const { data, error } = await supabase.rpc("submit_turn", { p_exchange_id: exchangeId }).maybeSingle();
+  if (error) {
+    // submit_turn raises a typed error when the mark gate fails (incomplete mark set).
+    // The RPC uses SQLSTATE P0001 (raise_exception) with a message naming the unmarked count.
+    // Map to ConflictError so withAuth returns 409.
+    if (error.code === "P0001") throw new ConflictError(error.message);
+    throw error;
+  }
+  if (!data) throw new NotFoundError();
+  return data;
+}
+
 export async function listInvites(supabase: DB, userId: string): Promise<ChallengerInvite[]> {
   const { data: exchanges, error } = await supabase
     .from("exchanges")

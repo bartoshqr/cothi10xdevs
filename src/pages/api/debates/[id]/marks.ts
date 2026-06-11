@@ -2,7 +2,16 @@ import { z } from "zod";
 import { withAuth } from "@/lib/api";
 import { debateIdParamSchema } from "@/lib/debate/schemas";
 import { upsertMarkSchema } from "@/lib/mark/schemas";
-import { upsertMark } from "@/lib/mark/repository";
+import { getDebateMarks, upsertMark } from "@/lib/mark/repository";
+
+export const GET = withAuth(async (context, supabase) => {
+  const idParsed = debateIdParamSchema.safeParse(context.params.id);
+  if (!idParsed.success) {
+    return Response.json({ error: "Invalid debate id" }, { status: 400 });
+  }
+  const marks = await getDebateMarks({ supabase, debateId: idParsed.data });
+  return Response.json(marks);
+});
 
 export const POST = withAuth(async (context, supabase, user) => {
   const idParsed = debateIdParamSchema.safeParse(context.params.id);

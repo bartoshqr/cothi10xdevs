@@ -385,9 +385,9 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 2: Frontend — advocate turn
 
 #### Automated
-- [ ] 2.1 Unit test: `computeTurnGate` advocate counterpart count + marked count
-- [ ] 2.2 Type check passes: `npx astro check`
-- [ ] 2.3 Lint/build pass: `npm run build`
+- [x] 2.1 Unit test: `computeTurnGate` advocate counterpart count + marked count — dc7c67e
+- [x] 2.2 Type check passes: `npx astro check` — dc7c67e
+- [x] 2.3 Lint/build pass: `npm run build` — dc7c67e
 
 #### Manual
 - [ ] 2.4 Advocate `Submit turn` enables after marking all challenger statements and locks the board
@@ -400,9 +400,15 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 
   > **Agent-automatable**: No — visual check of the `marked/total` label in the header island.
 
-- [ ] 2.6 Completed exchange shows a completed state in the header (no live turn/submit)
+- [ ] 2.6 Advocate's final-round submit hands the turn to the challenger's mini-turn (advocate header flips to a muted "Submitted"; the challenger then sees "My Turn")
 
-  > **Agent-automatable**: No — visual check after a round_count=1 advocate submit.
+  > **Mini-turn (Phase 1 shift, FR-019)**: on a `round_count=1` exchange the advocate's submit does **not** complete the exchange directly. It flips `current_turn` back to the challenger with `in_mini_turn=true` — a final, marking-only closing turn. The challenger can still mark the advocate's just-added statements but cannot add new content (`can_add_content_as_current_actor` blocks the challenger while `in_mini_turn`). So after the advocate submits, the advocate's `TurnBar` shows the muted "Submitted" (off-turn) and the challenger's shows "My Turn". See [Shifts during implementation §1](#1-mini-turn-fr-019-pulled-forward-into-phase-1).
+
+  > **Agent-automatable**: No — visual check across two browser sessions after a round_count=1 advocate submit.
+
+- [ ] 2.7 Exchange completes only after the challenger submits the closing mini-turn — both headers then show the static "Exchange complete" state (no live turn/submit)
+
+  > **Agent-automatable**: No — visual check after the challenger submits the mini-turn; the exchange transitions to `status='completed'`, `in_mini_turn=false`.
 
 ### Phase 3: Summary algorithm — pure classifier + repository read
 
@@ -490,6 +496,50 @@ The three working June-11 migrations were consolidated to **two** before commit 
 
 - `20260611000001_add_completed_status.sql` — unchanged (enum value-add must be its own migration).
 - `20260611000002_round_close_and_mini_turn.sql` — **new merged file** holding columns + helper + `submit_turn` (final mini-turn-aware form) + read-scope widening + write-scope tightening. Replaces the former `…_submit_turn_round_close.sql` and `…_mini_turn_extension.sql`, which were deleted. `submit_turn` is now defined exactly twice total (committed original `20260610000002` + this one), not three times.
+
+### 5. Phase 2 implementation details (recorded during Phase 2)
+
+#### ViewerContext widened to carry live exchange state
+
+`ViewerContext` (`store.ts`) gained `inMiniTurn: boolean` and `isCompleted: boolean`. Both are populated by `deriveViewer` (server-initial) and kept live by `submitTurn` in the store, which now reads the authoritative row returned by `apiSubmitTurn` and patches all three turn fields (`isMyTurn`, `inMiniTurn`, `isCompleted`) in one `set(...)` call rather than the previous blanket `isMyTurn: false`. This lets the actor's own header update in place — mini-turn opening, or exchange completing — without a page reload.
+
+#### TurnGateDetail mirrors ViewerContext's new flags
+
+`TurnGateDetail` (`MapEditor.tsx`) gained matching `isMiniTurn` and `isCompleted` fields so `TurnBar` can react to them from the live event stream (not just from server-initial props). `computeTurnGate` passes both through from the viewer.
+
+#### TurnBar subscribes for both parties; props are server-initial only
+
+`TurnBar` now subscribes to `wvmap:turn-gate` for both `advocate` and `challenger` (no `isChallenger` gating removed — there was never a `viewerRole !== "challenger"` guard in `TurnBar`; that guard was in `MapEditor.computeTurnGate`). The `isCompleted` and `isMiniTurn` props from the page serve as server-initial fallbacks; the live gate values override them once the first broadcast arrives.
+
+#### getExchangeStatus widened for the board poll
+
+`getExchangeStatus` (`repository.ts`) now selects `current_turn` and `in_mini_turn` alongside `status` and exposes them on `ExchangeStatus`. The board's turn-flip poll (which calls `getExchangeStatus`) can now detect a flip and re-hydrate without a full `getDebateExchange` round-trip.
+
+#### `currentRound` threaded through the gate so the header counter updates live
+
+The header's `n/round_count` counter was previously a static server-rendered prop on `TurnBar` (`currentRound={exchange.currentRound}`) — it never moved after page load, so the counterpart kept seeing a stale round number after a submit advanced the round. `currentRound` now flows through the same live path the turn/mini-turn/completed flags use:
+
+- `ExchangeStatus` (`repository.ts`) selects and returns `current_round`, so the board poll payload carries it.
+- `ViewerContext` (`store.ts`) gained `currentRound`, populated by `deriveViewer` (server-initial) from `exchange.currentRound`.
+- `TurnGateDetail` (`MapEditor.tsx`) gained `currentRound`; `computeTurnGate` passes it through from the viewer.
+- The `MapEditor` counterpart-sync poll added `currentRound` to its response type and to the divergence check, so a round advance patches `viewer.currentRound` (alongside `isMyTurn`/`inMiniTurn`/`isCompleted`) and re-broadcasts the gate — no reload.
+- `TurnBar` reads `gate?.currentRound ?? currentRound` (live gate value, falling back to the server-initial prop) in both the active and completed render paths.
+
+The submitter's own seat updates via `submitTurn`'s response path; the counterpart updates via the 1s poll — the same split that already governed the turn flip. Unit coverage: a `currentRound` passthrough case added to `computeTurnGate.test.ts` (the no-viewer gate now also asserts `currentRound: 1`).
+
+### 6. Turn-flip sync: reload replaced by state patch + reconcile (recorded during Phase 2)
+
+The counterpart-sync poll in `MapEditor` previously called `window.location.reload()` when it detected a turn-state divergence from the server. This caused a full-page flicker. The approach was replaced with a two-step in-place update:
+
+1. **Viewer state patched immediately** — `useStore.setState({ viewer: { ...v, isMyTurn, inMiniTurn, isCompleted } })` applies the authoritative turn flags the instant the poll detects a change. The `broadcastTurnGate` effect fires on the next render and pushes a fresh `TurnGateDetail` to `TurnBar`, so the header updates with no reload.
+2. **`reconcileFromServer()` called after** — fetches the counterpart's new nodes, relations, and marks (added during their turn) and applies them atomically to the store. Without this the graph would be stale: the turn gate would show wrong counts and the counterpart's new nodes would be invisible.
+
+`reconcileFromServer` was extended to fetch graph + marks in parallel (`Promise.all([apiGetGraph, apiGetMarks])`) and apply both in one `setState`. This made it a true "full debate resync" primitive — all existing callers (conflict recovery, mutation failure) now also refresh marks for free.
+
+Supporting additions:
+- `GET /api/debates/[id]/marks` — new endpoint alongside the existing `POST`; calls `getDebateMarks` under RLS, returns `nodeId → stance` map as JSON.
+- `apiGetMarks(debateId)` in `persistence.ts` — thin fetch wrapper, same shape as `apiGetGraph`.
+- Unit test mock factories for `@/components/debate/persistence` in `reconcileFromServer.store.test.ts`, `optimisticReconcile.store.test.ts`, `duplicateRelation.store.test.ts` updated to include `apiGetMarks`, `apiUpsertMark`, and `apiSubmitTurn` (all missing from the hermetic stubs, which would have caused the tests to blow up at runtime once `reconcileFromServer` called the new function).
 
 ### 4. DB types regeneration command
 

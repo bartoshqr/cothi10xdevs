@@ -176,7 +176,7 @@ begin
       )
     ),
     (
-      v_rebuttal, v_debate, v_challenger, 'statement', 624, 116,
+      v_rebuttal, v_debate, v_challenger, 'statement', 700, 116,
       jsonb_build_object(
         'statement_type', 'rebuttal',
         'title',          'Natural cycles argument',
@@ -189,7 +189,7 @@ begin
     ),
     -- Challenger's counter-structure rebutting the warrant "CO₂ is a greenhouse gas".
     (
-      v_c_rebuttal, v_debate, v_challenger, 'statement', 640, 380,
+      v_c_rebuttal, v_debate, v_challenger, 'statement', 700, 400,
       jsonb_build_object(
         'statement_type', 'rebuttal',
         'title',          'Greenhouse effect breaks thermodynamics',
@@ -197,7 +197,7 @@ begin
       )
     ),
     (
-      v_c_data, v_debate, v_challenger, 'statement', 640, 540,
+      v_c_data, v_debate, v_challenger, 'statement', 720, 650,
       jsonb_build_object(
         'statement_type', 'data',
         'title',          'Atmosphere is colder than the surface',
@@ -205,7 +205,7 @@ begin
       )
     ),
     (
-      v_c_source, v_debate, v_challenger, 'statement', 640, 700,
+      v_c_source, v_debate, v_challenger, 'statement', 740, 900,
       jsonb_build_object(
         'statement_type', 'source',
         'title',          'Gerlich & Tscheuschner (2009)',

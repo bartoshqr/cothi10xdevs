@@ -26,17 +26,20 @@ export interface ViewerDerivation {
 export function deriveViewer({ user, graph, isOwner, exchange }: DeriveViewerArgs): ViewerDerivation {
   if (!graph || !user) return { viewerRole: null, viewer: null, viewerExchangeId: null };
 
-  const isAccepted = exchange?.status === "accepted";
+  // A completed exchange stays viewable (read-only) so both parties keep seeing the board
+  // and every mark; only an accepted exchange is interactive (someone is on turn).
+  const isViewable = exchange != null && (exchange.status === "accepted" || exchange.status === "completed");
   const viewerRole: ViewerDerivation["viewerRole"] = isOwner
     ? "advocate"
-    : isAccepted && exchange.challengerId === user.id
+    : isViewable && exchange.challengerId === user.id
       ? "challenger"
       : null;
 
-  if (!viewerRole || !isAccepted) {
+  if (!viewerRole || !isViewable) {
     return { viewerRole, viewer: null, viewerExchangeId: null };
   }
 
+  const isCompleted = exchange.status === "completed";
   return {
     viewerRole,
     viewerExchangeId: exchange.id,
@@ -44,7 +47,11 @@ export function deriveViewer({ user, graph, isOwner, exchange }: DeriveViewerArg
       viewerId: user.id,
       viewerRole,
       advocateId: graph.debate.owner_id,
-      isMyTurn: exchange.currentTurn === viewerRole,
+      // Completed exchanges are read-only for everyone, so no one is "on turn".
+      isMyTurn: !isCompleted && exchange.currentTurn === viewerRole,
+      inMiniTurn: exchange.inMiniTurn,
+      isCompleted,
+      currentRound: exchange.currentRound,
     },
   };
 }

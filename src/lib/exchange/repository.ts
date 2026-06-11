@@ -96,15 +96,19 @@ export interface ExchangeStatus {
   status: Database["public"]["Enums"]["exchange_status"];
   challengerUsername: string | null;
   roundCount: number;
+  currentRound: number;
+  currentTurn: Database["public"]["Enums"]["turn_actor"];
+  inMiniTurn: boolean;
 }
 
 // Read the current state of an exchange for the freshness poll + the advocate's
 // status line. RLS scopes the row to the advocate or the challenger; the join to
-// profiles resolves the challenger's username. null = unknown id or RLS-scoped out.
+// profiles resolves the challenger's username. `currentTurn` + `inMiniTurn` let the
+// board poll detect a turn flip and re-hydrate. null = unknown id or RLS-scoped out.
 export async function getExchangeStatus(supabase: DB, exchangeId: string): Promise<ExchangeStatus | null> {
   const { data, error } = await supabase
     .from("exchanges")
-    .select("status, round_count, challenger_id")
+    .select("status, round_count, current_round, challenger_id, current_turn, in_mini_turn")
     .eq("id", exchangeId)
     .maybeSingle();
   if (error) throw error;
@@ -121,6 +125,9 @@ export async function getExchangeStatus(supabase: DB, exchangeId: string): Promi
     status: data.status,
     challengerUsername: profile?.username ?? null,
     roundCount: data.round_count,
+    currentRound: data.current_round,
+    currentTurn: data.current_turn,
+    inMiniTurn: data.in_mini_turn,
   };
 }
 

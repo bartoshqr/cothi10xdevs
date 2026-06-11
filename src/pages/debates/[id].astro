@@ -59,7 +59,7 @@ if (!graph) {
       <div class="flex h-screen flex-col">
         <DebateHeader user={user} username={username} title={graph.debate.title}>
           {isOwner &&
-            (exchange?.status === "accepted" ? (
+            (exchange?.status === "accepted" || exchange?.status === "completed" ? (
               <TurnBar
                 slot="header-actions"
                 client:only="react"
@@ -68,6 +68,8 @@ if (!graph) {
                 currentRound={exchange.currentRound}
                 roundCount={exchange.roundCount}
                 counterpartUsername={exchange.challengerUsername}
+                isCompleted={exchange.status === "completed"}
+                isMiniTurn={exchange.inMiniTurn}
               />
             ) : (
               <InviteChallenger
@@ -79,7 +81,7 @@ if (!graph) {
             ))}
           {!isOwner &&
             exchange?.advocateUsername &&
-            (exchange.status === "accepted" ? (
+            (exchange.status === "accepted" || exchange.status === "completed" ? (
               <TurnBar
                 slot="header-actions"
                 client:only="react"
@@ -88,6 +90,8 @@ if (!graph) {
                 currentRound={exchange.currentRound}
                 roundCount={exchange.roundCount}
                 counterpartUsername={exchange.advocateUsername}
+                isCompleted={exchange.status === "completed"}
+                isMiniTurn={exchange.inMiniTurn}
               />
             ) : (
               <span slot="header-actions" class="text-muted-foreground text-sm">

@@ -29,7 +29,7 @@ import AddNodeMenu from "./AddNodeMenu";
 import NodeContextMenu from "./NodeContextMenu";
 import EdgeContextMenu from "./EdgeContextMenu";
 import ConnectKindPicker from "./ConnectKindPicker";
-import { useStore, useShallow } from "./store";
+import { useStore, useShallow, reconcileFromServer } from "./store";
 import type { DebateNode, ViewerContext } from "./store";
 import type { DebateGraph } from "@/lib/debate/repository";
 import type { MarkStance } from "./mapVisualLanguage";
@@ -44,20 +44,36 @@ export interface TurnGateDetail {
   isMyTurn: boolean;
   markedCount: number;
   total: number;
+  /** The challenger's closing, marking-only turn is open — labels the header for either seat. */
+  isMiniTurn: boolean;
+  /** The exchange has closed — the header collapses to a static "Exchange complete" line. */
+  isCompleted: boolean;
+  /** Current round (1-based) — drives the header's "round" counter live for either seat. */
+  currentRound: number;
 }
 
-function computeTurnGate(
+// Both parties have a marking-driven live gate: you must mark every one of the
+// counterpart's statements before submitting your turn. We count the counterpart's
+// statements via `authorId !== viewerId` — the same test as `isMarkableNode` — which
+// works for advocate and challenger alike without needing a `challengerId` on the viewer.
+export function computeTurnGate(
   nodes: DebateNode[],
   marks: Partial<Record<string, MarkStance>>,
   viewer: ViewerContext | null,
 ): TurnGateDetail {
-  // Only the challenger has a marking-driven, live gate; the advocate's bar is static.
-  if (viewer?.viewerRole !== "challenger") {
-    return { isMyTurn: false, markedCount: 0, total: 0 };
+  if (!viewer) {
+    return { isMyTurn: false, markedCount: 0, total: 0, isMiniTurn: false, isCompleted: false, currentRound: 1 };
   }
-  const advocateStatements = nodes.filter((n) => n.type === "statement" && n.data.authorId === viewer.advocateId);
-  const markedCount = advocateStatements.filter((n) => marks[n.id] !== undefined).length;
-  return { isMyTurn: viewer.isMyTurn, markedCount, total: advocateStatements.length };
+  const counterpartStatements = nodes.filter((n) => n.type === "statement" && n.data.authorId !== viewer.viewerId);
+  const markedCount = counterpartStatements.filter((n) => marks[n.id] !== undefined).length;
+  return {
+    isMyTurn: viewer.isMyTurn,
+    markedCount,
+    total: counterpartStatements.length,
+    isMiniTurn: viewer.inMiniTurn,
+    isCompleted: viewer.isCompleted,
+    currentRound: viewer.currentRound,
+  };
 }
 
 function broadcastTurnGate(detail: TurnGateDetail) {
@@ -245,6 +261,87 @@ function MapEditorInner() {
       window.removeEventListener("wvmap:submit-turn", onSubmit);
     };
   }, []);
+
+  // Live turn-state sync for the *counterpart*. The party who submits updates its own
+  // header in place (store.submitTurn from the API response), but the other seat only
+  // learns the turn flipped by polling. When the server's turn-state diverges from what
+  // this board holds — the turn handed to me, the challenger's mini-turn opened, or the
+  // exchange completed — we reload so the board, every mark, and the header re-hydrate
+  // consistently from the server (the counterpart's new nodes/marks aren't otherwise
+  // streamed across islands). Visibility-gated like InviteChallenger's poll: a
+  // backgrounded tab goes quiet, and focus/visibility return triggers an immediate check.
+  useEffect(() => {
+    if (!viewer || viewer.isCompleted) return;
+    let stopped = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    async function check() {
+      const exchangeId = useStore.getState().exchangeId;
+      const v = useStore.getState().viewer;
+      if (!exchangeId || !v) return;
+      try {
+        const res = await fetch(`/api/exchanges/${exchangeId}`);
+        if (!res.ok || stopped) return;
+        const s = (await res.json()) as {
+          status: string;
+          currentTurn: string;
+          inMiniTurn: boolean;
+          currentRound: number;
+        };
+        const serverMyTurn = s.status === "accepted" && s.currentTurn === v.viewerRole;
+        const serverCompleted = s.status === "completed";
+        if (
+          serverMyTurn !== v.isMyTurn ||
+          s.inMiniTurn !== v.inMiniTurn ||
+          serverCompleted !== v.isCompleted ||
+          s.currentRound !== v.currentRound
+        ) {
+          useStore.setState({
+            viewer: {
+              ...v,
+              isMyTurn: serverMyTurn,
+              inMiniTurn: s.inMiniTurn,
+              isCompleted: serverCompleted,
+              currentRound: s.currentRound,
+            },
+          });
+          void reconcileFromServer();
+        }
+      } catch {
+        // transient — next tick retries
+      }
+    }
+    function start() {
+      intervalId ??= setInterval(() => void check(), 1000);
+    }
+    function stop() {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+    function onVisibility() {
+      if (document.hidden) {
+        stop();
+      } else {
+        void check();
+        start();
+      }
+    }
+
+    if (!document.hidden) {
+      void check();
+      start();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      stopped = true;
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
+  }, [viewer]);
 
   // Local-only mode (no debate backing) bootstraps a root claim. Persisted debates
   // always load with their root node, so this never fires there.

@@ -83,6 +83,7 @@ export type Database = {
           {
             foreignKeyName: "debates_root_node_id_fkey"
             columns: ["root_node_id"]
+            isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id"]
           },
@@ -97,6 +98,7 @@ export type Database = {
           current_turn: Database["public"]["Enums"]["turn_actor"]
           debate_id: string
           id: string
+          in_mini_turn: boolean
           responded_at: string | null
           round_count: number
           status: Database["public"]["Enums"]["exchange_status"]
@@ -109,6 +111,7 @@ export type Database = {
           current_turn?: Database["public"]["Enums"]["turn_actor"]
           debate_id: string
           id?: string
+          in_mini_turn?: boolean
           responded_at?: string | null
           round_count: number
           status?: Database["public"]["Enums"]["exchange_status"]
@@ -121,6 +124,7 @@ export type Database = {
           current_turn?: Database["public"]["Enums"]["turn_actor"]
           debate_id?: string
           id?: string
+          in_mini_turn?: boolean
           responded_at?: string | null
           round_count?: number
           status?: Database["public"]["Enums"]["exchange_status"]
@@ -129,6 +133,7 @@ export type Database = {
           {
             foreignKeyName: "exchanges_debate_id_fkey"
             columns: ["debate_id"]
+            isOneToOne: false
             referencedRelation: "debates"
             referencedColumns: ["id"]
           },
@@ -169,12 +174,14 @@ export type Database = {
           {
             foreignKeyName: "marks_debate_id_fkey"
             columns: ["debate_id"]
+            isOneToOne: false
             referencedRelation: "debates"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "marks_node_id_fkey"
             columns: ["node_id"]
+            isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id"]
           },
@@ -215,6 +222,7 @@ export type Database = {
           {
             foreignKeyName: "nodes_debate_id_fkey"
             columns: ["debate_id"]
+            isOneToOne: false
             referencedRelation: "debates"
             referencedColumns: ["id"]
           },
@@ -270,18 +278,21 @@ export type Database = {
           {
             foreignKeyName: "relations_debate_id_fkey"
             columns: ["debate_id"]
+            isOneToOne: false
             referencedRelation: "debates"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "relations_source_node_id_fkey"
             columns: ["source_node_id"]
+            isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "relations_target_node_id_fkey"
             columns: ["target_node_id"]
+            isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id"]
           },
@@ -292,6 +303,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_add_content_as_current_actor: {
+        Args: { p_debate_id: string }
+        Returns: boolean
+      }
       can_write_as_current_actor: {
         Args: { p_debate_id: string }
         Returns: boolean
@@ -355,6 +370,7 @@ export type Database = {
           current_turn: Database["public"]["Enums"]["turn_actor"]
           debate_id: string
           id: string
+          in_mini_turn: boolean
           responded_at: string | null
           round_count: number
           status: Database["public"]["Enums"]["exchange_status"]
@@ -370,7 +386,7 @@ export type Database = {
     }
     Enums: {
       connective_op: "and" | "or"
-      exchange_status: "pending" | "accepted" | "declined"
+      exchange_status: "pending" | "accepted" | "declined" | "completed"
       mark_stance: "agree" | "challenge" | "abstain"
       node_kind: "statement" | "connective"
       relation_kind: "supports" | "link" | "rephrases" | "rebuts"
@@ -514,6 +530,7 @@ export type Database = {
           {
             foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
             columns: ["catalog_id"]
+            isOneToOne: false
             referencedRelation: "buckets_analytics"
             referencedColumns: ["id"]
           },
@@ -563,12 +580,14 @@ export type Database = {
           {
             foreignKeyName: "iceberg_tables_catalog_id_fkey"
             columns: ["catalog_id"]
+            isOneToOne: false
             referencedRelation: "buckets_analytics"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "iceberg_tables_namespace_id_fkey"
             columns: ["namespace_id"]
+            isOneToOne: false
             referencedRelation: "iceberg_namespaces"
             referencedColumns: ["id"]
           },
@@ -642,6 +661,7 @@ export type Database = {
           {
             foreignKeyName: "objects_bucketId_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
@@ -688,6 +708,7 @@ export type Database = {
           {
             foreignKeyName: "s3_multipart_uploads_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
@@ -734,12 +755,14 @@ export type Database = {
           {
             foreignKeyName: "s3_multipart_uploads_parts_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "s3_multipart_uploads_parts_upload_id_fkey"
             columns: ["upload_id"]
+            isOneToOne: false
             referencedRelation: "s3_multipart_uploads"
             referencedColumns: ["id"]
           },
@@ -783,6 +806,7 @@ export type Database = {
           {
             foreignKeyName: "vector_indexes_bucket_id_fkey"
             columns: ["bucket_id"]
+            isOneToOne: false
             referencedRelation: "buckets_vectors"
             referencedColumns: ["id"]
           },
@@ -1053,7 +1077,7 @@ export const Constants = {
   public: {
     Enums: {
       connective_op: ["and", "or"],
-      exchange_status: ["pending", "accepted", "declined"],
+      exchange_status: ["pending", "accepted", "declined", "completed"],
       mark_stance: ["agree", "challenge", "abstain"],
       node_kind: ["statement", "connective"],
       relation_kind: ["supports", "link", "rephrases", "rebuts"],
@@ -1074,3 +1098,4 @@ export const Constants = {
     },
   },
 } as const
+

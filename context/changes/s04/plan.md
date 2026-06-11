@@ -33,8 +33,8 @@ S-03 was built deliberately symmetric, so the advocate's turn is already wired a
 
 ## What We're NOT Doing
 
-- **No write-immutability on close** (FR-019/FR-027) — `completed` is purely the summary-gate signal in S-04. `can_write_as_current_actor` still permits writes on a completed exchange until S-05 closes that gap. Documented, intentional deferral.
-- **No final-round mini-turn** (FR-019) — S-05.
+- ~~**No write-immutability on close** (FR-019/FR-027) — `completed` is purely the summary-gate signal in S-04. `can_write_as_current_actor` still permits writes on a completed exchange until S-05 closes that gap.~~ **Superseded during implementation** — write-immutability landed in Phase 1. See [Shifts during implementation](#shifts-during-implementation).
+- ~~**No final-round mini-turn** (FR-019) — S-05.~~ **Superseded during implementation** — the mini-turn was pulled forward into Phase 1. See [Shifts during implementation](#shifts-during-implementation).
 - **No mark invalidation / `valid=false` flipping** (S-05). The summary filters `valid = true` for forward-compatibility, but every round-1 mark is `valid=true`.
 - **No `marker_id` refactor** of the store map / `getDebateMarks` (disjointness makes it unnecessary).
 - **No child-debate inclusion** in the summary (FR-020's optional toggle) — parent linking is S-07; not built.
@@ -329,13 +329,13 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 1: DB — round close + `completed` status
 
 #### Automated
-- [ ] 1.1 Migration applies cleanly on `npx supabase db reset`
-- [ ] 1.2 Type check passes: `npx astro check`
-- [ ] 1.3 Build passes: `npm run build`
-- [ ] 1.4 Integration tests pass: `npm run test:integration`
+- [x] 1.1 Migration applies cleanly on `npx supabase db reset`
+- [x] 1.2 Type check passes: `npx astro check`
+- [x] 1.3 Build passes: `npm run build`
+- [x] 1.4 Integration tests pass: `npm run test:integration`
 
 #### Manual
-- [ ] 1.5 Advocate submit on a multi-round exchange flips turn + increments `current_round`
+- [x] 1.5 Advocate submit on a multi-round exchange flips turn + increments `current_round`
 
   > **Agent-automatable**: Yes — bearer-token curl to submit-turn + SQL assertion on the exchange row.
 
@@ -358,7 +358,7 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
   -- Expected: challenger | 2 | accepted
   ```
 
-- [ ] 1.6 Advocate submit on the final round sets `status='completed'`, `current_round` in range
+- [x] 1.6 Advocate submit on the final round sets `status='completed'`, `current_round` in range
 
   > **Agent-automatable**: Yes — same flow with a `round_count = 1` exchange.
 
@@ -368,7 +368,7 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
   -- Expected: current_round <= round_count (1), status = 'completed'
   ```
 
-- [ ] 1.7 A completed exchange remains readable by both parties
+- [x] 1.7 A completed exchange remains readable by both parties
 
   > **Agent-automatable**: Yes — RLS-on selects as advocate and as challenger.
 
@@ -458,3 +458,43 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 - [ ] 5.5 Panel renders three buckets with correct gap labels, no console errors
 
   > **Agent-automatable**: No — visual + devtools console inspection.
+
+---
+
+## Shifts during implementation
+
+> Recorded 2026-06-11, during Phase 1. These deviate from the plan as written above; the originating bullets in "What We're NOT Doing" are struck through and point here.
+
+### 1. Mini-turn (FR-019) pulled forward into Phase 1
+
+The final-round mini-turn — planned for S-05 — was implemented now rather than deferred, because the round-close work touched the same `submit_turn` branch and it was cheaper to land the routing once than to recreate the function again in S-05.
+
+- The mini-turn is **always enabled** — there is no opt-in flag. One new runtime column on `exchanges`: `in_mini_turn`. It is still required (rather than a derived formula) because `current_turn='challenger' AND current_round=round_count` cannot distinguish the *initial* challenger turn from the mini-turn on a `round_count=1` exchange.
+- New SECURITY DEFINER helper `can_add_content_as_current_actor` — like `can_write_as_current_actor` but the challenger branch also requires `NOT in_mini_turn`. Marks keep `can_write_as_current_actor`, so the challenger can still mark during the mini-turn.
+- `submit_turn` advocate-final-round branch always enters the mini-turn (flip to challenger + `in_mini_turn=true`); the exchange completes only on the challenger's closing mini-turn submit (`status='completed'`, `in_mini_turn=false`), never directly on the advocate's submit. The regular challenger branch flips to advocate.
+
+### 2. Write-immutability on close (FR-019/FR-027) implemented now
+
+Planned as a deferral (`completed` was to be "purely the summary-gate signal"). Instead, `nodes`/`relations` `INSERT`/`UPDATE`/`DELETE` were all turn-gated via the two-branch pattern (pre-exchange owner branch **or** `can_add_content_as_current_actor`). Net effect:
+
+- **Pre-invite only**: the owner edits freely until an exchange exists.
+- **`pending` invite locks the map** — the owner can no longer edit once a challenger is invited (the map is the basis the challenger is deciding on). A `declined` exchange does *not* lock (advocate may revise and re-invite).
+- **During an accepted exchange**: only the current-turn actor may write their own content; no one writes on the other party's turn; the challenger is frozen during the mini-turn.
+- **A `completed` exchange is fully immutable.**
+
+This is a tightening beyond the original scope: `UPDATE`/`DELETE` were previously `author_id`-only and ungated by turn.
+
+### 3. Migration consolidation
+
+The three working June-11 migrations were consolidated to **two** before commit (all were untracked/local-only, so safe to rewrite):
+
+- `20260611000001_add_completed_status.sql` — unchanged (enum value-add must be its own migration).
+- `20260611000002_round_close_and_mini_turn.sql` — **new merged file** holding columns + helper + `submit_turn` (final mini-turn-aware form) + read-scope widening + write-scope tightening. Replaces the former `…_submit_turn_round_close.sql` and `…_mini_turn_extension.sql`, which were deleted. `submit_turn` is now defined exactly twice total (committed original `20260610000002` + this one), not three times.
+
+### 4. DB types regeneration command
+
+`src/db/database.types.ts` must be regenerated with `npm run db:types` (pins the `graphql_public,pgbouncer,public,storage` schema set) — hand-editing or partial MCP output drops the `storage` schema and desyncs `Database` from `Constants`. A rule to this effect was added to `CLAUDE.md` (Code style).
+
+### Verification at time of recording
+
+`npx supabase db reset` clean · `npx astro check` 0 errors · `npm run test:integration` 37/37 pass. (Phase 1 automated items 1.1–1.4 hold for the consolidated migration; the new immutability/mini-turn behavior is not yet covered by dedicated tests — a gap to close when Phase 1 tests are revisited.)

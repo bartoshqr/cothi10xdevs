@@ -9,7 +9,7 @@ interface UserResult {
 
 interface ExistingExchange {
   id: string;
-  status: "pending" | "accepted";
+  status: "pending" | "accepted" | "completed";
   challengerUsername: string | null;
   roundCount: number;
   currentRound: number;

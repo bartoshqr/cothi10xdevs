@@ -390,35 +390,35 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 - [x] 2.3 Lint/build pass: `npm run build` — dc7c67e
 
 #### Manual
-- [ ] 2.4 Advocate `Submit turn` enables after marking all challenger statements and locks the board
+- [x] 2.4 Advocate `Submit turn` enables after marking all challenger statements and locks the board
 
   > **Agent-automatable**: No — requires a browser session; the gate state lives in the React island and submit is wired through cross-island DOM events.
 
   Steps: sign in as `user01@e.pl` in the browser, open the debate where `user02` has submitted round 1, mark every challenger statement, confirm the button enables at `marked === total`, click it, confirm the canvas locks.
 
-- [ ] 2.5 Advocate gate counter counts challenger statements (not advocate statements)
+- [x] 2.5 Advocate gate counter counts challenger statements (not advocate statements)
 
   > **Agent-automatable**: No — visual check of the `marked/total` label in the header island.
 
-- [ ] 2.6 Advocate's final-round submit hands the turn to the challenger's mini-turn (advocate header flips to a muted "Submitted"; the challenger then sees "My Turn")
+- [x] 2.6 Advocate's final-round submit hands the turn to the challenger's mini-turn (advocate header flips to a muted "Submitted"; the challenger then sees "My Turn")
 
   > **Mini-turn (Phase 1 shift, FR-019)**: on a `round_count=1` exchange the advocate's submit does **not** complete the exchange directly. It flips `current_turn` back to the challenger with `in_mini_turn=true` — a final, marking-only closing turn. The challenger can still mark the advocate's just-added statements but cannot add new content (`can_add_content_as_current_actor` blocks the challenger while `in_mini_turn`). So after the advocate submits, the advocate's `TurnBar` shows the muted "Submitted" (off-turn) and the challenger's shows "My Turn". See [Shifts during implementation §1](#1-mini-turn-fr-019-pulled-forward-into-phase-1).
 
   > **Agent-automatable**: No — visual check across two browser sessions after a round_count=1 advocate submit.
 
-- [ ] 2.7 Exchange completes only after the challenger submits the closing mini-turn — both headers then show the static "Exchange complete" state (no live turn/submit)
+- [x] 2.7 Exchange completes only after the challenger submits the closing mini-turn — both headers then show the static "Exchange complete" state (no live turn/submit)
 
   > **Agent-automatable**: No — visual check after the challenger submits the mini-turn; the exchange transitions to `status='completed'`, `in_mini_turn=false`.
 
 ### Phase 3: Summary algorithm — pure classifier + repository read
 
 #### Automated
-- [ ] 3.1 Unit tests cover the full oracle (type × stance/unmarked → bucket + gap; connectives excluded; `valid=false` ignored)
-- [ ] 3.2 Type check passes: `npx astro check`
-- [ ] 3.3 `npm run test:unit` passes
+- [x] 3.1 Unit tests cover the full oracle (type × stance/unmarked → bucket + gap; connectives excluded; `valid=false` ignored)
+- [x] 3.2 Type check passes: `npx astro check`
+- [x] 3.3 `npm run test:unit` passes
 
 #### Manual
-- [ ] 3.4 Classifier spot-check matches the PRD §Business-Logic mapping
+- [x] 3.4 Classifier spot-check matches the PRD §Business-Logic mapping
 
   > **Agent-automatable**: Yes — a throwaway unit/REPL assertion on a hand-built graph; no browser needed.
 

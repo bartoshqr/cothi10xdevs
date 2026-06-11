@@ -413,25 +413,25 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 3: Summary algorithm — pure classifier + repository read
 
 #### Automated
-- [x] 3.1 Unit tests cover the full oracle (type × stance/unmarked → bucket + gap; connectives excluded; `valid=false` ignored)
-- [x] 3.2 Type check passes: `npx astro check`
-- [x] 3.3 `npm run test:unit` passes
+- [x] 3.1 Unit tests cover the full oracle (type × stance/unmarked → bucket + gap; connectives excluded; `valid=false` ignored) — c19e062
+- [x] 3.2 Type check passes: `npx astro check` — c19e062
+- [x] 3.3 `npm run test:unit` passes — c19e062
 
 #### Manual
-- [x] 3.4 Classifier spot-check matches the PRD §Business-Logic mapping
+- [x] 3.4 Classifier spot-check matches the PRD §Business-Logic mapping — c19e062
 
   > **Agent-automatable**: Yes — a throwaway unit/REPL assertion on a hand-built graph; no browser needed.
 
 ### Phase 4: Summary endpoint
 
 #### Automated
-- [ ] 4.1 Integration test: gate-unmet → 404/409; round-2 and completed → 200 with correct buckets
-- [ ] 4.2 Integration test: non-member → 404
-- [ ] 4.3 `npm run test:integration` passes
-- [ ] 4.4 Build passes: `npm run build`
+- [x] 4.1 Integration test: gate-unmet → 404/409; round-2 and completed → 200 with correct buckets
+- [x] 4.2 Integration test: non-member → 404
+- [x] 4.3 `npm run test:integration` passes
+- [x] 4.4 Build passes: `npm run build`
 
 #### Manual
-- [ ] 4.5 `curl` the summary as advocate and challenger on a completed exchange → identical JSON
+- [x] 4.5 `curl` the summary as advocate and challenger on a completed exchange → identical JSON
 
   > **Agent-automatable**: Yes — bearer-token curl for both users.
 

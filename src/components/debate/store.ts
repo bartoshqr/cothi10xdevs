@@ -837,6 +837,7 @@ export const useStore = create<RFState>()((set, get) => ({
           isMyTurn: row.status === "accepted" && row.current_turn === viewer.viewerRole,
           inMiniTurn: row.in_mini_turn,
           isCompleted: row.status === "completed",
+          currentRound: row.current_round,
         },
       });
     } catch (e) {

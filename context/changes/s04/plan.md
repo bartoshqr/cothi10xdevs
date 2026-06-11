@@ -541,6 +541,10 @@ Supporting additions:
 - `apiGetMarks(debateId)` in `persistence.ts` — thin fetch wrapper, same shape as `apiGetGraph`.
 - Unit test mock factories for `@/components/debate/persistence` in `reconcileFromServer.store.test.ts`, `optimisticReconcile.store.test.ts`, `duplicateRelation.store.test.ts` updated to include `apiGetMarks`, `apiUpsertMark`, and `apiSubmitTurn` (all missing from the hermetic stubs, which would have caused the tests to blow up at runtime once `reconcileFromServer` called the new function).
 
+### 7. Seed layout tweak (recorded during Phase 2)
+
+Four challenger seed nodes in `supabase/seed.sql` were repositioned (x/y coordinates only, no content or schema change) so the challenger's counter-structure renders without overlapping the advocate's nodes on the climate-debate fixture. Cosmetic; unrelated to turn logic.
+
 ### 4. DB types regeneration command
 
 `src/db/database.types.ts` must be regenerated with `npm run db:types` (pins the `graphql_public,pgbouncer,public,storage` schema set) — hand-editing or partial MCP output drops the `storage` schema and desyncs `Database` from `Constants`. A rule to this effect was added to `CLAUDE.md` (Code style).

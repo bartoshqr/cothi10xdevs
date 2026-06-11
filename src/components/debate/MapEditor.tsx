@@ -266,9 +266,10 @@ function MapEditorInner() {
   // header in place (store.submitTurn from the API response), but the other seat only
   // learns the turn flipped by polling. When the server's turn-state diverges from what
   // this board holds — the turn handed to me, the challenger's mini-turn opened, or the
-  // exchange completed — we reload so the board, every mark, and the header re-hydrate
-  // consistently from the server (the counterpart's new nodes/marks aren't otherwise
-  // streamed across islands). Visibility-gated like InviteChallenger's poll: a
+  // exchange completed — we reconcile in place (no full-page reload): first
+  // reconcileFromServer() pulls the counterpart's new nodes/marks (not otherwise streamed
+  // across islands), then we patch the viewer's turn flags so the header flips. Order
+  // matters — see the inline note below. Visibility-gated like InviteChallenger's poll: a
   // backgrounded tab goes quiet, and focus/visibility return triggers an immediate check.
   useEffect(() => {
     if (!viewer || viewer.isCompleted) return;
@@ -296,6 +297,11 @@ function MapEditorInner() {
           serverCompleted !== v.isCompleted ||
           s.currentRound !== v.currentRound
         ) {
+          // Refresh the board (the counterpart's new nodes/marks) BEFORE flipping the
+          // header flags. If the resync throws, the catch below swallows it and the
+          // viewer flags stay un-patched — the divergence persists, so the next tick
+          // retries. Header and board never disagree past one failed tick.
+          await reconcileFromServer();
           useStore.setState({
             viewer: {
               ...v,
@@ -305,7 +311,6 @@ function MapEditorInner() {
               currentRound: s.currentRound,
             },
           });
-          void reconcileFromServer();
         }
       } catch {
         // transient — next tick retries

@@ -96,15 +96,19 @@ export interface ExchangeStatus {
   status: Database["public"]["Enums"]["exchange_status"];
   challengerUsername: string | null;
   roundCount: number;
+  currentRound: number;
+  currentTurn: Database["public"]["Enums"]["turn_actor"];
+  inMiniTurn: boolean;
 }
 
 // Read the current state of an exchange for the freshness poll + the advocate's
 // status line. RLS scopes the row to the advocate or the challenger; the join to
-// profiles resolves the challenger's username. null = unknown id or RLS-scoped out.
+// profiles resolves the challenger's username. `currentTurn` + `inMiniTurn` let the
+// board poll detect a turn flip and re-hydrate. null = unknown id or RLS-scoped out.
 export async function getExchangeStatus(supabase: DB, exchangeId: string): Promise<ExchangeStatus | null> {
   const { data, error } = await supabase
     .from("exchanges")
-    .select("status, round_count, challenger_id")
+    .select("status, round_count, current_round, challenger_id, current_turn, in_mini_turn")
     .eq("id", exchangeId)
     .maybeSingle();
   if (error) throw error;
@@ -121,12 +125,15 @@ export async function getExchangeStatus(supabase: DB, exchangeId: string): Promi
     status: data.status,
     challengerUsername: profile?.username ?? null,
     roundCount: data.round_count,
+    currentRound: data.current_round,
+    currentTurn: data.current_turn,
+    inMiniTurn: data.in_mini_turn,
   };
 }
 
 export interface DebateExchange {
   id: string;
-  status: "pending" | "accepted";
+  status: "pending" | "accepted" | "completed";
   roundCount: number;
   currentRound: number;
   currentTurn: Database["public"]["Enums"]["turn_actor"];
@@ -134,6 +141,7 @@ export interface DebateExchange {
   advocateUsername: string | null;
   challengerId: string;
   challengerUsername: string | null;
+  inMiniTurn: boolean;
 }
 
 // Load a debate's single open exchange (pending or accepted) with both participant
@@ -144,9 +152,9 @@ export interface DebateExchange {
 export async function getDebateExchange(supabase: DB, debateId: string): Promise<DebateExchange | null> {
   const { data: exchange, error } = await supabase
     .from("exchanges")
-    .select("id, status, round_count, current_round, current_turn, advocate_id, challenger_id")
+    .select("id, status, round_count, current_round, current_turn, advocate_id, challenger_id, in_mini_turn")
     .eq("debate_id", debateId)
-    .in("status", ["pending", "accepted"])
+    .in("status", ["pending", "accepted", "completed"])
     .maybeSingle();
   if (error) throw error;
   if (!exchange) return null;
@@ -162,7 +170,7 @@ export async function getDebateExchange(supabase: DB, debateId: string): Promise
   const usernameById = new Map(profiles.map((p) => [p.id, p.username]));
   return {
     id: exchange.id,
-    status: exchange.status as "pending" | "accepted",
+    status: exchange.status as "pending" | "accepted" | "completed",
     roundCount: exchange.round_count,
     currentRound: exchange.current_round,
     currentTurn: exchange.current_turn,
@@ -170,6 +178,7 @@ export async function getDebateExchange(supabase: DB, debateId: string): Promise
     advocateUsername: usernameById.get(exchange.advocate_id) ?? null,
     challengerId: exchange.challenger_id,
     challengerUsername: usernameById.get(exchange.challenger_id) ?? null,
+    inMiniTurn: exchange.in_mini_turn,
   };
 }
 
@@ -204,19 +213,6 @@ export interface ChallengerInvite {
 
 // Returns the challenger's pending and accepted exchanges so the inbox can show
 // both "awaiting response" rows (with Accept/Decline) and "enter debate" rows.
-export async function submitTurn(supabase: DB, exchangeId: string): Promise<ExchangeRow> {
-  const { data, error } = await supabase.rpc("submit_turn", { p_exchange_id: exchangeId }).maybeSingle();
-  if (error) {
-    // submit_turn raises a typed error when the mark gate fails (incomplete mark set).
-    // The RPC uses SQLSTATE P0001 (raise_exception) with a message naming the unmarked count.
-    // Map to ConflictError so withAuth returns 409.
-    if (error.code === "P0001") throw new ConflictError(error.message);
-    throw error;
-  }
-  if (!data) throw new NotFoundError();
-  return data;
-}
-
 export async function listInvites(supabase: DB, userId: string): Promise<ChallengerInvite[]> {
   const { data: exchanges, error } = await supabase
     .from("exchanges")
@@ -268,4 +264,17 @@ export async function listInvites(supabase: DB, userId: string): Promise<Challen
       created_at: row.created_at,
     };
   });
+}
+
+export async function submitTurn(supabase: DB, exchangeId: string): Promise<ExchangeRow> {
+  const { data, error } = await supabase.rpc("submit_turn", { p_exchange_id: exchangeId }).maybeSingle();
+  if (error) {
+    // submit_turn raises a typed error when the mark gate fails (incomplete mark set).
+    // The RPC uses SQLSTATE P0001 (raise_exception) with a message naming the unmarked count.
+    // Map to ConflictError so withAuth returns 409.
+    if (error.code === "P0001") throw new ConflictError(error.message);
+    throw error;
+  }
+  if (!data) throw new NotFoundError();
+  return data;
 }

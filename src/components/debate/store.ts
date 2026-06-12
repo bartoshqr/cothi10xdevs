@@ -20,6 +20,7 @@ import {
   apiDeleteRelation,
   apiSetDebateRoot,
   apiGetGraph,
+  apiGetMarks,
   apiUpsertMark,
   apiSubmitTurn,
 } from "./persistence";
@@ -35,6 +36,15 @@ export interface ViewerContext {
   viewerRole: "advocate" | "challenger";
   advocateId: string;
   isMyTurn: boolean;
+  /** The challenger's closing, marking-only turn is open. Carried so the header can label
+   * it ("My mini-turn" / "Challenger's mini-turn") live, for either seat, after a submit. */
+  inMiniTurn: boolean;
+  /** The exchange has closed — board is read-only for both parties and the header collapses
+   * to a static "Exchange complete" line. */
+  isCompleted: boolean;
+  /** Current round (1-based). Carried so the header's round counter updates live for the
+   * counterpart when a submit advances the round, alongside the turn/mini-turn/completed flags. */
+  currentRound: number;
 }
 
 export type DebateNode = StatementNodeType | ConnectiveNodeType;
@@ -321,8 +331,8 @@ export async function reconcileFromServer(): Promise<void> {
   }
   reconciling = true;
   try {
-    const graph = await apiGetGraph(debateId);
-    // One synchronous block once the fetch resolves: snapshot in-flight creates,
+    const [graph, marks] = await Promise.all([apiGetGraph(debateId), apiGetMarks(debateId)]);
+    // One synchronous block once the fetches resolve: snapshot in-flight creates,
     // clear committed-entity bookkeeping, swap the canvas, re-append the creates.
     const { nodes, edges } = useStore.getState();
     const pendingNodes = nodes.filter((n) => n.data.pending === true);
@@ -335,6 +345,7 @@ export async function reconcileFromServer(): Promise<void> {
     patchBuffers.clear();
     useStore.getState().setGraph(graph.debate, graph.nodes, graph.relations);
     useStore.setState((state) => ({
+      marks,
       nodes: [...state.nodes, ...pendingNodes],
       edges: [...state.edges, ...pendingEdges],
       inEditNodeId: null,
@@ -815,9 +826,20 @@ export const useStore = create<RFState>()((set, get) => ({
     const { exchangeId, viewer } = get();
     if (!exchangeId || !viewer) return;
     try {
-      await apiSubmitTurn(exchangeId);
-      // Turn flipped — lock the board for the challenger
-      set({ viewer: { ...viewer, isMyTurn: false } });
+      const row = await apiSubmitTurn(exchangeId);
+      // Apply the authoritative post-submit state so the actor's OWN header updates in
+      // place — turn handed off, or (on the advocate's final round) the challenger's
+      // mini-turn opens, or the exchange completes — with no reload. The counterpart
+      // learns of the flip via MapEditor's poll.
+      set({
+        viewer: {
+          ...viewer,
+          isMyTurn: row.status === "accepted" && row.current_turn === viewer.viewerRole,
+          inMiniTurn: row.in_mini_turn,
+          isCompleted: row.status === "completed",
+          currentRound: row.current_round,
+        },
+      });
     } catch (e) {
       reportError(e instanceof Error ? e.message : "Failed to submit turn");
     }

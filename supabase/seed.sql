@@ -83,31 +83,45 @@ begin
 end;
 $$;
 
--- ─── Debate graph (user01 owns it) ───────────────────────────────────────────
--- A small but complete graph exercising every node kind and relation kind.
--- Layout mirrors exampleMap.ts from the spike for easy visual comparison.
+-- ─── Debate graph (user01 advocate, user02 challenger) ───────────────────────
+-- A small but complete graph exercising every node kind and relation kind, then
+-- extended to imitate a challenger who has RESPONDED and SUBMITTED round 1:
+-- he marks the advocate's statements (agrees with the data + source, challenges
+-- the root claim and the warrant) and adds his own counter-structure.
 -- Every debate here is created WITH a root claim — never seed a rootless debate
 -- (the create_debate_with_root RPC is the only creation path and always sets one).
 --
--- Nodes:
+-- Advocate nodes (user01):
 --   root_claim   (statement/claim,   isRoot)
 --   data_node    (statement/data)
 --   warrant_node (statement/warrant)
 --   source_node  (statement/source,  url set)
---   rebuttal_node(statement/rebuttal)
 --   and_node     (connective/and)
 --
--- Relations (one of each kind):
---   data_node    → and_node       (link)
---   warrant_node → and_node       (link)
---   and_node     → root_claim     (supports)
---   source_node  → data_node      (rephrases)
---   rebuttal_node→ root_claim     (rebuts)
+-- Challenger nodes (user02) — his submitted counter-structure:
+--   rebuttal_node  (statement/rebuttal) "Natural cycles argument" → rebuts root
+--   c_rebuttal     (statement/rebuttal) thermodynamics objection   → rebuts warrant
+--   c_data         (statement/data)     "atmosphere colder than surface"
+--   c_source       (statement/source)   Gerlich & Tscheuschner (2009)
+--
+-- Relations:
+--   data_node    → and_node       (link)       advocate
+--   warrant_node → and_node       (link)       advocate
+--   and_node     → root_claim     (supports)   advocate
+--   source_node  → data_node      (rephrases)  advocate
+--   rebuttal_node→ root_claim     (rebuts)     challenger
+--   c_rebuttal   → warrant_node   (rebuts)     challenger
+--   c_data       → c_rebuttal     (supports)   challenger
+--   c_source     → c_data         (rephrases)  challenger
+--
+-- Challenger marks (user02 on user01's statements): root=challenge,
+-- warrant=challenge, data=agree, source=agree.
 
 do $$
 declare
-  v_owner      uuid := '00000000-0000-4000-8000-000000000001';  -- user01
-  -- v4-shaped UUIDs (group 3 = 4xxx, group 4 = 8xxx); suffixes 0x10–0x16 don't
+  v_owner      uuid := '00000000-0000-4000-8000-000000000001';  -- user01 (advocate)
+  v_challenger uuid := '00000000-0000-4000-8000-000000000002';  -- user02 (challenger)
+  -- v4-shaped UUIDs (group 3 = 4xxx, group 4 = 8xxx); suffixes 0x10–0x19 don't
   -- collide with the user ids (0x01–0x0a above).
   v_debate     uuid := '00000000-0000-4000-8000-000000000010';
   v_root       uuid := '00000000-0000-4000-8000-000000000011';
@@ -116,6 +130,10 @@ declare
   v_source     uuid := '00000000-0000-4000-8000-000000000014';
   v_rebuttal   uuid := '00000000-0000-4000-8000-000000000015';
   v_and        uuid := '00000000-0000-4000-8000-000000000016';
+  -- challenger's counter-structure (suffixes 0x17–0x19)
+  v_c_rebuttal uuid := '00000000-0000-4000-8000-000000000017';
+  v_c_data     uuid := '00000000-0000-4000-8000-000000000018';
+  v_c_source   uuid := '00000000-0000-4000-8000-000000000019';
 begin
   -- Debate row (root_node_id is deferrable — set after node insert)
   insert into public.debates (id, owner_id, title, root_node_id)
@@ -158,41 +176,83 @@ begin
       )
     ),
     (
-      v_rebuttal, v_debate, v_owner, 'statement', 624, 116,
+      v_rebuttal, v_debate, v_challenger, 'statement', 700, 116,
       jsonb_build_object(
         'statement_type', 'rebuttal',
         'title',          'Natural cycles argument',
-        'body',           'Climate has changed before without human activity — this rebuttal challenges the causal link.'
+        'body',           'Climate shifted dramatically before humans existed — glacial cycles and the medieval warm period were driven by orbital and solar variation, so warming need not be anthropogenic.'
       )
     ),
     (
       v_and, v_debate, v_owner, 'connective', 300, 150,
       jsonb_build_object('op', 'and')
+    ),
+    -- Challenger's counter-structure rebutting the warrant "CO₂ is a greenhouse gas".
+    (
+      v_c_rebuttal, v_debate, v_challenger, 'statement', 700, 400,
+      jsonb_build_object(
+        'statement_type', 'rebuttal',
+        'title',          'Greenhouse effect breaks thermodynamics',
+        'body',           'A cooler atmosphere cannot transfer net heat to the warmer surface, so CO₂ back-radiation cannot raise surface temperature without violating the Second Law of Thermodynamics.'
+      )
+    ),
+    (
+      v_c_data, v_debate, v_challenger, 'statement', 720, 650,
+      jsonb_build_object(
+        'statement_type', 'data',
+        'title',          'Atmosphere is colder than the surface',
+        'body',           'The atmosphere''s radiating layer averages about −18 °C, far colder than Earth''s ~15 °C surface — a cold body cannot heat a warmer one.'
+      )
+    ),
+    (
+      v_c_source, v_debate, v_challenger, 'statement', 740, 900,
+      jsonb_build_object(
+        'statement_type', 'source',
+        'title',          'Gerlich & Tscheuschner (2009)',
+        'url',            'https://arxiv.org/abs/0707.1161'
+      )
     )
   on conflict (id) do nothing;
 
   -- Set root_node_id (deferrable FK, safe to set after node row exists)
   update public.debates set root_node_id = v_root where id = v_debate;
 
-  -- Relations (one of each kind)
+  -- Relations: advocate's support structure + challenger's rebuttals.
   insert into public.relations (debate_id, author_id, source_node_id, target_node_id, kind)
   values
-    (v_debate, v_owner, v_data,     v_and,        'link'),      -- data feeds into AND connective
-    (v_debate, v_owner, v_warrant,  v_and,        'link'),      -- warrant feeds into AND connective
-    (v_debate, v_owner, v_and,      v_root,       'supports'),  -- combined evidence supports root claim
-    (v_debate, v_owner, v_source,   v_data,       'rephrases'), -- source rephrases the data node
-    (v_debate, v_owner, v_rebuttal, v_root,       'rebuts')     -- rebuttal attacks the root claim
+    (v_debate, v_owner,      v_data,       v_and,        'link'),      -- data feeds into AND connective
+    (v_debate, v_owner,      v_warrant,    v_and,        'link'),      -- warrant feeds into AND connective
+    (v_debate, v_owner,      v_and,        v_root,       'supports'),  -- combined evidence supports root claim
+    (v_debate, v_owner,      v_source,     v_data,       'rephrases'), -- source rephrases the data node
+    (v_debate, v_challenger, v_rebuttal,   v_root,       'rebuts'),    -- challenger: natural cycles rebut the root claim
+    (v_debate, v_challenger, v_c_rebuttal, v_warrant,    'rebuts'),    -- challenger: thermodynamics objection rebuts the warrant
+    (v_debate, v_challenger, v_c_data,     v_c_rebuttal, 'supports'),  -- challenger: data backs the thermo rebuttal
+    (v_debate, v_challenger, v_c_source,   v_c_data,     'rephrases')  -- challenger: source rephrases that data
   on conflict do nothing;
+
+  -- ─── Challenger's marks (user02 marks user01's statements) ──────────────────
+  -- The challenger responded and SUBMITTED round 1: agrees with the data and its
+  -- source, challenges the root claim and the warrant. Marks are disjoint per node
+  -- and only land on the counterpart's statements — the challenger's own nodes and
+  -- the connective are not markable. marker_id = challenger.
+  insert into public.marks (debate_id, node_id, marker_id, stance)
+  values
+    (v_debate, v_root,    v_challenger, 'challenge'),
+    (v_debate, v_warrant, v_challenger, 'challenge'),
+    (v_debate, v_data,    v_challenger, 'agree'),
+    (v_debate, v_source,  v_challenger, 'agree')
+  on conflict (node_id, marker_id) do nothing;
 end;
 $$;
 
 -- ─── Exchange (user01 advocate ⇄ user02 challenger, accepted) ─────────────────
--- An accepted exchange so the S-03 challenger first-turn flow can be exercised by
--- hand: sign in as user02, open debate …010, mark the advocate's statements, submit.
--- A fresh accepted exchange opens on the challenger's turn (current_turn defaults to
--- 'challenger', current_round to 1); responded_at is set because user02 accepted.
--- Fixed id keeps it idempotent; the partial unique index (one open exchange per
--- debate) is respected since this is the debate's only exchange.
+-- The challenger has already RESPONDED and SUBMITTED round 1, so the turn has
+-- flipped to the advocate: current_turn='advocate', current_round=1 (challenger
+-- submit leaves the round unchanged). This sets up the S-04 advocate-turn flow:
+-- sign in as user01, open debate …010, mark the challenger's statements, submit.
+-- round_count=3 leaves room to exercise the multi-round path; responded_at is set
+-- because user02 accepted. Fixed id keeps it idempotent; the partial unique index
+-- (one open exchange per debate) is respected since this is the debate's only exchange.
 insert into public.exchanges (
   id, debate_id, advocate_id, challenger_id,
   status, round_count, current_round, current_turn, responded_at
@@ -202,6 +262,6 @@ values (
   '00000000-0000-4000-8000-000000000010',  -- debate (owned by user01)
   '00000000-0000-4000-8000-000000000001',  -- advocate  = user01
   '00000000-0000-4000-8000-000000000002',  -- challenger = user02
-  'accepted', 3, 1, 'challenger', now()
+  'accepted', 3, 1, 'advocate', now()
 )
 on conflict (id) do nothing;

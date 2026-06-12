@@ -72,3 +72,10 @@
 - **Problem**: Inline Supabase queries scatter data-access across the UI layer, duplicate the same query in multiple pages/endpoints (which then silently diverge), and leak DB schema knowledge into components. They also tend to use the `const { data } = await supabase...` idiom that drops the `error` — masking a real DB failure as an empty/"not found" result instead of throwing. (Seen in the debate page: four raw `exchanges`/`profiles`/`marks` queries in `[id].astro`, errors swallowed.)
 - **Rule**: Never call `supabase.from()` / `supabase.rpc()` outside `src/lib/<domain>/repository.ts`. Pages, endpoints, and components call a typed repository function that returns a domain type and surfaces failures with `if (error) throw error` — never the silent `const { data } = ...` destructure. Functions with 3+ params use the object-destructuring arg convention.
 - **Applies to**: all
+
+## Never use window.location.reload() — it causes visible flickering
+
+- **Context**: All React/UI components
+- **Problem**: Causes a visible full-page flash — the whole page blanks out and repaints, breaking the UX.
+- **Rule**: Never use `window.location.reload()` anywhere in the codebase. It causes visible flickering (full-page blank + repaint). Instead, drive UI updates through state or store mutations so only the relevant components re-render.
+- **Applies to**: all

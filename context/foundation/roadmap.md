@@ -3,7 +3,7 @@ project: WVMap
 version: 1
 status: draft
 created: 2026-05-25
-updated: 2026-06-10
+updated: 2026-06-12
 prd_version: 1
 main_goal: market-feedback
 top_blocker: capacity
@@ -50,7 +50,7 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 | S-01 | advocate-map-builder        | build a debate: root Claim, typed statements, sources, relations    | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006     | done     |
 | S-02 | invite-and-open-exchange    | set round count, invite a challenger by username, they accept | S-01          | US-01, FR-007, FR-008, FR-009, FR-010     | done     |
 | S-03 | challenger-first-turn       | mark every advocate statement and add own statements, submit turn   | S-02          | US-02, FR-011, FR-012, FR-013, FR-014     | done |
-| S-04 | first-divergence-summary    | respond, complete round 1, and view the divergence summary          | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | proposed |
+| S-04 | first-divergence-summary    | respond, complete round 1, and view the divergence summary          | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | done |
 | S-05 | multiround-edit-invalidation| edit/delete across rounds with mark invalidation; close exchange    | S-04          | US-04, FR-019, FR-026, FR-027             | proposed |
 | S-06 | debate-list-and-inbox       | see all own debates with state, and an inbox of invites/exchanges   | S-02          | FR-024, FR-025                            | proposed |
 | S-07 | parent-debate-linking       | link a new debate to a parent statement and navigate between them   | S-01          | FR-022, FR-023                            | proposed |
@@ -179,7 +179,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - Summary must render within the 10s NFR; no graph-size cap in MVP — confirm the deterministic algorithm is O(graph) and fits the edge-runtime CPU budget. Owner: user. Block: no.
 - **Risk:** This is the validation milestone — the first time the full loop produces the artifact the product exists to create. Round-completion semantics (both turns submitted) gate the summary trigger. Deterministic-only; no AI. The summary classification (contested Data → factual gap, contested Warrant → values gap) is the core deliverable.
-- **Status:** proposed
+- **Status:** done
 
 ### S-05: Multi-round exchange with edit/delete, mark invalidation, and close
 
@@ -263,3 +263,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-01: advocate builds a structured map** — Archived 2026-06-08 → `context/archive/2026-05-26-advocate-map-builder/`. Lesson: —.
 - **S-02: set round count, invite a challenger by username, they accept** — Archived 2026-06-09 → `context/archive/2026-06-08-invite-and-open-exchange/`. Lesson: —.
 - **S-03: challenger can mark every unmarked advocate statement (Agree/Challenge/Abstain), add their own typed statements with sources and directed relations, and submit their turn, which activates the advocate's turn.** — Archived 2026-06-10 → `context/archive/2026-06-09-challenger-first-turn/`. Lesson: —.
+- **S-04: respond, complete round 1, and view the divergence summary** — Archived 2026-06-12 → `context/archive/2026-06-10-first-divergence-summary/`. Lesson: —.

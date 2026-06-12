@@ -12,6 +12,9 @@ vi.mock("@/components/debate/persistence", () => ({
   apiDeleteRelation: vi.fn(),
   apiSetDebateRoot: vi.fn(),
   apiGetGraph: vi.fn(),
+  apiGetMarks: vi.fn().mockResolvedValue({}),
+  apiUpsertMark: vi.fn(),
+  apiSubmitTurn: vi.fn(),
 }));
 
 import { apiCreateNode, apiCreateRelation, apiGetGraph, apiUpdateNode } from "@/components/debate/persistence";

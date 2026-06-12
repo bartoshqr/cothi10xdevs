@@ -33,8 +33,8 @@ S-03 was built deliberately symmetric, so the advocate's turn is already wired a
 
 ## What We're NOT Doing
 
-- **No write-immutability on close** (FR-019/FR-027) — `completed` is purely the summary-gate signal in S-04. `can_write_as_current_actor` still permits writes on a completed exchange until S-05 closes that gap. Documented, intentional deferral.
-- **No final-round mini-turn** (FR-019) — S-05.
+- ~~**No write-immutability on close** (FR-019/FR-027) — `completed` is purely the summary-gate signal in S-04. `can_write_as_current_actor` still permits writes on a completed exchange until S-05 closes that gap.~~ **Superseded during implementation** — write-immutability landed in Phase 1. See [Shifts during implementation](#shifts-during-implementation).
+- ~~**No final-round mini-turn** (FR-019) — S-05.~~ **Superseded during implementation** — the mini-turn was pulled forward into Phase 1. See [Shifts during implementation](#shifts-during-implementation).
 - **No mark invalidation / `valid=false` flipping** (S-05). The summary filters `valid = true` for forward-compatibility, but every round-1 mark is `valid=true`.
 - **No `marker_id` refactor** of the store map / `getDebateMarks` (disjointness makes it unnecessary).
 - **No child-debate inclusion** in the summary (FR-020's optional toggle) — parent linking is S-07; not built.
@@ -329,13 +329,13 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 1: DB — round close + `completed` status
 
 #### Automated
-- [ ] 1.1 Migration applies cleanly on `npx supabase db reset`
-- [ ] 1.2 Type check passes: `npx astro check`
-- [ ] 1.3 Build passes: `npm run build`
-- [ ] 1.4 Integration tests pass: `npm run test:integration`
+- [x] 1.1 Migration applies cleanly on `npx supabase db reset`
+- [x] 1.2 Type check passes: `npx astro check`
+- [x] 1.3 Build passes: `npm run build`
+- [x] 1.4 Integration tests pass: `npm run test:integration`
 
 #### Manual
-- [ ] 1.5 Advocate submit on a multi-round exchange flips turn + increments `current_round`
+- [x] 1.5 Advocate submit on a multi-round exchange flips turn + increments `current_round`
 
   > **Agent-automatable**: Yes — bearer-token curl to submit-turn + SQL assertion on the exchange row.
 
@@ -358,7 +358,7 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
   -- Expected: challenger | 2 | accepted
   ```
 
-- [ ] 1.6 Advocate submit on the final round sets `status='completed'`, `current_round` in range
+- [x] 1.6 Advocate submit on the final round sets `status='completed'`, `current_round` in range
 
   > **Agent-automatable**: Yes — same flow with a `round_count = 1` exchange.
 
@@ -368,7 +368,7 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
   -- Expected: current_round <= round_count (1), status = 'completed'
   ```
 
-- [ ] 1.7 A completed exchange remains readable by both parties
+- [x] 1.7 A completed exchange remains readable by both parties
 
   > **Agent-automatable**: Yes — RLS-on selects as advocate and as challenger.
 
@@ -385,47 +385,53 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 2: Frontend — advocate turn
 
 #### Automated
-- [ ] 2.1 Unit test: `computeTurnGate` advocate counterpart count + marked count
-- [ ] 2.2 Type check passes: `npx astro check`
-- [ ] 2.3 Lint/build pass: `npm run build`
+- [x] 2.1 Unit test: `computeTurnGate` advocate counterpart count + marked count — dc7c67e
+- [x] 2.2 Type check passes: `npx astro check` — dc7c67e
+- [x] 2.3 Lint/build pass: `npm run build` — dc7c67e
 
 #### Manual
-- [ ] 2.4 Advocate `Submit turn` enables after marking all challenger statements and locks the board
+- [x] 2.4 Advocate `Submit turn` enables after marking all challenger statements and locks the board
 
   > **Agent-automatable**: No — requires a browser session; the gate state lives in the React island and submit is wired through cross-island DOM events.
 
   Steps: sign in as `user01@e.pl` in the browser, open the debate where `user02` has submitted round 1, mark every challenger statement, confirm the button enables at `marked === total`, click it, confirm the canvas locks.
 
-- [ ] 2.5 Advocate gate counter counts challenger statements (not advocate statements)
+- [x] 2.5 Advocate gate counter counts challenger statements (not advocate statements)
 
   > **Agent-automatable**: No — visual check of the `marked/total` label in the header island.
 
-- [ ] 2.6 Completed exchange shows a completed state in the header (no live turn/submit)
+- [x] 2.6 Advocate's final-round submit hands the turn to the challenger's mini-turn (advocate header flips to a muted "Submitted"; the challenger then sees "My Turn")
 
-  > **Agent-automatable**: No — visual check after a round_count=1 advocate submit.
+  > **Mini-turn (Phase 1 shift, FR-019)**: on a `round_count=1` exchange the advocate's submit does **not** complete the exchange directly. It flips `current_turn` back to the challenger with `in_mini_turn=true` — a final, marking-only closing turn. The challenger can still mark the advocate's just-added statements but cannot add new content (`can_add_content_as_current_actor` blocks the challenger while `in_mini_turn`). So after the advocate submits, the advocate's `TurnBar` shows the muted "Submitted" (off-turn) and the challenger's shows "My Turn". See [Shifts during implementation §1](#1-mini-turn-fr-019-pulled-forward-into-phase-1).
+
+  > **Agent-automatable**: No — visual check across two browser sessions after a round_count=1 advocate submit.
+
+- [x] 2.7 Exchange completes only after the challenger submits the closing mini-turn — both headers then show the static "Exchange complete" state (no live turn/submit)
+
+  > **Agent-automatable**: No — visual check after the challenger submits the mini-turn; the exchange transitions to `status='completed'`, `in_mini_turn=false`.
 
 ### Phase 3: Summary algorithm — pure classifier + repository read
 
 #### Automated
-- [ ] 3.1 Unit tests cover the full oracle (type × stance/unmarked → bucket + gap; connectives excluded; `valid=false` ignored)
-- [ ] 3.2 Type check passes: `npx astro check`
-- [ ] 3.3 `npm run test:unit` passes
+- [x] 3.1 Unit tests cover the full oracle (type × stance/unmarked → bucket + gap; connectives excluded; `valid=false` ignored) — c19e062
+- [x] 3.2 Type check passes: `npx astro check` — c19e062
+- [x] 3.3 `npm run test:unit` passes — c19e062
 
 #### Manual
-- [ ] 3.4 Classifier spot-check matches the PRD §Business-Logic mapping
+- [x] 3.4 Classifier spot-check matches the PRD §Business-Logic mapping — c19e062
 
   > **Agent-automatable**: Yes — a throwaway unit/REPL assertion on a hand-built graph; no browser needed.
 
 ### Phase 4: Summary endpoint
 
 #### Automated
-- [ ] 4.1 Integration test: gate-unmet → 404/409; round-2 and completed → 200 with correct buckets
-- [ ] 4.2 Integration test: non-member → 404
-- [ ] 4.3 `npm run test:integration` passes
-- [ ] 4.4 Build passes: `npm run build`
+- [x] 4.1 Integration test: gate-unmet → 404/409; round-2 and completed → 200 with correct buckets — 60049b5
+- [x] 4.2 Integration test: non-member → 404 — 60049b5
+- [x] 4.3 `npm run test:integration` passes — 60049b5
+- [x] 4.4 Build passes: `npm run build` — 60049b5
 
 #### Manual
-- [ ] 4.5 `curl` the summary as advocate and challenger on a completed exchange → identical JSON
+- [x] 4.5 `curl` the summary as advocate and challenger on a completed exchange → identical JSON — 60049b5
 
   > **Agent-automatable**: Yes — bearer-token curl for both users.
 
@@ -443,18 +449,116 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 5: Summary UI — read-only panel
 
 #### Automated
-- [ ] 5.1 Type check passes: `npx astro check`
-- [ ] 5.2 Build passes: `npm run build`
+- [x] 5.1 Type check passes: `npx astro check` — 3fddc87
+- [x] 5.2 Build passes: `npm run build` — 3fddc87
 
 #### Manual
-- [ ] 5.3 Both parties see the page (read-only) + summary button on a completed round_count=1 exchange
+- [x] 5.3 Both parties see the page (read-only) + summary button on a completed round_count=1 exchange — 3fddc87
 
   > **Agent-automatable**: No — browser visual check for both user sessions.
 
-- [ ] 5.4 Summary button hidden/disabled before round 1 completes, appears once the gate is met
+- [x] 5.4 Summary button hidden/disabled before round 1 completes, appears once the gate is met — 3fddc87
 
   > **Agent-automatable**: No — browser visual check across the gate boundary.
 
-- [ ] 5.5 Panel renders three buckets with correct gap labels, no console errors
+- [x] 5.5 Panel renders three buckets with correct gap labels, no console errors — 3fddc87
 
   > **Agent-automatable**: No — visual + devtools console inspection.
+
+---
+
+## Shifts during implementation
+
+> Recorded 2026-06-11, during Phase 1. These deviate from the plan as written above; the originating bullets in "What We're NOT Doing" are struck through and point here.
+
+### 1. Mini-turn (FR-019) pulled forward into Phase 1
+
+The final-round mini-turn — planned for S-05 — was implemented now rather than deferred, because the round-close work touched the same `submit_turn` branch and it was cheaper to land the routing once than to recreate the function again in S-05.
+
+- The mini-turn is **always enabled** — there is no opt-in flag. One new runtime column on `exchanges`: `in_mini_turn`. It is still required (rather than a derived formula) because `current_turn='challenger' AND current_round=round_count` cannot distinguish the *initial* challenger turn from the mini-turn on a `round_count=1` exchange.
+- New SECURITY DEFINER helper `can_add_content_as_current_actor` — like `can_write_as_current_actor` but the challenger branch also requires `NOT in_mini_turn`. Marks keep `can_write_as_current_actor`, so the challenger can still mark during the mini-turn.
+- `submit_turn` advocate-final-round branch always enters the mini-turn (flip to challenger + `in_mini_turn=true`); the exchange completes only on the challenger's closing mini-turn submit (`status='completed'`, `in_mini_turn=false`), never directly on the advocate's submit. The regular challenger branch flips to advocate.
+
+### 2. Write-immutability on close (FR-019/FR-027) implemented now
+
+Planned as a deferral (`completed` was to be "purely the summary-gate signal"). Instead, `nodes`/`relations` `INSERT`/`UPDATE`/`DELETE` were all turn-gated via the two-branch pattern (pre-exchange owner branch **or** `can_add_content_as_current_actor`). Net effect:
+
+- **Pre-invite only**: the owner edits freely until an exchange exists.
+- **`pending` invite locks the map** — the owner can no longer edit once a challenger is invited (the map is the basis the challenger is deciding on). A `declined` exchange does *not* lock (advocate may revise and re-invite).
+- **During an accepted exchange**: only the current-turn actor may write their own content; no one writes on the other party's turn; the challenger is frozen during the mini-turn.
+- **A `completed` exchange is fully immutable.**
+
+This is a tightening beyond the original scope: `UPDATE`/`DELETE` were previously `author_id`-only and ungated by turn.
+
+### 3. Migration consolidation
+
+The three working June-11 migrations were consolidated to **two** before commit (all were untracked/local-only, so safe to rewrite):
+
+- `20260611000001_add_completed_status.sql` — unchanged (enum value-add must be its own migration).
+- `20260611000002_round_close_and_mini_turn.sql` — **new merged file** holding columns + helper + `submit_turn` (final mini-turn-aware form) + read-scope widening + write-scope tightening. Replaces the former `…_submit_turn_round_close.sql` and `…_mini_turn_extension.sql`, which were deleted. `submit_turn` is now defined exactly twice total (committed original `20260610000002` + this one), not three times.
+
+### 5. Phase 2 implementation details (recorded during Phase 2)
+
+#### ViewerContext widened to carry live exchange state
+
+`ViewerContext` (`store.ts`) gained `inMiniTurn: boolean` and `isCompleted: boolean`. Both are populated by `deriveViewer` (server-initial) and kept live by `submitTurn` in the store, which now reads the authoritative row returned by `apiSubmitTurn` and patches all three turn fields (`isMyTurn`, `inMiniTurn`, `isCompleted`) in one `set(...)` call rather than the previous blanket `isMyTurn: false`. This lets the actor's own header update in place — mini-turn opening, or exchange completing — without a page reload.
+
+#### TurnGateDetail mirrors ViewerContext's new flags
+
+`TurnGateDetail` (`MapEditor.tsx`) gained matching `isMiniTurn` and `isCompleted` fields so `TurnBar` can react to them from the live event stream (not just from server-initial props). `computeTurnGate` passes both through from the viewer.
+
+#### TurnBar subscribes for both parties; props are server-initial only
+
+`TurnBar` now subscribes to `wvmap:turn-gate` for both `advocate` and `challenger` (no `isChallenger` gating removed — there was never a `viewerRole !== "challenger"` guard in `TurnBar`; that guard was in `MapEditor.computeTurnGate`). The `isCompleted` and `isMiniTurn` props from the page serve as server-initial fallbacks; the live gate values override them once the first broadcast arrives.
+
+#### getExchangeStatus widened for the board poll
+
+`getExchangeStatus` (`repository.ts`) now selects `current_turn` and `in_mini_turn` alongside `status` and exposes them on `ExchangeStatus`. The board's turn-flip poll (which calls `getExchangeStatus`) can now detect a flip and re-hydrate without a full `getDebateExchange` round-trip.
+
+#### `currentRound` threaded through the gate so the header counter updates live
+
+The header's `n/round_count` counter was previously a static server-rendered prop on `TurnBar` (`currentRound={exchange.currentRound}`) — it never moved after page load, so the counterpart kept seeing a stale round number after a submit advanced the round. `currentRound` now flows through the same live path the turn/mini-turn/completed flags use:
+
+- `ExchangeStatus` (`repository.ts`) selects and returns `current_round`, so the board poll payload carries it.
+- `ViewerContext` (`store.ts`) gained `currentRound`, populated by `deriveViewer` (server-initial) from `exchange.currentRound`.
+- `TurnGateDetail` (`MapEditor.tsx`) gained `currentRound`; `computeTurnGate` passes it through from the viewer.
+- The `MapEditor` counterpart-sync poll added `currentRound` to its response type and to the divergence check, so a round advance patches `viewer.currentRound` (alongside `isMyTurn`/`inMiniTurn`/`isCompleted`) and re-broadcasts the gate — no reload.
+- `TurnBar` reads `gate?.currentRound ?? currentRound` (live gate value, falling back to the server-initial prop) in both the active and completed render paths.
+
+The submitter's own seat updates via `submitTurn`'s response path; the counterpart updates via the 1s poll — the same split that already governed the turn flip. Unit coverage: a `currentRound` passthrough case added to `computeTurnGate.test.ts` (the no-viewer gate now also asserts `currentRound: 1`).
+
+### 6. Turn-flip sync: reload replaced by state patch + reconcile (recorded during Phase 2)
+
+The counterpart-sync poll in `MapEditor` previously called `window.location.reload()` when it detected a turn-state divergence from the server. This caused a full-page flicker. The approach was replaced with a two-step in-place update:
+
+1. **Viewer state patched immediately** — `useStore.setState({ viewer: { ...v, isMyTurn, inMiniTurn, isCompleted } })` applies the authoritative turn flags the instant the poll detects a change. The `broadcastTurnGate` effect fires on the next render and pushes a fresh `TurnGateDetail` to `TurnBar`, so the header updates with no reload.
+2. **`reconcileFromServer()` called after** — fetches the counterpart's new nodes, relations, and marks (added during their turn) and applies them atomically to the store. Without this the graph would be stale: the turn gate would show wrong counts and the counterpart's new nodes would be invisible.
+
+`reconcileFromServer` was extended to fetch graph + marks in parallel (`Promise.all([apiGetGraph, apiGetMarks])`) and apply both in one `setState`. This made it a true "full debate resync" primitive — all existing callers (conflict recovery, mutation failure) now also refresh marks for free.
+
+Supporting additions:
+- `GET /api/debates/[id]/marks` — new endpoint alongside the existing `POST`; calls `getDebateMarks` under RLS, returns `nodeId → stance` map as JSON.
+- `apiGetMarks(debateId)` in `persistence.ts` — thin fetch wrapper, same shape as `apiGetGraph`.
+- Unit test mock factories for `@/components/debate/persistence` in `reconcileFromServer.store.test.ts`, `optimisticReconcile.store.test.ts`, `duplicateRelation.store.test.ts` updated to include `apiGetMarks`, `apiUpsertMark`, and `apiSubmitTurn` (all missing from the hermetic stubs, which would have caused the tests to blow up at runtime once `reconcileFromServer` called the new function).
+
+### 7. Seed layout tweak (recorded during Phase 2)
+
+Four challenger seed nodes in `supabase/seed.sql` were repositioned (x/y coordinates only, no content or schema change) so the challenger's counter-structure renders without overlapping the advocate's nodes on the climate-debate fixture. Cosmetic; unrelated to turn logic.
+
+### 4. DB types regeneration command
+
+`src/db/database.types.ts` must be regenerated with `npm run db:types` (pins the `graphql_public,pgbouncer,public,storage` schema set) — hand-editing or partial MCP output drops the `storage` schema and desyncs `Database` from `Constants`. A rule to this effect was added to `CLAUDE.md` (Code style).
+
+### 8. Phase 5 UI refinements (recorded during Phase 5)
+
+The read-only panel landed per plan, plus several refinements from live UI review that go beyond the plan's "render the three buckets" contract:
+
+- **Visibility driven by the live turn gate, not SSR.** `DivergenceSummary` subscribes to the same `wvmap:turn-gate` event `TurnBar` uses and computes its own `gateMet` (`completed || currentRound >= 2`); the SSR `isCompleted`/`currentRound` props are first-paint fallbacks only. The island mounts whenever an exchange exists (`exchange != null`), so no SSR value can suppress a button the live gate would show — this fixed the counterpart's button never appearing after a round advanced.
+- **Author grouping required extending the Phase 3 classifier.** Each bucket is split into "My statements" vs "<Counterpart> statements", sorted by kind then title. This needed the author identity per item, so `SummaryItem` (in `src/lib/summary/classify.ts`) gained an `authorId` field — populated in `getDivergenceSummary`'s node mapping and asserted in the `classifyDivergence` oracle (`tests/unit/classifyDivergence.test.ts` updated). The `viewerId`/`viewerRole` flow as props from `[id].astro`'s `viewer` context.
+- **Open divergences shown as gap subsections** ("Factual gaps" / "Premise gaps") instead of a per-row label; **"values gap" relabelled "Premise gap"** in the UI (the internal `gap: "values"` type is unchanged).
+- **Click-outside-to-close uses a capture-phase listener** — React Flow `stopPropagation`s canvas `mousedown` for its pan gesture, so a bubble-phase listener never sees canvas clicks.
+- All header actions were wrapped in a single `slot="header-actions"` container (the summary is the first such header action, left of `TurnBar`), since this is the first time two header actions render simultaneously.
+
+### Verification at time of recording
+
+`npx supabase db reset` clean · `npx astro check` 0 errors · `npm run test:integration` 37/37 pass. (Phase 1 automated items 1.1–1.4 hold for the consolidated migration; the new immutability/mini-turn behavior is not yet covered by dedicated tests — a gap to close when Phase 1 tests are revisited.)

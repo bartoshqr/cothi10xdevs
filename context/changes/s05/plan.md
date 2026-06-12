@@ -348,15 +348,15 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [ ] 1.1 Migration applies cleanly: `npx supabase db reset`
-- [ ] 1.2 Types regenerated, no further diff: `npm run db:types`
-- [ ] 1.3 Type checking passes: `npx astro check`
-- [ ] 1.4 Lint passes: `npm run lint`
-- [ ] 1.5 Integration tests pass: `npm run test:integration` (`markInvalidation.test.ts`)
+- [x] 1.1 Migration applies cleanly: `npx supabase db reset`
+- [x] 1.2 Types regenerated, no further diff: `npm run db:types`
+- [x] 1.3 Type checking passes: `npx astro check`
+- [x] 1.4 Lint passes: `npm run lint`
+- [x] 1.5 Integration tests pass: `npm run test:integration` (`markInvalidation.test.ts`)
 
 #### Manual
 
-- [ ] 1.6 Editing own statement content invalidates the counterpart's mark; position drag and identical re-save do not
+- [x] 1.6 Editing own statement content invalidates the counterpart's mark; position drag and identical re-save do not
 
   > **Agent-automatable**: Yes — bearer-token curl to PATCH the node, then SQL on `marks`.
 

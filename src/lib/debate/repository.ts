@@ -127,7 +127,7 @@ export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNode
   if (patch.connectiveOp !== undefined) metadataPatch.op = patch.connectiveOp;
 
   const { data, error } = await supabase
-    .rpc("patch_node", {
+    .rpc("patch_node_and_invalidate", {
       p_node_id: nodeId,
       p_metadata_patch: Object.keys(metadataPatch).length > 0 ? metadataPatch : undefined,
       p_position_x: patch.positionX,

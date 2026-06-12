@@ -16,7 +16,7 @@ Page Structure & Copy Requirements:
 
     CTA: "Start Building Your Map" (Primary button).
 
-    Visual/Mockup: Place a stylized, abstract graphic of a "Toulmin map" UI next to or below the text. Show a clean, tree-like structure of cards labeled Claim, connected to Data and Warrant, with a small "Agree / Challenge / Abstain" toggle visible on a node.
+    Visual/Mockup: Place a stylized, abstract graphic of a "Toulmin map" UI next to or below the text. Show a clean, tree-like structure of cards labeled Claim, connected to Data and Warrant, with a small "Accept / Challenge / Abstain" toggle visible on a node.
 
 3. The Problem vs. The Solution Section
 
@@ -34,7 +34,7 @@ Page Structure & Copy Requirements:
 
     Step 2: Invite a Challenger. "Send a private invite to an opponent. The debate is 1:1, focused, and free from the audience effect."
 
-    Step 3: The Audit. "Turn-based exchanges. They must explicitly 'Agree', 'Challenge', or 'Abstain' on your points before adding their own."
+    Step 3: The Audit. "Turn-based exchanges. They must explicitly 'Accept', 'Challenge', or 'Abstain' on your points before adding their own."
 
     Step 4: Divergence Summary. "Automatically generate a clear summary of your common ground and exact points of unresolved divergence."
 

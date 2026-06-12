@@ -130,7 +130,7 @@ export default function MapLegend() {
               Claim
             </p>
             <p className="mb-3" style={{ fontSize: 10, color: "var(--muted-foreground)" }}>
-              An assertion that can be agreed, challenged, or rebutted.
+              An assertion that can be accepted, challenged, or rebutted.
             </p>
 
             <p

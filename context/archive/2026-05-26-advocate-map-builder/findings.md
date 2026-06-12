@@ -26,7 +26,7 @@
 Treating a source as a canvas node makes its reliability explicitly contestable — the legend
 reads "SOURCE: Assertion about a cited origin — its reliability can be contested." This is
 consistent with Toulmin: a source is itself a claim that can be challenged, not merely a
-footnote. A sub-entity in a sidebar cannot be marked Agree/Challenge/Abstain by the challenger;
+footnote. A sub-entity in a sidebar cannot be marked Accept/Challenge/Abstain by the challenger;
 a source node can.
 
 ---

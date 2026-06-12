@@ -54,7 +54,7 @@ describe("computeTurnGate", () => {
 
   it("tracks markedCount as the viewer marks counterpart statements", () => {
     const nodes = [statement("c1", CHALLENGER), statement("c2", CHALLENGER), statement("a1", ADVOCATE)];
-    const marks: Partial<Record<string, MarkStance>> = { c1: "agree" };
+    const marks: Partial<Record<string, MarkStance>> = { c1: "accept" };
     const gate = computeTurnGate(nodes, marks, advocateViewer());
     expect(gate.total).toBe(2);
     expect(gate.markedCount).toBe(1);
@@ -63,7 +63,7 @@ describe("computeTurnGate", () => {
   it("ignores marks on the viewer's own statements", () => {
     const nodes = [statement("c1", CHALLENGER), statement("a1", ADVOCATE)];
     // A mark keyed on the advocate's own node must not inflate the count.
-    const marks: Partial<Record<string, MarkStance>> = { a1: "agree" };
+    const marks: Partial<Record<string, MarkStance>> = { a1: "accept" };
     const gate = computeTurnGate(nodes, marks, advocateViewer());
     expect(gate.total).toBe(1);
     expect(gate.markedCount).toBe(0);

@@ -35,7 +35,7 @@ export interface SummaryItem {
 export type DivergenceGap = "factual" | "values";
 
 export interface DivergenceSummary {
-  /** Statements the counterpart Agreed with — mutual common ground. */
+  /** Statements the counterpart Accepted — mutual common ground. */
   commonGround: SummaryItem[];
   /** Statements the counterpart Challenged, tagged factual (data-level) vs values (premise-level). */
   openDivergences: (SummaryItem & { gap: DivergenceGap })[];
@@ -86,7 +86,7 @@ export function classifyDivergence({ nodes, marks }: ClassifyInput): DivergenceS
     }
 
     switch (mark.stance) {
-      case "agree":
+      case "accept":
         summary.commonGround.push(item);
         break;
       case "challenge":

@@ -6,7 +6,7 @@
 ## What & Why
 
 Roadmap slice S-03. Let an accepted challenger audit the advocate's argument map: mark every advocate
-Statement Agree / Challenge / Abstain, add their own Statements / Sources / connectives with directed
+Statement Accept / Challenge / Abstain, add their own Statements / Sources / connectives with directed
 relations, then submit their turn — which activates the advocate's turn. The three-state mark is the input
 that generates the divergence summary (S-04), so the mark model's correctness is the load-bearing concern.
 
@@ -60,7 +60,7 @@ insert / narrowed update-delete policies, statement-only mark RLS. Then the atom
 not a stored column) and flips the turn. Then a thin **`src/lib/mark/`** module + two `withAuth` endpoints
 (mark upsert, submit-turn). Finally the **frontend**: thread `viewerId`, `viewerRole`, `advocateId`, and
 `isMyTurn` into the Zustand store; replace the single `canEdit` boolean with derived per-node capabilities;
-add an inline Agree/Challenge/Abstain bar **below the node body** to `StatementNode`; shade challenger nodes;
+add an inline Accept/Challenge/Abstain bar **below the node body** to `StatementNode`; shade challenger nodes;
 wire optimistic mark persistence + the submit button.
 
 ## Phases at a Glance

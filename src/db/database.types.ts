@@ -387,7 +387,7 @@ export type Database = {
     Enums: {
       connective_op: "and" | "or"
       exchange_status: "pending" | "accepted" | "declined" | "completed"
-      mark_stance: "agree" | "challenge" | "abstain"
+      mark_stance: "accept" | "challenge" | "abstain"
       node_kind: "statement" | "connective"
       relation_kind: "supports" | "link" | "rephrases" | "rebuts"
       statement_type:
@@ -1078,7 +1078,7 @@ export const Constants = {
     Enums: {
       connective_op: ["and", "or"],
       exchange_status: ["pending", "accepted", "declined", "completed"],
-      mark_stance: ["agree", "challenge", "abstain"],
+      mark_stance: ["accept", "challenge", "abstain"],
       node_kind: ["statement", "connective"],
       relation_kind: ["supports", "link", "rephrases", "rebuts"],
       statement_type: [

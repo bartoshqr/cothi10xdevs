@@ -42,7 +42,7 @@ Each entry shows: **file**, **line(s)**, **Polish text**, **suggested English tr
 | 64 | `Zaproś oponenta` | `Invite Your Opponent` |
 | 66–67 | `Wyślij prywatne zaproszenie do oponenta. Debata toczy się w formacie 1:1, jest merytoryczna i wolna od presji publiczności.` | `Send a private invitation to your opponent. The debate is 1:1, substantive, and free from audience pressure.` |
 | 95 | `Audyt` | `Audit` |
-| 97–98 | `Wymiana turowa. Oponent musi wyraźnie zaznaczyć "Zgadzam się", "Kwestionuję" lub "Wstrzymuję się" przy Twoich punktach, zanim doda własne.` | `Turn-based exchange. Your opponent must explicitly mark "Agree", "Dispute", or "Abstain" on each of your points before adding their own.` |
+| 97–98 | `Wymiana turowa. Oponent musi wyraźnie zaznaczyć "Zgadzam się", "Kwestionuję" lub "Wstrzymuję się" przy Twoich punktach, zanim doda własne.` | `Turn-based exchange. Your opponent must explicitly mark "Accept", "Dispute", or "Abstain" on each of your points before adding their own.` |
 | 129 | `Podsumowanie rozbieżności` | `Divergence Summary` |
 | 131 | `Wygeneruj automatyczne, jasne podsumowanie pokazujące punkty wspólne oraz dokładne miejsca rozbieżności.` | `Generate an automatic, clear summary showing common ground and the exact points of disagreement.` |
 
@@ -99,12 +99,12 @@ Each entry shows: **file**, **line(s)**, **Polish text**, **suggested English tr
 | 14 | `Energia jądrowa jest niezbędna do walki ze zmianami klimatu.` | `Nuclear energy is essential to combating climate change.` |
 | 26 | `Dane` | `Data` |
 | 27 | `Atom dostarcza 10% światowej energii bez emisji CO₂.` | `Nuclear power provides 10% of global energy with zero CO₂ emissions.` |
-| 33 | `Zgadzam się` | `Agree` |
+| 33 | `Zgadzam się` | `Accept` |
 | 38 | `Kwestionuję` | `Dispute` |
 | 43 | `Wstrzymuję się` | `Abstain` |
 | 53 | `Uzasadnienie` | `Warrant` |
 | 55 | `Źródła odnawialne nie są w stanie zapewnić stabilnej bazy energetycznej.` | `Renewable sources cannot provide a stable base load.` |
-| 62 | `Zgadzam się` | `Agree` |
+| 62 | `Zgadzam się` | `Accept` |
 | 67 | `Kwestionuję` | `Dispute` |
 | 72 | `Wstrzymuję się` | `Abstain` |
 

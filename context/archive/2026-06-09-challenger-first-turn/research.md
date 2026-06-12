@@ -34,7 +34,7 @@ machinery**:
 
 1. **Marks are 100% net-new.** There is no marks table, column, or enum anywhere — not in any
    migration, not in `database.types.ts`, not in the exchange or debate modules. The
-   Agree/Challenge/Abstain model (table + enum + RLS + write grants + repository + schema + API
+   Accept/Challenge/Abstain model (table + enum + RLS + write grants + repository + schema + API
    + store + node UI) must be built from scratch. This is the key risk flagged in `change.md`
    and the bulk of the work.
 
@@ -73,7 +73,7 @@ policy reads `exchanges`. And **RETURNS SETOF for not-found** — already follow
   The S-02 migration header states this explicitly: *"Write policies … stay owner/author-scoped —
   challenger writes are S-03"* (`supabase/migrations/20260609000001_create_exchanges.sql:3-4`).
 - **The oracle (FR-011)** is precise: the challenger must mark every advocate Statement that is
-  *currently unmarked* (round 1 = all of them) as Agree / Challenge / Abstain before the turn can
+  *currently unmarked* (round 1 = all of them) as Accept / Challenge / Abstain before the turn can
   be submitted. Already-valid marks carry over (carry-over / invalidation is S-05 — round 1 only
   needs "mark all advocate statements"). **Abstain counts as unresolved** in the divergence
   summary (`prd.md:131`). Confirm with `change.md:36-37` unknown: round 1 simply requires marking

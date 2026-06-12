@@ -86,7 +86,7 @@ $$;
 -- ─── Debate graph (user01 advocate, user02 challenger) ───────────────────────
 -- A small but complete graph exercising every node kind and relation kind, then
 -- extended to imitate a challenger who has RESPONDED and SUBMITTED round 1:
--- he marks the advocate's statements (agrees with the data + source, challenges
+-- he marks the advocate's statements (accepts the data + source, challenges
 -- the root claim and the warrant) and adds his own counter-structure.
 -- Every debate here is created WITH a root claim — never seed a rootless debate
 -- (the create_debate_with_root RPC is the only creation path and always sets one).
@@ -115,7 +115,7 @@ $$;
 --   c_source     → c_data         (rephrases)  challenger
 --
 -- Challenger marks (user02 on user01's statements): root=challenge,
--- warrant=challenge, data=agree, source=agree.
+-- warrant=challenge, data=accept, source=accept.
 
 do $$
 declare
@@ -231,7 +231,7 @@ begin
   on conflict do nothing;
 
   -- ─── Challenger's marks (user02 marks user01's statements) ──────────────────
-  -- The challenger responded and SUBMITTED round 1: agrees with the data and its
+  -- The challenger responded and SUBMITTED round 1: accepts the data and its
   -- source, challenges the root claim and the warrant. Marks are disjoint per node
   -- and only land on the counterpart's statements — the challenger's own nodes and
   -- the connective are not markable. marker_id = challenger.
@@ -239,8 +239,8 @@ begin
   values
     (v_debate, v_root,    v_challenger, 'challenge'),
     (v_debate, v_warrant, v_challenger, 'challenge'),
-    (v_debate, v_data,    v_challenger, 'agree'),
-    (v_debate, v_source,  v_challenger, 'agree')
+    (v_debate, v_data,    v_challenger, 'accept'),
+    (v_debate, v_source,  v_challenger, 'accept')
   on conflict (node_id, marker_id) do nothing;
 end;
 $$;

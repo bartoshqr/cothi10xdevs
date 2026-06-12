@@ -147,9 +147,9 @@ describeIntegration("S-03 marks & turn submission — RLS write boundaries + gat
       debateId,
       nodeId: rootNodeId,
       markerId: challengerId,
-      stance: "agree",
+      stance: "accept",
     });
-    expect(mark.stance).toBe("agree");
+    expect(mark.stance).toBe("accept");
     expect(mark.marker_id).toBe(challengerId);
 
     // Re-marking is idempotent — stance flips in place, still one row.
@@ -167,7 +167,7 @@ describeIntegration("S-03 marks & turn submission — RLS write boundaries + gat
     const connectiveId = await addAdvocateConnective(debateId);
     const connectiveMark = await challengerClient
       .from("marks")
-      .insert({ debate_id: debateId, node_id: connectiveId, marker_id: challengerId, stance: "agree" })
+      .insert({ debate_id: debateId, node_id: connectiveId, marker_id: challengerId, stance: "accept" })
       .select("id");
     expect(connectiveMark.error).not.toBeNull();
 
@@ -179,7 +179,7 @@ describeIntegration("S-03 marks & turn submission — RLS write boundaries + gat
     );
     const ownMark = await challengerClient
       .from("marks")
-      .insert({ debate_id: debateId, node_id: myNode.id, marker_id: challengerId, stance: "agree" })
+      .insert({ debate_id: debateId, node_id: myNode.id, marker_id: challengerId, stance: "accept" })
       .select("id");
     expect(ownMark.error).not.toBeNull();
   });
@@ -195,7 +195,7 @@ describeIntegration("S-03 marks & turn submission — RLS write boundaries + gat
       debateId,
       nodeId: rootNodeId,
       markerId: challengerId,
-      stance: "agree",
+      stance: "accept",
     });
     const flipped = await submitTurn(challengerClient, exchangeId);
     expect(flipped.current_turn).toBe("advocate");
@@ -229,7 +229,7 @@ describeIntegration("S-03 marks & turn submission — RLS write boundaries + gat
       debateId,
       nodeId: rootNodeId,
       markerId: challengerId,
-      stance: "agree",
+      stance: "accept",
     });
     await expect(submitTurn(challengerClient, exchangeId)).rejects.toBeInstanceOf(ConflictError);
 

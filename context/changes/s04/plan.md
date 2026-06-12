@@ -449,19 +449,19 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 5: Summary UI — read-only panel
 
 #### Automated
-- [x] 5.1 Type check passes: `npx astro check`
-- [x] 5.2 Build passes: `npm run build`
+- [x] 5.1 Type check passes: `npx astro check` — 3fddc87
+- [x] 5.2 Build passes: `npm run build` — 3fddc87
 
 #### Manual
-- [x] 5.3 Both parties see the page (read-only) + summary button on a completed round_count=1 exchange
+- [x] 5.3 Both parties see the page (read-only) + summary button on a completed round_count=1 exchange — 3fddc87
 
   > **Agent-automatable**: No — browser visual check for both user sessions.
 
-- [x] 5.4 Summary button hidden/disabled before round 1 completes, appears once the gate is met
+- [x] 5.4 Summary button hidden/disabled before round 1 completes, appears once the gate is met — 3fddc87
 
   > **Agent-automatable**: No — browser visual check across the gate boundary.
 
-- [x] 5.5 Panel renders three buckets with correct gap labels, no console errors
+- [x] 5.5 Panel renders three buckets with correct gap labels, no console errors — 3fddc87
 
   > **Agent-automatable**: No — visual + devtools console inspection.
 

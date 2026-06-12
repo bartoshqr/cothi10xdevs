@@ -32,7 +32,7 @@ import ConnectKindPicker from "./ConnectKindPicker";
 import { useStore, useShallow, reconcileFromServer } from "./store";
 import type { DebateNode, ViewerContext } from "./store";
 import type { DebateGraph } from "@/lib/debate/repository";
-import type { MarkStance } from "./mapVisualLanguage";
+import type { MarkState } from "./mapVisualLanguage";
 
 // Cross-island contract for the "Submit turn" button, which lives in the page
 // header (a separate hydration root that cannot read this store). MapEditor pushes
@@ -56,16 +56,17 @@ export interface TurnGateDetail {
 // counterpart's statements before submitting your turn. We count the counterpart's
 // statements via `authorId !== viewerId` — the same test as `isMarkableNode` — which
 // works for advocate and challenger alike without needing a `challengerId` on the viewer.
+// An invalid mark (valid=false) counts as unmarked, mirroring the DB gate in submit_turn.
 export function computeTurnGate(
   nodes: DebateNode[],
-  marks: Partial<Record<string, MarkStance>>,
+  marks: Partial<Record<string, MarkState>>,
   viewer: ViewerContext | null,
 ): TurnGateDetail {
   if (!viewer) {
     return { isMyTurn: false, markedCount: 0, total: 0, isMiniTurn: false, isCompleted: false, currentRound: 1 };
   }
   const counterpartStatements = nodes.filter((n) => n.type === "statement" && n.data.authorId !== viewer.viewerId);
-  const markedCount = counterpartStatements.filter((n) => marks[n.id] !== undefined).length;
+  const markedCount = counterpartStatements.filter((n) => marks[n.id]?.valid === true).length;
   return {
     isMyTurn: viewer.isMyTurn,
     markedCount,
@@ -571,7 +572,7 @@ interface MapEditorProps {
   /** Exchange id, required when viewer is set. */
   exchangeId?: string | null;
   /** Pre-loaded marks for the debate (server-side hydration). */
-  initialMarks?: Partial<Record<string, MarkStance>>;
+  initialMarks?: Partial<Record<string, MarkState>>;
 }
 
 export default function MapEditor({

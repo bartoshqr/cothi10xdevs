@@ -348,15 +348,15 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [x] 1.1 Migration applies cleanly: `npx supabase db reset`
-- [x] 1.2 Types regenerated, no further diff: `npm run db:types`
-- [x] 1.3 Type checking passes: `npx astro check`
-- [x] 1.4 Lint passes: `npm run lint`
-- [x] 1.5 Integration tests pass: `npm run test:integration` (`markInvalidation.test.ts`)
+- [x] 1.1 Migration applies cleanly: `npx supabase db reset` — 338facc
+- [x] 1.2 Types regenerated, no further diff: `npm run db:types` — 338facc
+- [x] 1.3 Type checking passes: `npx astro check` — 338facc
+- [x] 1.4 Lint passes: `npm run lint` — 338facc
+- [x] 1.5 Integration tests pass: `npm run test:integration` (`markInvalidation.test.ts`) — 338facc
 
 #### Manual
 
-- [x] 1.6 Editing own statement content invalidates the counterpart's mark; position drag and identical re-save do not
+- [x] 1.6 Editing own statement content invalidates the counterpart's mark; position drag and identical re-save do not — 338facc
 
   > **Agent-automatable**: Yes — bearer-token curl to PATCH the node, then SQL on `marks`.
 
@@ -383,10 +383,10 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [ ] 2.1 Type checking passes: `npx astro check`
-- [ ] 2.2 Lint passes: `npm run lint`
-- [ ] 2.3 Unit: `computeTurnGate` counts an invalid mark as unmarked: `npm run test:unit`
-- [ ] 2.4 Integration: `getDebateMarks` returns `valid`: `npm run test:integration`
+- [x] 2.1 Type checking passes: `npx astro check`
+- [x] 2.2 Lint passes: `npm run lint`
+- [x] 2.3 Unit: `computeTurnGate` counts an invalid mark as unmarked: `npm run test:unit`
+- [x] 2.4 Integration: `getDebateMarks` returns `valid`: `npm run test:integration`
 
 #### Manual
 

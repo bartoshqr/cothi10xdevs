@@ -25,7 +25,7 @@ import {
   apiSubmitTurn,
 } from "./persistence";
 import { ApiError } from "./apiError";
-import type { MarkStance } from "./mapVisualLanguage";
+import type { MarkStance, MarkState } from "./mapVisualLanguage";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
@@ -80,12 +80,12 @@ export interface RFState {
   viewer: ViewerContext | null;
   /** Exchange id, set when viewer is set. Needed to call submit_turn. */
   exchangeId: string | null;
-  /** Every mark in the debate: nodeId → stance. Loaded from server and updated
+  /** Every mark in the debate: nodeId → { stance, valid }. Loaded from server and updated
    * optimistically. Round 1 has a single marker (the challenger), so one map serves both
    * views — the challenger's own marks (interactive on their turn) and, for the advocate,
    * the challenger's marks shown read-only. Interactivity is gated by `canMarkNode`, not
    * by mark authorship. The two-stance case (both parties marking) is S-04. */
-  marks: Partial<Record<string, MarkStance>>;
+  marks: Partial<Record<string, MarkState>>;
 
   onNodesChange: OnNodesChange<DebateNode>;
   onEdgesChange: OnEdgesChange<DebateEdge>;
@@ -100,7 +100,7 @@ export interface RFState {
     canEdit?: boolean,
     viewer?: ViewerContext | null,
     exchangeId?: string | null,
-    initialMarks?: Partial<Record<string, MarkStance>>,
+    initialMarks?: Partial<Record<string, MarkState>>,
   ) => void;
   setGraph: (debate: DebateRow, nodes: NodeRow[], relations: RelationRow[]) => void;
   createStatementNode: (statementType: StatementRole, position: XYPosition) => string;
@@ -810,14 +810,14 @@ export const useStore = create<RFState>()((set, get) => ({
   setMark: (nodeId, stance) => {
     const { debateId, viewer, marks } = get();
     if (!debateId || !viewer) return;
-    const prevStance = marks[nodeId];
-    // Optimistic update
-    set({ marks: { ...get().marks, [nodeId]: stance } });
+    const prevState = marks[nodeId];
+    // Optimistic update: re-marking always makes the mark valid again.
+    set({ marks: { ...get().marks, [nodeId]: { stance, valid: true } } });
     apiUpsertMark(debateId, nodeId, stance).catch((e: unknown) => {
       // Roll back the optimistic update for this node only: restore the previous
-      // stance, or drop the entry entirely if this was its first (unsaved) mark.
+      // MarkState, or drop the entry entirely if this was its first (unsaved) mark.
       const { [nodeId]: _discarded, ...rest } = get().marks;
-      set({ marks: prevStance === undefined ? rest : { ...rest, [nodeId]: prevStance } });
+      set({ marks: prevState === undefined ? rest : { ...rest, [nodeId]: prevState } });
       reportError(e instanceof Error ? e.message : "Failed to save mark");
     });
   },

@@ -258,4 +258,57 @@ describeIntegration("S-03 marks & turn submission — RLS write boundaries + gat
   it("submit_turn on an unknown exchange id returns an empty set (→ 404), not an all-NULL row", async () => {
     await expect(submitTurn(challengerClient, randomUUID())).rejects.toBeInstanceOf(NotFoundError);
   });
+
+  // ─── getDebateMarks includes the valid field ──────────────────────────────────
+
+  it("getDebateMarks returns a MarkState with valid=true for a freshly placed mark", async () => {
+    const { getDebateMarks } = await import("@/lib/mark/repository");
+    const { debateId, rootNodeId } = await freshAcceptedDebate();
+
+    await upsertMark({
+      supabase: challengerClient,
+      debateId,
+      nodeId: rootNodeId,
+      markerId: challengerId,
+      stance: "accept",
+    });
+
+    const marks = await getDebateMarks({ supabase: challengerClient, debateId });
+    expect(marks[rootNodeId]).toEqual({ stance: "accept", valid: true });
+  });
+
+  // ─── re-evaluation revalidates an invalidated mark (S-05) ──────────────────────
+  // Regression: a mark the counterpart invalidated (valid=false) must flip back to
+  // valid=true when the marker re-evaluates it. The submit_turn gate counts only
+  // valid=true marks, so without this the server keeps rejecting a turn the UI shows
+  // as complete (INCOMPLETE_MARKS: N-1 of N).
+  it("upsertMark revalidates a previously-invalidated mark (valid=false → valid=true)", async () => {
+    const { getDebateMarks } = await import("@/lib/mark/repository");
+    const { debateId, rootNodeId } = await freshAcceptedDebate();
+
+    // Place the mark, then simulate the counterpart's edit invalidating it.
+    await upsertMark({
+      supabase: challengerClient,
+      debateId,
+      nodeId: rootNodeId,
+      markerId: challengerId,
+      stance: "accept",
+    });
+    await service.from("marks").update({ valid: false }).eq("node_id", rootNodeId).eq("marker_id", challengerId);
+
+    const stale = await getDebateMarks({ supabase: challengerClient, debateId });
+    expect(stale[rootNodeId]).toEqual({ stance: "accept", valid: false });
+
+    // Re-evaluate: same or different stance, the row must become valid again.
+    await upsertMark({
+      supabase: challengerClient,
+      debateId,
+      nodeId: rootNodeId,
+      markerId: challengerId,
+      stance: "challenge",
+    });
+
+    const revalidated = await getDebateMarks({ supabase: challengerClient, debateId });
+    expect(revalidated[rootNodeId]).toEqual({ stance: "challenge", valid: true });
+  });
 });

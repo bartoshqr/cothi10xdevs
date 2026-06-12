@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { computeTurnGate } from "@/components/debate/MapEditor";
 import type { DebateNode, ViewerContext } from "@/components/debate/store";
-import type { MarkStance } from "@/components/debate/mapVisualLanguage";
+import type { MarkState } from "@/components/debate/mapVisualLanguage";
 
 // The gate counts the *counterpart's* statements (authorId !== viewerId) and how many
 // the viewer has marked. It is symmetric — these tests drive it from the advocate's seat
@@ -31,6 +31,14 @@ function advocateViewer(isMyTurn = true): ViewerContext {
   };
 }
 
+function valid(stance: MarkState["stance"]): MarkState {
+  return { stance, valid: true };
+}
+
+function stale(stance: MarkState["stance"]): MarkState {
+  return { stance, valid: false };
+}
+
 describe("computeTurnGate", () => {
   it("returns a zero gate when there is no viewer (pre-exchange / local-only)", () => {
     const nodes = [statement("s1", CHALLENGER)];
@@ -54,7 +62,7 @@ describe("computeTurnGate", () => {
 
   it("tracks markedCount as the viewer marks counterpart statements", () => {
     const nodes = [statement("c1", CHALLENGER), statement("c2", CHALLENGER), statement("a1", ADVOCATE)];
-    const marks: Partial<Record<string, MarkStance>> = { c1: "accept" };
+    const marks: Partial<Record<string, MarkState>> = { c1: valid("accept") };
     const gate = computeTurnGate(nodes, marks, advocateViewer());
     expect(gate.total).toBe(2);
     expect(gate.markedCount).toBe(1);
@@ -63,10 +71,19 @@ describe("computeTurnGate", () => {
   it("ignores marks on the viewer's own statements", () => {
     const nodes = [statement("c1", CHALLENGER), statement("a1", ADVOCATE)];
     // A mark keyed on the advocate's own node must not inflate the count.
-    const marks: Partial<Record<string, MarkStance>> = { a1: "accept" };
+    const marks: Partial<Record<string, MarkState>> = { a1: valid("accept") };
     const gate = computeTurnGate(nodes, marks, advocateViewer());
     expect(gate.total).toBe(1);
     expect(gate.markedCount).toBe(0);
+  });
+
+  it("treats an invalid (stale) mark as unmarked", () => {
+    const nodes = [statement("c1", CHALLENGER), statement("c2", CHALLENGER)];
+    // c1 has a stale mark (valid=false) — should not count toward markedCount
+    const marks: Partial<Record<string, MarkState>> = { c1: stale("accept"), c2: valid("challenge") };
+    const gate = computeTurnGate(nodes, marks, advocateViewer());
+    expect(gate.total).toBe(2);
+    expect(gate.markedCount).toBe(1);
   });
 
   it("excludes connective nodes from the count", () => {

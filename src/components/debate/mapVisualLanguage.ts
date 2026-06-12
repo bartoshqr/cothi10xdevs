@@ -7,6 +7,11 @@ export type StatementRole = "claim" | "source" | "data" | "warrant" | "backing" 
 import type { MarkStance } from "@/lib/mark/schemas";
 export type { MarkStance };
 
+export interface MarkState {
+  stance: MarkStance;
+  valid: boolean;
+}
+
 export type ConnectiveOp = "and" | "or";
 
 export type RelationKind = "supports" | "link" | "rephrases" | "rebuts" | "pending";

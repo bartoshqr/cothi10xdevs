@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/db/database.types";
 import { NotFoundError } from "@/lib/errors";
 import type { MarkStance } from "./schemas";
+import type { MarkState } from "@/components/debate/mapVisualLanguage";
 
 type DB = SupabaseClient<Database>;
 type MarkRow = Database["public"]["Tables"]["marks"]["Row"];
@@ -29,13 +30,13 @@ interface GetDebateMarksArgs {
 export async function getDebateMarks({
   supabase,
   debateId,
-}: GetDebateMarksArgs): Promise<Partial<Record<string, MarkStance>>> {
-  const { data, error } = await supabase.from("marks").select("node_id, stance").eq("debate_id", debateId);
+}: GetDebateMarksArgs): Promise<Partial<Record<string, MarkState>>> {
+  const { data, error } = await supabase.from("marks").select("node_id, stance, valid").eq("debate_id", debateId);
   if (error) throw error;
 
-  const marks: Partial<Record<string, MarkStance>> = {};
+  const marks: Partial<Record<string, MarkState>> = {};
   for (const row of data) {
-    marks[row.node_id] = row.stance;
+    marks[row.node_id] = { stance: row.stance, valid: row.valid };
   }
   return marks;
 }
@@ -44,7 +45,18 @@ export async function upsertMark({ supabase, debateId, nodeId, markerId, stance 
   const { data, error } = await supabase
     .from("marks")
     .upsert(
-      { debate_id: debateId, node_id: nodeId, marker_id: markerId, stance, updated_at: new Date().toISOString() },
+      // valid:true — a marker setting their own stance is a fresh evaluation, so it
+      // revalidates a previously-invalidated mark (S-05 re-evaluation). The submit_turn
+      // gate counts only valid=true marks; without this, a re-marked stale mark stays
+      // valid=false and the server keeps rejecting the turn the UI thinks is complete.
+      {
+        debate_id: debateId,
+        node_id: nodeId,
+        marker_id: markerId,
+        stance,
+        valid: true,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: "node_id,marker_id" },
     )
     .select()

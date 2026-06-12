@@ -10,7 +10,7 @@ import { getDebateGraph } from "@/lib/debate/repository";
 import { getDebateExchange } from "@/lib/exchange/repository";
 import { deriveViewer } from "@/lib/debate/viewer";
 import { getDebateMarks } from "@/lib/mark/repository";
-import type { MarkStance } from "@/components/debate/mapVisualLanguage";
+import type { MarkState } from "@/components/debate/mapVisualLanguage";
 
 const { id: debateId } = Astro.params;
 const { user } = Astro.locals;
@@ -38,8 +38,8 @@ const { viewer, viewerExchangeId } = deriveViewer({ user, graph, isOwner, exchan
 // Pre-load every mark in the debate so the board hydrates correctly for either viewer:
 // the challenger sees their own marks (interactive), the advocate sees the challenger's
 // marks read-only on their statements once the turn flips. Round 1 has a single marker, so
-// one node→stance map suffices.
-let initialMarks: Partial<Record<string, MarkStance>> = {};
+// one node→{stance,valid} map suffices.
+let initialMarks: Partial<Record<string, MarkState>> = {};
 if (viewer && supabase && debateId) {
   initialMarks = await getDebateMarks({ supabase, debateId });
 }

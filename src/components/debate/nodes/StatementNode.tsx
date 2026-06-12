@@ -57,7 +57,10 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   const isEditing = inEditNodeId === id;
   const canEditThisNode = canEditNode(id);
   const canMarkThisNode = canMarkNode(id);
-  const currentMark: MarkStance | undefined = marks[id];
+  const markEntry = marks[id];
+  const currentMark: MarkStance | undefined = markEntry?.stance;
+  // valid=false: content changed since mark was placed — counterpart must re-evaluate before submitting.
+  const isStale = markEntry !== undefined && !markEntry.valid;
   // Show the mark bar when the viewer can mark this node now, OR a mark already exists on
   // it. The latter keeps a mark visible read-only after the challenger submits, and also
   // surfaces the challenger's mark to the advocate on the advocate's own statement once the
@@ -496,43 +499,51 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
               a little padding behind the bar so it reads as "touched by the challenger". */}
           {showMarkBar && (
             <div
-              className="nodrag nopan flex border-t"
+              className="nodrag nopan flex flex-col border-t"
               style={{
                 borderColor: "var(--border)",
                 // The tint reads as "challenger touched this" only on an advocate (white)
                 // card; a challenger card is already tinted, so the bar blends in there.
                 backgroundColor: isChallenger ? "var(--card)" : CHALLENGER_TINT,
                 padding: 2,
-                gap: 2,
               }}
               onClick={(e) => {
                 e.stopPropagation();
               }}
             >
-              {MARK_STANCES.map((stance) => {
-                const d = markStanceDescriptors[stance];
-                const active = currentMark === stance;
-                return (
-                  <button
-                    key={stance}
-                    className="flex flex-1 items-center justify-center rounded py-1 text-[10px] font-semibold transition-colors"
-                    style={{
-                      // Inactive buttons sit on white so only the padding/gap shows the
-                      // light-red tint as thin "quasi-borders"; the active one is tinted.
-                      color: active ? d.color : "var(--muted-foreground)",
-                      backgroundColor: active ? `color-mix(in srgb, ${d.color} 18%, var(--card))` : "var(--card)",
-                      cursor: canMarkThisNode ? "pointer" : "default",
-                    }}
-                    title={d.label}
-                    disabled={!canMarkThisNode}
-                    onClick={() => {
-                      setMark(id, stance);
-                    }}
-                  >
-                    {d.label}
-                  </button>
-                );
-              })}
+              {isStale && (
+                <div className="pb-1 text-center text-xs font-bold" style={{ color: "var(--muted-foreground)" }}>
+                  CHANGED: Need re-evaluation
+                </div>
+              )}
+              <div className="flex" style={{ gap: 2 }}>
+                {MARK_STANCES.map((stance) => {
+                  const d = markStanceDescriptors[stance];
+                  const active = currentMark === stance;
+                  return (
+                    <button
+                      key={stance}
+                      className="flex flex-1 items-center justify-center rounded py-1 text-[10px] font-semibold transition-colors"
+                      style={{
+                        // Inactive buttons sit on white so only the padding/gap shows the
+                        // light-red tint as thin "quasi-borders"; the active one is tinted.
+                        color: active ? d.color : "var(--muted-foreground)",
+                        backgroundColor: active ? `color-mix(in srgb, ${d.color} 18%, var(--card))` : "var(--card)",
+                        cursor: canMarkThisNode ? "pointer" : "default",
+                        // Dim the active stance when stale so the viewer knows re-marking is required.
+                        opacity: active && isStale ? 0.45 : 1,
+                      }}
+                      title={d.label}
+                      disabled={!canMarkThisNode}
+                      onClick={() => {
+                        setMark(id, stance);
+                      }}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

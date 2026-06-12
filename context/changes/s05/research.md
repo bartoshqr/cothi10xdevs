@@ -46,7 +46,7 @@ Five lessons in `context/foundation/lessons.md` bind this slice directly (invali
 
 Tables and the key column for S-05:
 
-- **`marks`** (`supabase/migrations/20260610000001_create_marks_and_authorship.sql:24-39`): `id, debate_id, node_id, marker_id, stance ('agree'|'challenge'|'abstain'), created_at, updated_at, valid boolean not null default true`. UNIQUE `(node_id, marker_id)` — one mutable row per node/marker pair.
+- **`marks`** (`supabase/migrations/20260610000001_create_marks_and_authorship.sql:24-39`): `id, debate_id, node_id, marker_id, stance ('accept'|'challenge'|'abstain'), created_at, updated_at, valid boolean not null default true`. UNIQUE `(node_id, marker_id)` — one mutable row per node/marker pair.
   - `marks_and_authorship.sql:34-35` comment: *"valid: true = current; false = counterpart's content changed, mark stale (S-05 flips it). The counterpart flips valid to false when the marked node changes — never deleted."*
   - `marks_and_authorship.sql:234` comment: *"S-05 wires up the valid=false flip trigger; no schema change needed there."*
   - `marks_and_authorship.sql:239`: `grant update (stance, valid, updated_at) on public.marks to authenticated;` — the column is already write-grantable.

@@ -41,7 +41,7 @@ describeIntegration("S-04 divergence summary — gate + RLS read", () => {
 
   // Seed an advocate-owned debate with a Data and a Warrant statement, open an exchange,
   // have the challenger accept, and mark the three advocate statements through RLS:
-  //   root claim  → agree    (common ground)
+  //   root claim  → accept   (common ground)
   //   data        → challenge (factual open divergence)
   //   warrant     → abstain   (unresolved)
   async function seedMarkedDebate(
@@ -83,7 +83,7 @@ describeIntegration("S-04 divergence summary — gate + RLS read", () => {
       debateId,
       nodeId: rootNodeId,
       markerId: challengerId,
-      stance: "agree",
+      stance: "accept",
     });
     await upsertMark({
       supabase: challengerClient,

@@ -20,7 +20,7 @@ top_blocker: capacity
 Worldview debates on social media are chaotic because free-form comment formats hide
 *what* people actually disagree on. WVMap gives an advocate a structured Toulmin map
 (Claim → Data → Warrant) and runs a turn-based private exchange with a challenger who
-marks each statement Agree / Challenge / Abstain. The payoff is a deterministic
+marks each statement Accept / Challenge / Abstain. The payoff is a deterministic
 **divergence summary** that separates common ground from genuine cruxes.
 
 The product wedge — the one trait that, if removed, makes this just another comment
@@ -150,19 +150,19 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ### S-03: Challenger audits the map and submits the first turn
 
-- **Outcome:** challenger can mark every unmarked advocate statement (Agree/Challenge/Abstain), add their own typed statements with sources and directed relations, and submit their turn, which activates the advocate's turn.
+- **Outcome:** challenger can mark every unmarked advocate statement (Accept/Challenge/Abstain), add their own typed statements with sources and directed relations, and submit their turn, which activates the advocate's turn.
 - **Change ID:** challenger-first-turn
 - **PRD refs:** US-02, FR-011, FR-012, FR-013, FR-014
 - **Prerequisites:** S-02
 - **Parallel with:** S-06
 - **Blockers:** —
 - **UI requirements:**
-  - Statements must display three-state marks (Agree / Challenge / Abstain) adjacent to each statement.
+  - Statements must display three-state marks (Accept / Challenge / Abstain) adjacent to each statement.
   - Challenger-authored nodes must be visually distinct from advocate-authored nodes — use a different background shade (light red, light gray, or light blue) instead of white to signal ownership.
 - **Store.ts requirements:**
   - Extend statement/node schema to track authorship (`authorId` or `authorRole: 'advocate' | 'challenger'`).
   - Enforce editing restrictions: challenger can only add/edit their own statements and edges; cannot edit advocate statements/edges (can only mark them). Symmetrically, advocate cannot edit challenger statements in S-04.
-  - Persist mark state (Agree/Challenge/Abstain) per statement per user per turn.
+  - Persist mark state (Accept/Challenge/Abstain) per statement per user per turn.
 - **Unknowns:**
   - Marking obligation is "every currently-unmarked statement" — confirm carry-over semantics are deferred to S-05 (multi-round) and round 1 simply requires marking all advocate statements. Owner: TBD. Block: no.
 - **Risk:** Adds the three-state mark schema and turn-submission gating (cannot submit until every advocate statement is marked). This is half the input to the summary algorithm; correctness of the mark model matters more than UI polish. Ownership tracking and edit-permission checks must be enforced consistently to prevent data corruption across rounds.
@@ -262,5 +262,5 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **F-02: (design spike) a static, hardcoded example Toulmin map renders in a React Flow canvas — a root Claim plus Data/Warrant/Backing/Rebuttal nodes wired with supports/bridges/rebuts edges — establishing the node/edge visual language (per-type node design, per-kind edge styling, color palette, layout) before any schema or store is built.** — Archived 2026-05-27 → `context/archive/2026-05-27-map-visual-spike/`. Lesson: —.
 - **S-01: advocate builds a structured map** — Archived 2026-06-08 → `context/archive/2026-05-26-advocate-map-builder/`. Lesson: —.
 - **S-02: set round count, invite a challenger by username, they accept** — Archived 2026-06-09 → `context/archive/2026-06-08-invite-and-open-exchange/`. Lesson: —.
-- **S-03: challenger can mark every unmarked advocate statement (Agree/Challenge/Abstain), add their own typed statements with sources and directed relations, and submit their turn, which activates the advocate's turn.** — Archived 2026-06-10 → `context/archive/2026-06-09-challenger-first-turn/`. Lesson: —.
+- **S-03: challenger can mark every unmarked advocate statement (Accept/Challenge/Abstain), add their own typed statements with sources and directed relations, and submit their turn, which activates the advocate's turn.** — Archived 2026-06-10 → `context/archive/2026-06-09-challenger-first-turn/`. Lesson: —.
 - **S-04: respond, complete round 1, and view the divergence summary** — Archived 2026-06-12 → `context/archive/2026-06-10-first-divergence-summary/`. Lesson: —.

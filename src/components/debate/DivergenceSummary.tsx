@@ -221,12 +221,12 @@ export default function DivergenceSummary({
           <h2 className="text-foreground mb-3 text-base font-bold">Divergence summary</h2>
 
           <section className="mb-4">
-            <SectionHeading title="Common ground" subtitle="Counterpart agreed" />
+            <SectionHeading title="Common ground" subtitle="Counterpart accepted" />
             <AuthorGroups
               items={summary.commonGround}
               viewerId={viewerId}
               counterpartLabel={counterpartLabel}
-              empty="No agreed statements yet."
+              empty="No accepted statements yet."
             />
           </section>
 

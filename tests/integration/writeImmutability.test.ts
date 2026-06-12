@@ -93,9 +93,9 @@ describeIntegration("S-04 write-immutability + mini-turn — RLS write boundarie
       debateId,
       nodeId: advStatementId,
       markerId: challengerId,
-      stance: "agree",
+      stance: "accept",
     });
-    expect(mark.stance).toBe("agree");
+    expect(mark.stance).toBe("accept");
   });
 
   it("makes a completed exchange fully immutable — neither party can add content", async () => {

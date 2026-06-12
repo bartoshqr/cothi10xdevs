@@ -80,7 +80,7 @@ the mirror cheap.
 
 **`marks`** (`supabase/migrations/20260610000001_create_marks_and_authorship.sql:24-39`;
 types `src/db/database.types.ts:137-167`): columns `node_id`, `marker_id` (mark
-author), `stance public.mark_stance` = `('agree','challenge','abstain')` (line
+author), `stance public.mark_stance` = `('accept','challenge','abstain')` (line
 20), `valid boolean default true` (line 36), `debate_id`. Unique key
 `(node_id, marker_id)` (`marks_node_marker_unique`, line 38). **No `kind` column,
 no per-round stamp.** `nodes.author_id` / `relations.author_id` are the sole
@@ -329,7 +329,7 @@ valid)`, O(nodes + marks) — a single linear pass, trivially within the 10s NFR
 ## Open Questions
 
 1. **"Mutually Agreed" semantics (FR-020, `prd.md:153`/`:39`).** A literal
-   per-node "both parties agreed" reading is **impossible** under the schema (a
+   per-node "both parties accepted" reading is **impossible** under the schema (a
    node is markable only by its counterpart, never twice). Strong evidence
    ("mutual" = graph-wide symmetry; each statement bucketed by its one
    counterpart mark) but the **whole algorithm pivots on this** — confirm with

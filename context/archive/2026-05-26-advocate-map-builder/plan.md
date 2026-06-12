@@ -88,7 +88,7 @@ restore identically; a second account cannot read the first account's debate.
 ## What We're NOT Doing
 
 - **No challenger invites / exchange / round config** (S-02+).
-- **No marks (Agree/Challenge/Abstain)** schema or UI (S-03/S-04). `author_id` is a proper column on both `nodes` and `relations` so S-03+ needs no migration.
+- **No marks (Accept/Challenge/Abstain)** schema or UI (S-03/S-04). `author_id` is a proper column on both `nodes` and `relations` so S-03+ needs no migration.
 - **No turn model / edit-locking / mark invalidation / orphaning** — the advocate edits and deletes
   their own nodes freely in this slice (S-05).
 - **No debate list/index page** (S-06) and **no parent debate linking** (S-07). This slice ships only

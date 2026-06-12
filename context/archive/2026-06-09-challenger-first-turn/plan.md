@@ -2,7 +2,7 @@
 
 ## Overview
 
-Roadmap slice S-03. Build the net-new three-state **mark** model (Agree / Challenge / Abstain) and the
+Roadmap slice S-03. Build the net-new three-state **mark** model (Accept / Challenge / Abstain) and the
 challenger's first-turn flow end-to-end: an accepted challenger marks every advocate Statement, adds their
 own Statements / Sources / connectives with directed relations, and submits their turn — which flips the
 exchange's `current_turn` from `'challenger'` to `'advocate'`. This is the input that feeds the divergence
@@ -36,7 +36,7 @@ ignored.
 
 An accepted challenger, on their turn (`current_turn='challenger'`), can:
 
-1. Mark every advocate **Statement** node Agree / Challenge / Abstain (connective AND/OR nodes carry **no**
+1. Mark every advocate **Statement** node Accept / Challenge / Abstain (connective AND/OR nodes carry **no**
    mark — `prd.md:190`). Marks persist incrementally as each is clicked.
 2. Add their own Statements (any type), Source nodes, AND/OR connectives, and directed relations from their
    own nodes to any existing Statement — visually distinct (shaded) from advocate nodes.
@@ -140,7 +140,7 @@ changes that let an accepted challenger contribute without being able to edit th
 
 **Contract**:
 
-- Enum `public.mark_stance as enum ('agree', 'challenge', 'abstain')`.
+- Enum `public.mark_stance as enum ('accept', 'challenge', 'abstain')`.
 - Table `public.marks`: `id uuid pk default gen_random_uuid()`, `debate_id uuid not null references
   debates on delete cascade`, `node_id uuid not null references nodes on delete cascade`,
   `marker_id uuid not null references auth.users on delete cascade`, `stance public.mark_stance not null`,
@@ -385,7 +385,7 @@ must keep working (owner full edit when no exchange).
 **Intent**: Surface the three-state mark affordance (mirroring the existing role-badge dropdown pattern) and
 shade challenger-authored nodes distinctly.
 
-**Contract**: When `canMarkNode`, render an Agree/Challenge/Abstain control **inline inside the card,
+**Contract**: When `canMarkNode`, render an Accept/Challenge/Abstain control **inline inside the card,
 below the body** — a slim bar with three buttons (`nodrag nopan`), no portal/dropdown. Current stance
 highlighted; clicking calls `setMark`. Background paint (`StatementNode.tsx:269`) conditions on inferred
 author role (`node.data.author_id === advocateId`) — challenger nodes get a distinct shade (light
@@ -450,7 +450,7 @@ details are to be reviewed later.
 
 - **Stance list single-sourced from the DB enum**: `MARK_STANCES` derives from
   `Constants.public.Enums.mark_stance`, and `StatementNode` iterates it (no hardcoded
-  `["agree","challenge","abstain"]`).
+  `["accept","challenge","abstain"]`).
 
 - **Submit affordance shipped as a cross-island `TurnBar`** (`src/components/debate/TurnBar.tsx`,
   replacing the interim `SubmitTurnButton.tsx`), living in the page header — not an in-canvas button. It
@@ -626,7 +626,7 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   insert into public.marks (debate_id, node_id, marker_id, stance)
   values ('00000000-0000-4000-8000-000000000010',
           '00000000-0000-4000-8000-000000000011',
-          '00000000-0000-4000-8000-000000000002', 'agree');
+          '00000000-0000-4000-8000-000000000002', 'accept');
   reset role;
   ```
 
@@ -637,12 +637,12 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   insert into public.marks (debate_id, node_id, marker_id, stance)
   values ('00000000-0000-4000-8000-000000000010',
           '00000000-0000-4000-8000-000000000016',
-          '00000000-0000-4000-8000-000000000002', 'agree');
+          '00000000-0000-4000-8000-000000000002', 'accept');
   reset role;
   ```
 
   ```sql
-  -- (c) SELECT as challenger — Expected: sees mark from (a), stance='agree'.
+  -- (c) SELECT as challenger — Expected: sees mark from (a), stance='accept'.
   set local role authenticated;
   set local "request.jwt.claims" = '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}';
   select node_id, marker_id, stance from public.marks
@@ -706,7 +706,7 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
   -- Advocate statements = nodes where author_id matches debate.owner_id.
   insert into public.marks (debate_id, node_id, marker_id, stance)
   select '00000000-0000-4000-8000-000000000010', n.id,
-         '00000000-0000-4000-8000-000000000002', 'agree'
+         '00000000-0000-4000-8000-000000000002', 'accept'
   from public.nodes n
   join public.debates d on d.id = n.debate_id and d.owner_id = n.author_id
   where n.debate_id='00000000-0000-4000-8000-000000000010'
@@ -745,14 +745,14 @@ definer is `stable` and hits the `exchanges(challenger_id)` / `(debate_id)` inde
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
     -d '{"nodeId":"00000000-0000-4000-8000-000000000012","stance":"challenge"}' | jq .
 
-  # Re-mark same node 'agree' → idempotent update, still one row.
+  # Re-mark same node 'accept' → idempotent update, still one row.
   curl -s -X POST "http://localhost:4321/api/debates/00000000-0000-4000-8000-000000000010/marks" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-    -d '{"nodeId":"00000000-0000-4000-8000-000000000012","stance":"agree"}' | jq .
+    -d '{"nodeId":"00000000-0000-4000-8000-000000000012","stance":"accept"}' | jq .
   ```
 
   ```sql
-  -- DB layer: exactly one mark row for (node …012, user02), stance='agree'.
+  -- DB layer: exactly one mark row for (node …012, user02), stance='accept'.
   select node_id, stance from public.marks
   where node_id='00000000-0000-4000-8000-000000000012'
     and marker_id='00000000-0000-4000-8000-000000000002';

@@ -41,7 +41,7 @@ The product mechanics are domain-agnostic — expanding to new causes is a distr
 1. Advocate builds their belief map (Claims → Data → Warrants)
 2. Commits to every node (forces internal consistency check)
 3. Publishes map
-4. Challenger audits node by node: [Agree] or [Challenge]
+4. Challenger audits node by node: [Accept] or [Challenge]
 5. System subtracts common ground, isolates the **Crux** — the exact first point of divergence
 
 ## Example: Climate Argument Mapped (Toulmin Model)
@@ -89,7 +89,7 @@ Phase 1 only (map building + publishing). Challenge mechanic is Phase 2.
 
 ### Challenge (Phase 2 — pulled into MVP)
 9. **Invite challenger** — publish map to a specific person via private link (not public)
-10. **Audit node** — challenger marks each node Agree / Challenge (cannot edit original text)
+10. **Audit node** — challenger marks each node Accept / Challenge (cannot edit original text)
 11. **Add rebuttals** — challenger add rebuttals/alternative data etc.
 12. **Highlight Crux** — system marks the first Challenge as the exact point of divergence
 

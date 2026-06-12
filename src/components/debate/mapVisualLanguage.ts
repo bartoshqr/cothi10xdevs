@@ -68,7 +68,7 @@ export interface MarkStanceDescriptor {
 }
 
 export const markStanceDescriptors: Record<MarkStance, MarkStanceDescriptor> = {
-  agree: { label: "Agree", color: "var(--chart-2)" },
+  accept: { label: "Accept", color: "var(--chart-2)" },
   challenge: { label: "Challenge", color: "var(--destructive)" },
   abstain: { label: "Abstain", color: "var(--muted-foreground)" },
 };

@@ -52,7 +52,7 @@ const CONNECTIVES: { op: ConnectiveOp; description: string }[] = [
 ];
 
 const MARKS: { stance: MarkStance; description: string }[] = [
-  { stance: "agree", description: "You agree with this statement" },
+  { stance: "accept", description: "You accept this statement" },
   { stance: "challenge", description: "You challenge this statement" },
   { stance: "abstain", description: "You abstain on this statement — unresolved" },
 ];
@@ -132,7 +132,7 @@ export default function MapLegend() {
               Claim
             </p>
             <p className="mb-3" style={{ fontSize: 10, color: "var(--muted-foreground)" }}>
-              An assertion that can be agreed, challenged, or rebutted.
+              An assertion that can be accepted, challenged, or rebutted.
             </p>
 
             <p

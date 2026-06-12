@@ -50,13 +50,13 @@ A published map owner can choose to open their tree to a specific individual for
 
 When a challenger enters the map, they cannot modify the original author’s text; instead, they must audit the tree element by element.
 
-For every single Claim, Data node, and Warrant bridge, the challenger must explicitly choose either [Agree] or [Challenge].
+For every single Claim, Data node, and Warrant bridge, the challenger must explicitly choose either [Accept] or [Challenge].
 
 This interaction forces the challenger to acknowledge verified facts, preventing them from attacking strawman arguments or shifting the goalposts.
 
 As the challenger progresses, the platform’s core domain logic performs a digital subtraction of all mutually agreed-upon nodes.
 
-The system automatically filters out and hides the "common ground" where both participants selected [Agree].
+The system automatically filters out and hides the "common ground" where both participants selected [Accept].
 
 It then dynamically isolates and highlights the exact node or logical bridge where the first [Challenge] occurred, exposing the precise Crux of their divergence.
 

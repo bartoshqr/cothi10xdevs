@@ -12,7 +12,7 @@ The spike also works out a **restructured argument model** (diverging from the P
 type-and-source-attribute model) that the user wants to see rendered:
 
 - **Everything is a Claim.** There is one underlying statement node — fundamentally a claim (an
-  assertion that can be agreed / challenged / rebutted). Source, Data, Warrant, Backing, and Rebuttal
+  assertion that can be accepted / challenged / rebutted). Source, Data, Warrant, Backing, and Rebuttal
   are not separate entity types — they are **roles** a claim takes on by its **position**. A statement
   with no role is **just a Claim** (the root claim, and any plain claim).
 - **Logical connective nodes (AND / OR).** A second node category — a small **connective** node, set
@@ -45,7 +45,7 @@ change any PRD/roadmap artifact.
   role accents from the `--chart-*` ramp, base/structure from the semantic tokens — so it fits the
   existing design and works in light and dark without a bespoke palette.
 - **Existing argument-map mockup**: `src/components/landing/ArgumentMapMockup.astro` is a static
-  HTML/Tailwind depiction (Claim + Data + Warrant nodes, Agree/Challenge/Abstain toggles, climate
+  HTML/Tailwind depiction (Claim + Data + Warrant nodes, Accept/Challenge/Abstain toggles, climate
   nuclear-energy example). **This spike supersedes it** and is built so it could later replace the
   landing mockup with the React Flow version.
 - **`@xyflow/react` is NOT installed** — `package.json` has no xyflow/reactflow dependency. This

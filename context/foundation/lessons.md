@@ -54,7 +54,7 @@
 
 ## Model invalidation as a flag the counterpart flips — never delete or overwrite
 
-- **Context**: State that one party records about another party's content and that becomes stale when the content changes (e.g. marks: challenger's Agree/Challenge/Abstain on an advocate statement; round carry-over / invalidation in S-05).
+- **Context**: State that one party records about another party's content and that becomes stale when the content changes (e.g. marks: challenger's Accept/Challenge/Abstain on an advocate statement; round carry-over / invalidation in S-05).
 - **Problem**: Deleting or overwriting the stale row destroys history needed for audit and for diffing across rounds, and a delete-based design forces a heavier migration + risks losing data. It also blurs *who* is allowed to invalidate.
 - **Rule**: Store one mutable row and add a `valid boolean not null default true` column for invalidation. When a party changes their content, the **other** party's row about it is flipped `valid = false` (the counterpart invalidates, never the author); the stance/value stays intact. Gates then read `valid = true`. Designing the row as mutable-but-not-deleted keeps invalidation a pure column-add migration with no backfill and no data loss.
 - **Applies to**: plan, implement, impl-review

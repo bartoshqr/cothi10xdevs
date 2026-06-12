@@ -4,7 +4,7 @@ import { classifyDivergence, type ClassifyMark, type ClassifyNode } from "@/lib/
 import { Constants } from "@/db/database.types";
 
 // The classifier is the deterministic heart of the divergence summary. These tests are the
-// full oracle: every statement_type × {agree, challenge, abstain, unmarked} lands in the
+// full oracle: every statement_type × {accept, challenge, abstain, unmarked} lands in the
 // right bucket, open divergences carry the right factual/values gap, connectives are excluded,
 // and `valid = false` marks are ignored (treated as unmarked → unresolved).
 
@@ -27,9 +27,9 @@ function mark(stance: ClassifyMark["stance"], valid = true): ClassifyMark {
 }
 
 describe("classifyDivergence", () => {
-  it("buckets an Agreed statement of every type into commonGround", () => {
+  it("buckets an Accepted statement of every type into commonGround", () => {
     for (const t of STATEMENT_TYPES) {
-      const result = classifyDivergence({ nodes: [statement("s1", t)], marks: { s1: mark("agree") } });
+      const result = classifyDivergence({ nodes: [statement("s1", t)], marks: { s1: mark("accept") } });
       expect(result.commonGround).toEqual([{ id: "s1", statementType: t, title: "title-s1", authorId: AUTHOR }]);
       expect(result.openDivergences).toHaveLength(0);
       expect(result.unresolved).toHaveLength(0);
@@ -70,7 +70,7 @@ describe("classifyDivergence", () => {
   it("treats a `valid = false` mark as unmarked → unresolved (S-05 forward-compat)", () => {
     const result = classifyDivergence({
       nodes: [statement("s1", "data")],
-      marks: { s1: mark("agree", false) },
+      marks: { s1: mark("accept", false) },
     });
     expect(result.unresolved).toEqual([{ id: "s1", statementType: "data", title: "title-s1", authorId: AUTHOR }]);
     expect(result.commonGround).toHaveLength(0);
@@ -79,7 +79,7 @@ describe("classifyDivergence", () => {
   it("excludes connective nodes from every bucket, even if a stray mark is keyed on one", () => {
     const result = classifyDivergence({
       nodes: [connective("k1"), statement("s1", "claim")],
-      marks: { k1: mark("agree"), s1: mark("agree") },
+      marks: { k1: mark("accept"), s1: mark("accept") },
     });
     expect(result.commonGround).toEqual([{ id: "s1", statementType: "claim", title: "title-s1", authorId: AUTHOR }]);
     expect(result.openDivergences).toHaveLength(0);
@@ -89,7 +89,7 @@ describe("classifyDivergence", () => {
   it("classifies a mixed graph into all three buckets at once", () => {
     const result = classifyDivergence({
       nodes: [
-        statement("agree-claim", "claim"),
+        statement("accept-claim", "claim"),
         statement("challenge-data", "data"),
         statement("challenge-warrant", "warrant"),
         statement("abstain-source", "source"),
@@ -97,14 +97,14 @@ describe("classifyDivergence", () => {
         connective("k1"),
       ],
       marks: {
-        "agree-claim": mark("agree"),
+        "accept-claim": mark("accept"),
         "challenge-data": mark("challenge"),
         "challenge-warrant": mark("challenge"),
         "abstain-source": mark("abstain"),
       },
     });
 
-    expect(result.commonGround.map((i) => i.id)).toEqual(["agree-claim"]);
+    expect(result.commonGround.map((i) => i.id)).toEqual(["accept-claim"]);
     expect(result.openDivergences).toEqual([
       { id: "challenge-data", statementType: "data", title: "title-challenge-data", authorId: AUTHOR, gap: "factual" },
       {

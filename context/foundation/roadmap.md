@@ -51,9 +51,10 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 | S-02 | invite-and-open-exchange    | set round count, invite a challenger by username, they accept | S-01          | US-01, FR-007, FR-008, FR-009, FR-010     | done     |
 | S-03 | challenger-first-turn       | mark every advocate statement and add own statements, submit turn   | S-02          | US-02, FR-011, FR-012, FR-013, FR-014     | done |
 | S-04 | first-divergence-summary    | respond, complete round 1, and view the divergence summary          | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | done |
-| S-05 | multiround-edit-invalidation| edit/delete across rounds with mark invalidation; close exchange    | S-04          | US-04, FR-019, FR-026, FR-027             | proposed |
+| S-05 | multiround-edit-invalidation| edit/delete across rounds with mark invalidation + orphan highlight  | S-04          | US-04, FR-026                             | proposed |
 | S-06 | debate-list-and-inbox       | see all own debates with state, and an inbox of invites/exchanges   | S-02          | FR-024, FR-025                            | proposed |
 | S-07 | parent-debate-linking       | link a new debate to a parent statement and navigate between them   | S-01          | FR-022, FR-023                            | proposed |
+| S-08 | advocate-close-and-timeout  | advocate closes an exchange explicitly or after 7-day challenger inactivity | S-05  | FR-019, FR-027                            | proposed |
 
 ## Streams
 
@@ -62,7 +63,7 @@ Navigation aid — groups items that share a Prerequisites chain. Canonical orde
 | Stream | Theme               | Chain                                          | Note                                                              |
 | ------ | ------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
 | D      | Landing / onboarding | `S-00`                                        | Standalone; no prerequisites, parallel with everything. Ships whenever ready. |
-| A      | Core exchange loop  | `F-01` → `S-01` → `S-02` → `S-03` → `S-04` → `S-05` | The critical path to the north star (`S-04`) and the heavy state machine after it. |
+| A      | Core exchange loop  | `F-01` → `S-01` → `S-02` → `S-03` → `S-04` → `S-05` → `S-08` | The critical path to the north star (`S-04`), the heavy state machine (`S-05`), then the close/timeout tail (`S-08`). |
 | E      | Visual foundation   | `F-02` → `S-01`                                 | Disposable design spike; proves the canvas's node/edge visual language before `S-01` commits to a schema. |
 | B      | Navigation & inbox  | `S-06`                                          | Joins Stream A at `S-02`; can be built in parallel with `S-03`/`S-04` (capacity lever). |
 | C      | Fractal linking     | `S-07`                                          | Branches from `S-01`; highest value once `S-04` summaries exist, parallel with `S-05`. |
@@ -181,17 +182,32 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** This is the validation milestone — the first time the full loop produces the artifact the product exists to create. Round-completion semantics (both turns submitted) gate the summary trigger. Deterministic-only; no AI. The summary classification (contested Data → factual gap, contested Warrant → values gap) is the core deliverable.
 - **Status:** done
 
-### S-05: Multi-round exchange with edit/delete, mark invalidation, and close
+### S-05: Multi-round exchange with edit/delete, mark invalidation, and orphan highlight
 
-- **Outcome:** across rounds 2+, each party can edit/delete only their own statements during their active turn; edits/deletes invalidate the other party's marks (re-evaluation enforced for edits, auto-clear for deletes), orphaned statements are highlighted, the final-round mini turn runs, and the exchange closes (round exhaustion, explicit close, or 7-day challenger-inactivity) into immutability.
+- **Outcome:** across rounds 2+, each party can edit/delete only their own statements during their active turn; an edit invalidates the other party's mark on that statement (flag flip, re-mark required by turn-end — not ordered within the turn); a delete cascades the deleted node's own marks but **preserves** counterpart statements and their marks, recomputing only orphan status; orphaned statements (no path to the root claim) are highlighted in the canvas and labelled in the divergence summary; the final-round mini-turn (always opens; challenger may also revise valid marks) runs with content controls frozen in the UI. Close paths are **not** in this slice — see S-08.
 - **Change ID:** multiround-edit-invalidation
-- **PRD refs:** US-04, FR-019, FR-026, FR-027
+- **PRD refs:** US-04, FR-026 (see PRD §Shifts 2026-06-12 for the S-05 amendments)
 - **Prerequisites:** S-04
 - **Parallel with:** S-07
 - **Blockers:** —
+- **Scope decisions (PRD §Shifts):** re-eval ordering rule dropped (submit-gate is the only enforcement); orphaned counterpart statements keep their marks (no relation-delete clear cascade); orphans carry their stance into the summary under an "orphaned" sub-label per section; mini-turn always opens and permits change-of-mind on valid marks; own-statement connectivity is a UI-only soft-guard on invite/submit (client compute-at-read, not server-enforced).
 - **Unknowns:**
-  - "Silent" = no turn submission within 7 days; partial activity (login/view/draft) does not extend the clock. PRD documents the intended call — confirm at implementation. Owner: user / implementation. Block: no.
+  - Invalidation mechanism: a `SECURITY DEFINER` edit-RPC that flips the counterpart's `marks.valid=false` (the marker-only `marks_update` policy blocks the author from doing it as a plain UPDATE). `RETURNS SETOF`; integration-test the not-found branch. Owner: implementation. Block: no.
 - **Risk:** The heaviest, riskiest slice — the turn/mark-invalidation/orphaning/mini-turn state machine is where the data-integrity guardrail is won or lost. Deliberately sequenced AFTER the north star: market-feedback wants a working single-round loop in front of advocates before this complexity lands. A correctness bug here silently corrupts a user's reasoning map.
+- **Status:** proposed
+
+### S-08: Advocate-initiated close (explicit + 7-day challenger-inactivity)
+
+- **Outcome:** the advocate can end an exchange that isn't closing on its own — either by explicitly closing it, or, when it is the challenger's turn (regular or mini-turn) and they have not submitted within 7 days of the turn opening, by closing after the inactivity window elapses. **Close precondition** (FR-019): the advocate must first satisfy FR-015 (every challenger statement marked / re-evaluated). At close all statements become immutable; any still-invalidated marks and any still-unmarked advocate statements default to Abstain (counted as unresolved). The UI surfaces a countdown once the 7-day window becomes available.
+- **Change ID:** advocate-close-and-timeout
+- **PRD refs:** FR-019 (close paths), FR-027 (post-close immutability) — split out of S-05 per PRD §Shifts 2026-06-12 #6
+- **Prerequisites:** S-05
+- **Parallel with:** S-06, S-07
+- **Blockers:** —
+- **Unknowns:**
+  - "Silent" = no turn submission within 7 days; partial activity (login/view/draft) does not extend the clock (PRD Open Question 3 / FR-019). Owner: user / implementation. Block: yes (resolve at implementation time).
+  - 7-day clock storage & actuation: add an activity-clock column on `exchanges` (set when the challenger's turn opens, cleared on submit); no Cloudflare cron in this setup, so favour **lazy check-and-close on read** (the advocate's next visit) over a scheduler. Owner: implementation. Block: no.
+- **Risk:** Lower-volume than S-05 but the close transition is irreversible and feeds the summary's unresolved counts — the Abstain-defaulting at close must be exact. Sequenced after S-05 because it depends on the mark-invalidation state and the orphan/mini-turn machinery landing first.
 - **Status:** proposed
 
 ### S-06: Debate list and challenger inbox
@@ -230,15 +246,16 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | S-02       | invite-and-open-exchange     | Open an exchange and invite a challenger                  | no                    | Prereq S-01 |
 | S-03       | challenger-first-turn        | Challenger marks and adds statements (turn 1)             | no                    | Prereq S-02 |
 | S-04       | first-divergence-summary     | Complete round 1 and generate the divergence summary      | no                    | North star; prereq S-03 |
-| S-05       | multiround-edit-invalidation | Multi-round edit/delete, mark invalidation, and close     | no                    | Prereq S-04; heaviest slice |
+| S-05       | multiround-edit-invalidation | Multi-round edit/delete, mark invalidation, orphan highlight | no                  | Prereq S-04; heaviest slice; close paths split to S-08 |
 | S-06       | debate-list-and-inbox        | Debate list and challenger inbox                          | no                    | Prereq S-02; parallelizable |
 | S-07       | parent-debate-linking        | Link debates to a parent statement                        | no                    | Prereq S-01; parallelizable |
+| S-08       | advocate-close-and-timeout   | Advocate explicit close + 7-day challenger-inactivity close | no                  | Prereq S-05; split out of S-05 |
 
 ## Open Roadmap Questions
 
 1. **Challenger account friction** — requiring challengers to create an account raises the barrier for the skeptic to engage. Owner: user (post-launch product team). Block: `roadmap-wide` (informs whether invite-acceptance is a success blocker; does not gate any slice).
 2. **Source format** — FR-005 / FR-013 allow free-text URL-or-citation with no validation or canonical format in MVP. Owner: user. Block: gates nothing (affects S-01, S-03 polish only).
-3. **"Silent" definition for the 7-day window** — clock starts at turn open; only turn submission stops it. Owner: user / implementation. Block: S-05 (must be resolved at implementation time, not before planning).
+3. **"Silent" definition for the 7-day window** — clock starts at turn open; only turn submission stops it. Owner: user / implementation. Block: S-08 (the 7-day close path was split out of S-05 per PRD §Shifts 2026-06-12 #6; resolve at S-08 implementation time, not before planning).
 4. **Cloudflare deploy path (infra)** — `infrastructure.md` flags an unresolved Astro 6 + Supabase Auth + Cloudflare adapter build failure (GitHub #15796), High likelihood, blocks first deploy; and preview URLs are public by default for a private-user app. Owner: user. Block: gates first production deploy of any slice — verify issue status and pin the adapter before deploying.
 
 ## Parked

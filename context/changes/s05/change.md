@@ -18,7 +18,9 @@ Two FR-019/FR-027 items the roadmap assigns to S-05 were **pulled forward into S
 - **Final-round mini-turn (FR-019)** — already built. `exchanges.in_mini_turn` column, the `can_add_content_as_current_actor` helper, and `submit_turn`'s mini-turn routing exist (`supabase/migrations/20260611000002_round_close_and_mini_turn.sql`). The advocate's final-round submit opens the challenger's marking-only closing turn; the exchange completes on the challenger's mini-turn submit. Negative-path RLS coverage in `tests/integration/writeImmutability.test.ts`.
 - **Write-immutability on close (FR-019/FR-027)** — already built. `nodes`/`relations` INSERT/UPDATE/DELETE are turn-gated; the map locks on a `pending` invite and is fully immutable on `completed`.
 
-Still genuinely S-05: multi-round (rounds 2+) edit/delete with **mark invalidation** (`valid=false` carry-over), orphaned-statement highlighting, explicit close, and the 7-day challenger-inactivity timeout.
+Still genuinely S-05: multi-round (rounds 2+) edit/delete with **mark invalidation** (`valid=false` carry-over on edit; **no** clear cascade on delete) and **orphaned-statement highlighting** (canvas + summary label). See the scope amendments in `context/changes/s05/ans.md` and `prd.md` §Shifts (2026-06-12).
+
+**Moved out of S-05 → new slice S-08 (`advocate-close-and-timeout`):** explicit advocate close and the 7-day challenger-inactivity timeout. S-05 closes only via round-exhaustion / mini-turn (already shipped in S-04). See `roadmap.md` §S-08 and `prd.md` §Shifts #6.
 
 ## TODO carried over from S-04 — UI mini-turn freeze for the challenger
 

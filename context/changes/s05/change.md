@@ -1,7 +1,7 @@
 ---
 change_id: s05
 title: Multi-round edit/delete with mark invalidation
-status: preparing
+status: planned
 created: 2026-06-12
 updated: 2026-06-12
 archived_at: null

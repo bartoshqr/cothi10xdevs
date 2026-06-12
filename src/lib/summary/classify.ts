@@ -28,6 +28,8 @@ export interface SummaryItem {
   id: string;
   statementType: StatementType;
   title: string;
+  /** Node author — lets the UI group each bucket into "mine" vs "counterpart". */
+  authorId: string;
 }
 
 export type DivergenceGap = "factual" | "values";
@@ -70,7 +72,12 @@ export function classifyDivergence({ nodes, marks }: ClassifyInput): DivergenceS
 
   for (const node of nodes) {
     if (node.kind !== "statement" || node.statementType === null) continue;
-    const item: SummaryItem = { id: node.id, statementType: node.statementType, title: node.title };
+    const item: SummaryItem = {
+      id: node.id,
+      statementType: node.statementType,
+      title: node.title,
+      authorId: node.authorId,
+    };
 
     const mark = marks[node.id];
     if (!mark?.valid) {

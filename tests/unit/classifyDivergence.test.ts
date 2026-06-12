@@ -30,7 +30,7 @@ describe("classifyDivergence", () => {
   it("buckets an Agreed statement of every type into commonGround", () => {
     for (const t of STATEMENT_TYPES) {
       const result = classifyDivergence({ nodes: [statement("s1", t)], marks: { s1: mark("agree") } });
-      expect(result.commonGround).toEqual([{ id: "s1", statementType: t, title: "title-s1" }]);
+      expect(result.commonGround).toEqual([{ id: "s1", statementType: t, title: "title-s1", authorId: AUTHOR }]);
       expect(result.openDivergences).toHaveLength(0);
       expect(result.unresolved).toHaveLength(0);
     }
@@ -39,18 +39,22 @@ describe("classifyDivergence", () => {
   it("buckets a Challenged statement into openDivergences with the right gap label", () => {
     for (const t of FACTUAL_TYPES) {
       const result = classifyDivergence({ nodes: [statement("s1", t)], marks: { s1: mark("challenge") } });
-      expect(result.openDivergences).toEqual([{ id: "s1", statementType: t, title: "title-s1", gap: "factual" }]);
+      expect(result.openDivergences).toEqual([
+        { id: "s1", statementType: t, title: "title-s1", authorId: AUTHOR, gap: "factual" },
+      ]);
     }
     for (const t of VALUES_TYPES) {
       const result = classifyDivergence({ nodes: [statement("s1", t)], marks: { s1: mark("challenge") } });
-      expect(result.openDivergences).toEqual([{ id: "s1", statementType: t, title: "title-s1", gap: "values" }]);
+      expect(result.openDivergences).toEqual([
+        { id: "s1", statementType: t, title: "title-s1", authorId: AUTHOR, gap: "values" },
+      ]);
     }
   });
 
   it("buckets an Abstained statement of every type into unresolved", () => {
     for (const t of STATEMENT_TYPES) {
       const result = classifyDivergence({ nodes: [statement("s1", t)], marks: { s1: mark("abstain") } });
-      expect(result.unresolved).toEqual([{ id: "s1", statementType: t, title: "title-s1" }]);
+      expect(result.unresolved).toEqual([{ id: "s1", statementType: t, title: "title-s1", authorId: AUTHOR }]);
       expect(result.commonGround).toHaveLength(0);
       expect(result.openDivergences).toHaveLength(0);
     }
@@ -59,7 +63,7 @@ describe("classifyDivergence", () => {
   it("treats an unmarked statement of every type as unresolved", () => {
     for (const t of STATEMENT_TYPES) {
       const result = classifyDivergence({ nodes: [statement("s1", t)], marks: {} });
-      expect(result.unresolved).toEqual([{ id: "s1", statementType: t, title: "title-s1" }]);
+      expect(result.unresolved).toEqual([{ id: "s1", statementType: t, title: "title-s1", authorId: AUTHOR }]);
     }
   });
 
@@ -68,7 +72,7 @@ describe("classifyDivergence", () => {
       nodes: [statement("s1", "data")],
       marks: { s1: mark("agree", false) },
     });
-    expect(result.unresolved).toEqual([{ id: "s1", statementType: "data", title: "title-s1" }]);
+    expect(result.unresolved).toEqual([{ id: "s1", statementType: "data", title: "title-s1", authorId: AUTHOR }]);
     expect(result.commonGround).toHaveLength(0);
   });
 
@@ -77,7 +81,7 @@ describe("classifyDivergence", () => {
       nodes: [connective("k1"), statement("s1", "claim")],
       marks: { k1: mark("agree"), s1: mark("agree") },
     });
-    expect(result.commonGround).toEqual([{ id: "s1", statementType: "claim", title: "title-s1" }]);
+    expect(result.commonGround).toEqual([{ id: "s1", statementType: "claim", title: "title-s1", authorId: AUTHOR }]);
     expect(result.openDivergences).toHaveLength(0);
     expect(result.unresolved).toHaveLength(0);
   });
@@ -102,8 +106,14 @@ describe("classifyDivergence", () => {
 
     expect(result.commonGround.map((i) => i.id)).toEqual(["agree-claim"]);
     expect(result.openDivergences).toEqual([
-      { id: "challenge-data", statementType: "data", title: "title-challenge-data", gap: "factual" },
-      { id: "challenge-warrant", statementType: "warrant", title: "title-challenge-warrant", gap: "values" },
+      { id: "challenge-data", statementType: "data", title: "title-challenge-data", authorId: AUTHOR, gap: "factual" },
+      {
+        id: "challenge-warrant",
+        statementType: "warrant",
+        title: "title-challenge-warrant",
+        authorId: AUTHOR,
+        gap: "values",
+      },
     ]);
     expect(result.unresolved.map((i) => i.id).sort()).toEqual(["abstain-source", "unmarked-backing"]);
   });

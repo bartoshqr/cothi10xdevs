@@ -425,13 +425,13 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 4: Summary endpoint
 
 #### Automated
-- [x] 4.1 Integration test: gate-unmet → 404/409; round-2 and completed → 200 with correct buckets
-- [x] 4.2 Integration test: non-member → 404
-- [x] 4.3 `npm run test:integration` passes
-- [x] 4.4 Build passes: `npm run build`
+- [x] 4.1 Integration test: gate-unmet → 404/409; round-2 and completed → 200 with correct buckets — 60049b5
+- [x] 4.2 Integration test: non-member → 404 — 60049b5
+- [x] 4.3 `npm run test:integration` passes — 60049b5
+- [x] 4.4 Build passes: `npm run build` — 60049b5
 
 #### Manual
-- [x] 4.5 `curl` the summary as advocate and challenger on a completed exchange → identical JSON
+- [x] 4.5 `curl` the summary as advocate and challenger on a completed exchange → identical JSON — 60049b5
 
   > **Agent-automatable**: Yes — bearer-token curl for both users.
 
@@ -449,19 +449,19 @@ The summary is a single linear pass over nodes + marks (O(n)), trivially within 
 ### Phase 5: Summary UI — read-only panel
 
 #### Automated
-- [ ] 5.1 Type check passes: `npx astro check`
-- [ ] 5.2 Build passes: `npm run build`
+- [x] 5.1 Type check passes: `npx astro check`
+- [x] 5.2 Build passes: `npm run build`
 
 #### Manual
-- [ ] 5.3 Both parties see the page (read-only) + summary button on a completed round_count=1 exchange
+- [x] 5.3 Both parties see the page (read-only) + summary button on a completed round_count=1 exchange
 
   > **Agent-automatable**: No — browser visual check for both user sessions.
 
-- [ ] 5.4 Summary button hidden/disabled before round 1 completes, appears once the gate is met
+- [x] 5.4 Summary button hidden/disabled before round 1 completes, appears once the gate is met
 
   > **Agent-automatable**: No — browser visual check across the gate boundary.
 
-- [ ] 5.5 Panel renders three buckets with correct gap labels, no console errors
+- [x] 5.5 Panel renders three buckets with correct gap labels, no console errors
 
   > **Agent-automatable**: No — visual + devtools console inspection.
 
@@ -548,6 +548,16 @@ Four challenger seed nodes in `supabase/seed.sql` were repositioned (x/y coordin
 ### 4. DB types regeneration command
 
 `src/db/database.types.ts` must be regenerated with `npm run db:types` (pins the `graphql_public,pgbouncer,public,storage` schema set) — hand-editing or partial MCP output drops the `storage` schema and desyncs `Database` from `Constants`. A rule to this effect was added to `CLAUDE.md` (Code style).
+
+### 8. Phase 5 UI refinements (recorded during Phase 5)
+
+The read-only panel landed per plan, plus several refinements from live UI review that go beyond the plan's "render the three buckets" contract:
+
+- **Visibility driven by the live turn gate, not SSR.** `DivergenceSummary` subscribes to the same `wvmap:turn-gate` event `TurnBar` uses and computes its own `gateMet` (`completed || currentRound >= 2`); the SSR `isCompleted`/`currentRound` props are first-paint fallbacks only. The island mounts whenever an exchange exists (`exchange != null`), so no SSR value can suppress a button the live gate would show — this fixed the counterpart's button never appearing after a round advanced.
+- **Author grouping required extending the Phase 3 classifier.** Each bucket is split into "My statements" vs "<Counterpart> statements", sorted by kind then title. This needed the author identity per item, so `SummaryItem` (in `src/lib/summary/classify.ts`) gained an `authorId` field — populated in `getDivergenceSummary`'s node mapping and asserted in the `classifyDivergence` oracle (`tests/unit/classifyDivergence.test.ts` updated). The `viewerId`/`viewerRole` flow as props from `[id].astro`'s `viewer` context.
+- **Open divergences shown as gap subsections** ("Factual gaps" / "Premise gaps") instead of a per-row label; **"values gap" relabelled "Premise gap"** in the UI (the internal `gap: "values"` type is unchanged).
+- **Click-outside-to-close uses a capture-phase listener** — React Flow `stopPropagation`s canvas `mousedown` for its pan gesture, so a bubble-phase listener never sees canvas clicks.
+- All header actions were wrapped in a single `slot="header-actions"` container (the summary is the first such header action, left of `TurnBar`), since this is the first time two header actions render simultaneously.
 
 ### Verification at time of recording
 

@@ -79,7 +79,9 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   // Flag an orphaned own statement only while it's the viewer's turn, so they know what to
   // delete or reconnect before submitting (the submit-gate is the hard block). Pre-exchange
   // mid-build nodes aren't flagged — the advocate's invite guard handles that case instead.
-  const showOrphanWarning = isOrphanedOwn && (viewer?.isMyTurn ?? false);
+  // Suppressed while the node is open for editing: a freshly-added node is trivially orphaned
+  // until wired up, so don't flash the warning mid-creation (the submit-gate still catches it).
+  const showOrphanWarning = isOrphanedOwn && (viewer?.isMyTurn ?? false) && !isEditing;
   const isChallenger = data.authorId !== undefined && viewer !== null && data.authorId !== viewer.advocateId;
   // Card chrome (outer border + section dividers) uses a warm rosy line on the challenger's
   // tinted card so a cold neutral gray doesn't read muddy over the tint; advocate cards keep gray.

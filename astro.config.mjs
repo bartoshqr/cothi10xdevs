@@ -12,6 +12,13 @@ export default defineConfig({
   integrations: [react(), sitemap()],
   vite: {
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      // Pre-bundle all React entry points in one startup pass so react-dom/server
+      // and the JSX runtimes share a single React instance. Prevents the intermittent
+      // "jsxDEV is not a function" SSR crash under Astro 6 + Cloudflare workerd dev,
+      // which is caused by lazy dep discovery optimizing React in separate passes.
+      include: ["react", "react-dom", "react-dom/server", "react/jsx-runtime", "react/jsx-dev-runtime"],
+    },
   },
   adapter: cloudflare({
     imageService: "passthrough",

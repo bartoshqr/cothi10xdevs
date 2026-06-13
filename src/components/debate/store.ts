@@ -51,6 +51,14 @@ export interface ViewerContext {
 export type DebateNode = StatementNodeType | ConnectiveNodeType;
 export type DebateEdge = Edge<RelationEdgeData, "relation">;
 
+/** Whether the viewer may write content (add/move/edit/delete) right now. It is their turn,
+ * EXCEPT the challenger during their closing mini-turn — that turn is marking-only (the DB
+ * already freezes content via `can_add_content_as_current_actor`), so the UI must match.
+ * Marking is gated separately on `isMyTurn`, so the mark bar stays live in the mini-turn. */
+export function canWriteContentNow(viewer: ViewerContext): boolean {
+  return viewer.isMyTurn && !(viewer.viewerRole === "challenger" && viewer.inMiniTurn);
+}
+
 export interface NodeFieldPatch {
   title?: string;
   body?: string;
@@ -798,13 +806,13 @@ export const useStore = create<RFState>()((set, get) => ({
   myTurnOrPreExchange: () => {
     const { viewer, canEdit } = get();
     if (!viewer) return canEdit; // pre-exchange: use the old canEdit flag
-    return viewer.isMyTurn;
+    return canWriteContentNow(viewer);
   },
 
   canEditNode: (nodeId) => {
     const { viewer, canEdit, nodes } = get();
     if (!viewer) return canEdit; // pre-exchange: all nodes editable if canEdit
-    if (!viewer.isMyTurn) return false;
+    if (!canWriteContentNow(viewer)) return false;
     const node = nodes.find((n) => n.id === nodeId);
     return node?.data.authorId === viewer.viewerId;
   },

@@ -29,8 +29,8 @@ import AddNodeMenu from "./AddNodeMenu";
 import NodeContextMenu from "./NodeContextMenu";
 import EdgeContextMenu from "./EdgeContextMenu";
 import ConnectKindPicker from "./ConnectKindPicker";
-import { useStore, useShallow, reconcileFromServer } from "./store";
-import type { DebateNode, DebateEdge, ViewerContext } from "./store";
+import { useStore, useShallow, reconcileFromServer, canWriteContentNow } from "./store";
+import type { DebateNode, DebateEdge, ViewerContext, RFState } from "./store";
 import type { DebateGraph } from "@/lib/debate/repository";
 import { ownGraphIssues } from "./connectivityGraph";
 import type { MarkState } from "./mapVisualLanguage";
@@ -146,6 +146,47 @@ function computeConnectivity(s: ReturnType<typeof useStore.getState>): Connectiv
   };
 }
 
+// The exact store slice MapEditorInner subscribes to (via useShallow). Exported so a unit test
+// can pin the subscription contract — notably that `canEdit` is part of the slice, so a revoke's
+// setCanEdit(true) re-renders the canvas and re-enables it (regression: it was previously omitted,
+// and only the never-changing myTurnOrPreExchange function reference was selected).
+export function selectMapEditorState(s: RFState) {
+  return {
+    nodes: s.nodes,
+    edges: s.edges,
+    debateId: s.debateId,
+    error: s.error,
+    clearError: s.clearError,
+    onNodesChange: s.onNodesChange,
+    onEdgesChange: s.onEdgesChange,
+    stagePendingConnection: s.stagePendingConnection,
+    pendingConnection: s.pendingConnection,
+    cancelConnection: s.cancelConnection,
+    deleteNodes: s.deleteNodes,
+    createStatementNode: s.createStatementNode,
+    setRootNode: s.setRootNode,
+    addPendingPreview: s.addPendingPreview,
+    inEditNodeId: s.inEditNodeId,
+    inEditEdgeId: s.inEditEdgeId,
+    setInEditEdgeId: s.setInEditEdgeId,
+    isInEditBlocked: s.isInEditBlocked,
+    tryExitNodeEdit: s.tryExitNodeEdit,
+    // Subscribe to canEdit (not the myTurnOrPreExchange function, whose reference never
+    // changes) so a revoke's setCanEdit(true) actually re-renders and re-enables the board.
+    canEdit: s.canEdit,
+    canEditNode: s.canEditNode,
+    viewer: s.viewer,
+    marks: s.marks,
+  };
+}
+
+// Whether the board is writable for the viewer right now (their turn, or pre-exchange advocate).
+// Derived from the subscribed primitives so it tracks canEdit/viewer flips; mirrors the store's
+// myTurnOrPreExchange(). Exported for the same selector-contract test.
+export function deriveCanAdd({ viewer, canEdit }: { viewer: ViewerContext | null; canEdit: boolean }): boolean {
+  return viewer ? canWriteContentNow(viewer) : canEdit;
+}
+
 // Per-instance screen-coord cursor ref, provided by MapEditorInner. The connection
 // line stays a module-level component (stable identity — no React Flow remount) and
 // reads the live pointer through context, converting to flow coords itself. This
@@ -236,40 +277,9 @@ function MapEditorInner() {
     canEditNode,
     viewer,
     marks,
-  } = useStore(
-    useShallow((s) => ({
-      nodes: s.nodes,
-      edges: s.edges,
-      debateId: s.debateId,
-      error: s.error,
-      clearError: s.clearError,
-      onNodesChange: s.onNodesChange,
-      onEdgesChange: s.onEdgesChange,
-      stagePendingConnection: s.stagePendingConnection,
-      pendingConnection: s.pendingConnection,
-      cancelConnection: s.cancelConnection,
-      deleteNodes: s.deleteNodes,
-      createStatementNode: s.createStatementNode,
-      setRootNode: s.setRootNode,
-      addPendingPreview: s.addPendingPreview,
-      inEditNodeId: s.inEditNodeId,
-      inEditEdgeId: s.inEditEdgeId,
-      setInEditEdgeId: s.setInEditEdgeId,
-      isInEditBlocked: s.isInEditBlocked,
-      tryExitNodeEdit: s.tryExitNodeEdit,
-      // Subscribe to canEdit (not the myTurnOrPreExchange function, whose reference never
-      // changes) so a revoke's setCanEdit(true) actually re-renders and re-enables the board.
-      canEdit: s.canEdit,
-      canEditNode: s.canEditNode,
-      viewer: s.viewer,
-      marks: s.marks,
-    })),
-  );
+  } = useStore(useShallow(selectMapEditorState));
 
-  // Derived: whether the board is writable for the viewer right now (their turn, or pre-exchange
-  // advocate). Computed from the subscribed primitives so it re-renders when canEdit/viewer flip
-  // (mirrors the store's myTurnOrPreExchange()).
-  const canAdd = viewer ? viewer.isMyTurn : canEdit;
+  const canAdd = deriveCanAdd({ viewer, canEdit });
 
   const closeConnectionPicker = useCallback(() => {
     setInEditEdgeId(null);

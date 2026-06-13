@@ -398,14 +398,14 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [x] 3.1 Unit: `reachableFromRoot` reaches root / severed / never-connected: `npm run test:unit`
-- [x] 3.2 Unit: `computeTurnGate` sets `danglingCount` and suppresses it in mini-turn: `npm run test:unit`
-- [x] 3.3 Integration: summary tags an orphaned statement, keeps its stance: `npm run test:integration`
-- [x] 3.4 Type + lint: `npx astro check` && `npm run lint`
+- [x] 3.1 Unit: `reachableFromRoot` reaches root / severed / never-connected: `npm run test:unit` — 920ee96
+- [x] 3.2 Unit: `computeTurnGate` sets `danglingCount` and suppresses it in mini-turn: `npm run test:unit` — 920ee96
+- [x] 3.3 Integration: summary tags an orphaned statement, keeps its stance: `npm run test:integration` — 920ee96
+- [x] 3.4 Type + lint: `npx astro check` && `npm run lint` — 920ee96
 
 #### Manual
 
-- [x] 3.5 After A's delete severs B's statement, B sees it highlighted at turn start and cannot submit until delete/reconnect
+- [x] 3.5 After A's delete severs B's statement, B sees it highlighted at turn start and cannot submit until delete/reconnect — 920ee96
 
   > **Agent-automatable**: Partial — the submit-block (gate) and the orphan row in the summary are checkable via SQL/HTTP, but the canvas highlight is visual and needs a browser.
 
@@ -416,7 +416,7 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
   select id, kind, author_id from public.nodes where debate_id = '<debateId>' and kind = 'statement';
   ```
 
-- [x] 3.6 Orphaned statement that reaches a closed exchange appears in the summary tagged "orphaned" under its stance bucket
+- [x] 3.6 Orphaned statement that reaches a closed exchange appears in the summary tagged "orphaned" under its stance bucket — 920ee96
 
   > **Agent-automatable**: Partial — `/api/debates/[id]/summary` JSON carries `isOrphaned`; the badge rendering is visual.
 
@@ -433,11 +433,11 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [ ] 4.1 Unit: content gates false but `canMarkNode` true for challenger-in-mini-turn: `npm run test:unit`
-- [ ] 4.2 Type + lint: `npx astro check` && `npm run lint`
+- [x] 4.1 Unit: content gates false but `canMarkNode` true for challenger-in-mini-turn: `npm run test:unit`
+- [x] 4.2 Type + lint: `npx astro check` && `npm run lint`
 
 #### Manual
 
-- [ ] 4.3 In the mini-turn, add/drag/edit/delete unavailable, mark bar interactive, no error banner
+- [x] 4.3 In the mini-turn, add/drag/edit/delete unavailable, mark bar interactive, no error banner
 
   > **Agent-automatable**: No — requires driving an exchange to the mini-turn and visually confirming the controls and absence of the error banner in a browser.

@@ -28,6 +28,9 @@ export default function NodeContextMenu({ nodeId, screenX, screenY, onClose }: P
   const isConnective = node?.type === "connective";
   const currentOp = isConnective ? (node.data as { op: ConnectiveOp }).op : null;
   const oppositeOp: ConnectiveOp | null = currentOp === "and" ? "or" : currentOp === "or" ? "and" : null;
+  // The root claim can never be deleted (only re-designated via "Set as Root"), so don't
+  // offer Delete for it — otherwise the click always fails with the root-delete error banner.
+  const isRoot = node?.type === "statement" && node.data.isRoot === true;
 
   return (
     <>
@@ -83,16 +86,18 @@ export default function NodeContextMenu({ nodeId, screenX, screenY, onClose }: P
             Edit
           </button>
         )}
-        <button
-          className="nodrag nopan w-full border-t px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--muted)]"
-          style={{ borderColor: "var(--border)", color: "var(--destructive)" }}
-          onClick={() => {
-            deleteNodes([nodeId]);
-            onClose();
-          }}
-        >
-          Delete
-        </button>
+        {!isRoot && (
+          <button
+            className="nodrag nopan w-full border-t px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--muted)]"
+            style={{ borderColor: "var(--border)", color: "var(--destructive)" }}
+            onClick={() => {
+              deleteNodes([nodeId]);
+              onClose();
+            }}
+          >
+            Delete
+          </button>
+        )}
       </div>
     </>
   );

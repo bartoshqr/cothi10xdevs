@@ -855,6 +855,12 @@ export const useStore = create<RFState>()((set, get) => ({
       const { [nodeId]: _discarded, ...rest } = get().marks;
       set({ marks: prevState === undefined ? rest : { ...rest, [nodeId]: prevState } });
       reportError(e instanceof Error ? e.message : "Failed to save mark");
+      // The captured prevState may be stale if a poll-driven reconcile landed between
+      // the optimistic write and this failure (e.g. the counterpart's edit just
+      // invalidated this mark) — restoring it could resurrect a valid=true mark the
+      // server now treats as invalid. Re-pull authoritative state to correct that
+      // (impl-review F3). Skipped for first-mark drops, where there is nothing server-side.
+      if (prevState !== undefined) void reconcileFromServer();
     });
   },
 

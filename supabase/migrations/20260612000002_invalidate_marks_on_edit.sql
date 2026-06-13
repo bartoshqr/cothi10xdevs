@@ -87,6 +87,14 @@ begin
   -- Service-role callers have auth.uid() = NULL (no sub claim) and bypass RLS
   -- on the underlying tables — skip the check for them, matching the behaviour of
   -- the original SECURITY INVOKER patch_node.
+  --
+  -- INVARIANT (safety depends on this): unlike the old patch_node, this DEFINER
+  -- body bypasses RLS on the `marks` UPDATE below — there is NO RLS backstop. So a
+  -- service-role caller flips counterpart marks with zero authorization. This is
+  -- only safe because the sole caller (updateNode, src/lib/debate/repository.ts)
+  -- invokes it with the per-request anon/RLS client where auth.uid() is set. Never
+  -- call patch_node_and_invalidate with a service-role client; if a service-role
+  -- edit path is ever needed, add an explicit authorization check here first.
   if (select auth.uid()) is not null and not public.can_write_node_content(p_node_id) then
     return;
   end if;

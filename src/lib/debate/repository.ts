@@ -126,6 +126,11 @@ export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNode
   if (patch.statementType !== undefined) metadataPatch.statement_type = patch.statementType;
   if (patch.connectiveOp !== undefined) metadataPatch.op = patch.connectiveOp;
 
+  // Must be called with the per-request anon/RLS client (not a service-role client):
+  // patch_node_and_invalidate is SECURITY DEFINER and bypasses RLS on the marks
+  // invalidation, so it relies on auth.uid() being set to authorize the edit. It also
+  // trusts that the root-demotion guard above ran first — keep both checks at this
+  // call site. See migration 20260612000002 (impl-review F1/F2).
   const { data, error } = await supabase
     .rpc("patch_node_and_invalidate", {
       p_node_id: nodeId,

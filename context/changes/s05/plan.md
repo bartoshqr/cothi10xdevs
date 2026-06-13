@@ -41,6 +41,10 @@ Across rounds 2+, each party may edit/delete only their own statements during th
 - **No DB change to the mini-turn freeze** — the S-04 RLS stays as-is; the mini-turn remains a full content-freeze (no delete/reattach there). Phase 4 is UI-only.
 - **No persistent "always-on" orphan highlight** — freshly-added, not-yet-connected nodes mid-build are not flagged as orphaned; the highlight targets the viewer's own statements during their turn, and the submit-gate is the hard enforcement.
 
+## Addenda (discovered during implementation)
+
+- **Incomplete-connective gating threaded alongside orphans (2026-06-13).** While wiring the orphan submit/invite gate (Phase 3), the same gate was extended to cover **incomplete connectives** (AND/OR nodes with fewer than 2 operands — the FR-007 rule). `connectivity.ts` gained `incompleteConnectiveIds`, and `incompleteConnectiveCount`/`incompleteConnectiveIds` are carried through `ConnectivityDetail`/`TurnGateDetail`, `TurnBar.canSubmit`, and `InviteChallenger` next to `danglingCount`. This goes beyond the plan's statement-only scope but reuses the identical compute-at-read connectivity pass and gate plumbing; recorded here so the plan stays the source of truth. (impl-review F4.)
+
 ## Implementation Approach
 
 Four phases in dependency order. Phase 1 lands the DB invalidation core. Phase 2 threads `valid` through every read model and surfaces it in the UI (turn-gate + mark bar). Phase 3 adds the compute-at-read connectivity util and its three consumers (canvas highlight, submit-gate, summary tag) plus the advocate's pre-invite guard. Phase 4 closes the carried-over mini-turn UI-freeze TODO.
@@ -244,6 +248,7 @@ Add a pure compute-at-read reachability util and wire its three consumers: the c
 **Intent**: Restore the orphan dimension in the summary (orphan ≠ invalid): an orphaned statement keeps its stance bucket but is tagged so the reader sees it needs attention.
 
 **Contract**:
+
 - `classify.ts`: `ClassifyNode` and `SummaryItem` gain `isOrphaned: boolean`; bucketing is unchanged (an orphaned-but-validly-marked statement still lands in its stance bucket), the flag is just carried through.
 - `repository.ts` (`getDivergenceSummary`): also select `relations` (+ `debates.root_node_id`), compute `reachableFromRoot`, and set `isOrphaned` per `ClassifyNode`.
 - `DivergenceSummary.tsx`: `Row` renders an "orphaned" badge/sub-label when `item.isOrphaned`.

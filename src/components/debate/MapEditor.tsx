@@ -224,6 +224,8 @@ function FloatingConnectionLine({ fromX, fromY, fromPosition }: ConnectionLineCo
   );
 }
 
+const UserIdContext = createContext<string | null>(null);
+
 const nodeTypes: NodeTypes = {
   statement: StatementNode,
   connective: ConnectiveNode,
@@ -316,6 +318,41 @@ function MapEditorInner() {
       window.removeEventListener("wvmap:set-can-edit", onSetCanEdit);
     };
   }, []);
+
+  const userId = useContext(UserIdContext);
+
+  // When the advocate's page loaded with a pending exchange (viewer=null), the turn-change
+  // poll below never starts. InviteChallenger's freshness poll fires `wvmap:exchange-accepted`
+  // the moment the challenger accepts — initialise the store viewer here so the poll can start.
+  useEffect(() => {
+    function onExchangeAccepted(e: Event) {
+      const {
+        exchangeId: eid,
+        currentTurn,
+        currentRound,
+        inMiniTurn,
+      } = (e as CustomEvent<{ exchangeId: string; currentTurn: string; currentRound: number; inMiniTurn: boolean }>)
+        .detail;
+      if (!userId) return;
+      useStore.setState({
+        viewer: {
+          viewerId: userId,
+          viewerRole: "advocate",
+          advocateId: userId,
+          isMyTurn: currentTurn === "advocate",
+          inMiniTurn,
+          isCompleted: false,
+          currentRound,
+        },
+        exchangeId: eid,
+      });
+      void reconcileFromServer();
+    }
+    window.addEventListener("wvmap:exchange-accepted", onExchangeAccepted);
+    return () => {
+      window.removeEventListener("wvmap:exchange-accepted", onExchangeAccepted);
+    };
+  }, [userId]);
 
   // Push the turn-submit gate state to the header's "Submit turn" button (separate
   // hydration root). Re-fires whenever the challenger marks a node so the count
@@ -665,6 +702,10 @@ interface MapEditorProps {
   exchangeId?: string | null;
   /** Pre-loaded marks for the debate (server-side hydration). */
   initialMarks?: Partial<Record<string, MarkState>>;
+  /** Authenticated user's id. Stored in the store so cross-island events can build a
+   * ViewerContext when the exchange transitions from pending → accepted while the page
+   * is open (the InviteChallenger freshness poll fires `wvmap:exchange-accepted`). */
+  userId?: string | null;
 }
 
 export default function MapEditor({
@@ -674,6 +715,7 @@ export default function MapEditor({
   viewer = null,
   exchangeId = null,
   initialMarks = {},
+  userId = null,
 }: MapEditorProps) {
   // Hydrate the store synchronously, before the canvas first renders, so the local-only
   // auto-create effect sees the right debateId and there's no empty-canvas flash.
@@ -683,8 +725,10 @@ export default function MapEditor({
   });
 
   return (
-    <ReactFlowProvider>
-      <MapEditorInner />
-    </ReactFlowProvider>
+    <UserIdContext.Provider value={userId ?? null}>
+      <ReactFlowProvider>
+        <MapEditorInner />
+      </ReactFlowProvider>
+    </UserIdContext.Provider>
   );
 }

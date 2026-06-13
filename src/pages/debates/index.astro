@@ -1,0 +1,109 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import ChallengerSection from "@/components/debate/ChallengerSection";
+import type { ChallengerItem } from "@/components/debate/ChallengerSection";
+import { createClient } from "@/lib/supabase";
+import { listMyDebates } from "@/lib/debate/repository";
+import { stateBadge, stateRank } from "@/lib/debate/displayState";
+
+const { user } = Astro.locals;
+const supabase = createClient(Astro.request.headers, Astro.cookies);
+
+const allDebates = supabase && user ? await listMyDebates(supabase, user.id) : [];
+
+const sortFn = (a: (typeof allDebates)[number], b: (typeof allDebates)[number]) => {
+  const rankDiff = stateRank(a.state) - stateRank(b.state);
+  if (rankDiff !== 0) return rankDiff;
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+};
+
+const advocateDebates = allDebates.filter((d) => d.role === "advocate").sort(sortFn);
+const challengerItems: ChallengerItem[] = allDebates
+  .filter(
+    (d): d is typeof d & { exchange_id: string } =>
+      d.role === "challenger" && (d.state === "awaiting" || d.state === "in_progress") && d.exchange_id !== null,
+  )
+  .sort(sortFn)
+  .map((d) => ({
+    exchange_id: d.exchange_id,
+    debate_id: d.id,
+    debate_title: d.title,
+    root_claim_title: d.root_claim_title,
+    advocate_username: d.other_username,
+    round_count: d.round_count,
+    current_round: d.current_round,
+    initial_status: d.state === "awaiting" ? "pending" : "accepted",
+  }));
+---
+
+<Layout title="My debates — WVMap">
+  <div class="bg-background min-h-screen p-6">
+    <div class="mx-auto max-w-2xl">
+      <div class="mb-6 flex items-center justify-between">
+        <h1 class="text-foreground text-2xl font-bold">My debates</h1>
+        <div class="flex items-center gap-3">
+          <a
+            href="/debates/new"
+            class="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium shadow-xs transition-colors"
+          >
+            + New debate
+          </a>
+          <a href="/" class="text-muted-foreground hover:text-foreground text-sm transition-colors">Home</a>
+        </div>
+      </div>
+
+      <!-- As advocate -->
+      <section class="mb-8">
+        <h2 class="text-foreground mb-3 text-base font-semibold">As advocate</h2>
+        {
+          advocateDebates.length === 0 ? (
+            <div class="border-border bg-card rounded-xl border p-8 text-center">
+              <p class="text-muted-foreground text-sm">You haven't started any debates yet.</p>
+            </div>
+          ) : (
+            <ul class="space-y-4">
+              {advocateDebates.map((debate) => {
+                const badge = stateBadge(debate.state, "advocate");
+                return (
+                  <li class="border-border bg-card rounded-xl border p-5">
+                    <div class="mb-3 flex items-start justify-between gap-4">
+                      <div class="min-w-0">
+                        <p class="text-foreground truncate font-semibold">{debate.title}</p>
+                        {debate.root_claim_title && (
+                          <p class="text-muted-foreground mt-0.5 text-sm">Root claim: {debate.root_claim_title}</p>
+                        )}
+                        {debate.other_username && (
+                          <p class="text-muted-foreground mt-0.5 text-sm">Challenger: @{debate.other_username}</p>
+                        )}
+                      </div>
+                      <span class:list={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.classes}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+                    {debate.round_count !== null && debate.current_round !== null && (
+                      <p class="text-muted-foreground mb-3 text-xs">
+                        Round {debate.current_round}/{debate.round_count}
+                      </p>
+                    )}
+                    <a
+                      href={`/debates/${debate.id}`}
+                      class="text-primary text-sm font-medium underline-offset-4 hover:underline"
+                    >
+                      Open debate
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        }
+      </section>
+
+      <!-- As challenger — React island: polls every 15s for new invites -->
+      <section>
+        <h2 class="text-foreground mb-3 text-base font-semibold">As challenger</h2>
+        <ChallengerSection client:load initialItems={challengerItems} />
+      </section>
+    </div>
+  </div>
+</Layout>

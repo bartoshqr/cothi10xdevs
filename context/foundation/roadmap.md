@@ -235,6 +235,12 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Informational foreign-key link, no consistency check — low implementation risk. Most useful once S-04 summaries surface contested statements worth deepening, so its value lands late even though it only needs S-01 structurally.
 - **Status:** proposed
 
+## Technical Notes
+
+### Exchange deduplication (S-06)
+
+The debate list dedup loop (`exchangeByDebate`) contains a "prefer newer completed" branch that is currently dead code. The DB's partial unique index (`exchanges_one_open_per_debate`) prevents two open exchanges per debate, and the UI has no re-invite path after completion — so each debate will have at most one `completed` row in practice. If a future slice adds re-invite after close, the branch becomes load-bearing and no change is needed (logic is already correct). See `context/changes/s06/notes-exchange-dedup.md` for the full analysis.
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID                    | Suggested issue title                                        | Ready for `/10x-plan` | Notes                                                    |

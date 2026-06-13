@@ -1,9 +1,9 @@
 ---
 change_id: s06
 title: Debate list and challenger inbox
-status: preparing
+status: implementing
 created: 2026-06-12
-updated: 2026-06-12
+updated: 2026-06-13
 archived_at: null
 ---
 

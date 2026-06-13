@@ -108,8 +108,8 @@ if (!graph) {
               ) : (
                 <span class="text-muted-foreground text-sm">
                   Advocate @{exchange.advocateUsername} —{" "}
-                  <a href="/invites" class="text-primary underline-offset-4 hover:underline">
-                    respond on your invites
+                  <a href="/debates" class="text-primary underline-offset-4 hover:underline">
+                    respond on your debates
                   </a>
                 </span>
               ))}
@@ -124,6 +124,7 @@ if (!graph) {
             viewer={viewer}
             exchangeId={viewerExchangeId}
             initialMarks={initialMarks}
+            userId={user?.id ?? null}
           />
         </div>
       </div>

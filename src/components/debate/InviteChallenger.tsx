@@ -132,12 +132,28 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
       try {
         const res = await fetch(`/api/exchanges/${activeId}`);
         if (!res.ok) return;
-        const json = (await res.json()) as { status: string };
+        const json = (await res.json()) as {
+          status: string;
+          currentTurn: string;
+          currentRound: number;
+          inMiniTurn: boolean;
+        };
         if (stopped || json.status === "pending") return;
         if (json.status === "accepted") {
           // Advocate stays locked (an accepted exchange still freezes edits) —
-          // just update the status line.
+          // update the status line and tell MapEditor to initialise its viewer so
+          // its turn-change poll can start (it was paused since viewer was null while pending).
           setActiveExchange((prev) => (prev ? { ...prev, status: "accepted" } : prev));
+          window.dispatchEvent(
+            new CustomEvent("wvmap:exchange-accepted", {
+              detail: {
+                exchangeId: activeId,
+                currentTurn: json.currentTurn,
+                currentRound: json.currentRound,
+                inMiniTurn: json.inMiniTurn,
+              },
+            }),
+          );
         } else {
           // Declined: the exchange is closed → editing re-opens and the advocate
           // can re-invite. Clear the line and unlock the canvas.

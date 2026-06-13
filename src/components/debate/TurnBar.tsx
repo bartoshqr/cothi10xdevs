@@ -31,6 +31,8 @@ export default function TurnBar({
   isMiniTurn = false,
 }: Props) {
   const [gate, setGate] = useState<TurnGateDetail | null>(null);
+  // Whether the "why can't I submit" popover is open (hover/focus of the submit button).
+  const [showReasons, setShowReasons] = useState(false);
 
   useEffect(() => {
     if (isCompleted) return;
@@ -85,35 +87,84 @@ export default function TurnBar({
 
   const marked = gate?.markedCount ?? 0;
   const total = gate?.total ?? 0;
-  const canSubmit = myTurn && marked === total;
+  const danglingCount = gate?.danglingCount ?? 0;
+  const danglingTitles = gate?.danglingTitles ?? [];
+  const incompleteConnectiveCount = gate?.incompleteConnectiveCount ?? 0;
+  // Three live gates block a submit: every counterpart statement marked, no own statement
+  // orphaned (severed from root), and no own AND/OR connective missing an operand. The two
+  // structural gates are suppressed upstream in the mini-turn.
+  const canSubmit = myTurn && marked === total && danglingCount === 0 && incompleteConnectiveCount === 0;
   // Off-turn (you've submitted, or are waiting for the other party): a muted, disabled
   // "Submitted". On-turn: the live "Submit turn (marked/total)" gate.
   const buttonLabel = myTurn ? `Submit turn (${marked}/${total})` : "Submitted";
-  const title = !myTurn
-    ? "You've submitted your turn"
-    : canSubmit
-      ? "Submit your turn"
-      : `Mark all counterpart statements first (${marked}/${total})`;
+
+  // Every reason the submit is blocked, as one list rendered in a single popover (the only
+  // place blocking reasons are shown — no native tooltip, no inline text). Structural problems
+  // lead because they must be fixed before the mark count even matters.
+  const blockingReasons: string[] = [];
+  if (myTurn && !canSubmit) {
+    if (danglingCount > 0) {
+      blockingReasons.push(
+        `Reconnect or delete your orphaned statement${danglingCount > 1 ? "s" : ""}: ${danglingTitles.join(", ")}.`,
+      );
+    }
+    if (incompleteConnectiveCount > 0) {
+      blockingReasons.push("Give every AND/OR group at least two operands.");
+    }
+    if (marked < total) {
+      blockingReasons.push(`Mark all counterpart statements (${marked}/${total})`);
+    }
+  }
+  const reasonsOpen = showReasons && blockingReasons.length > 0;
 
   return (
     <div className="flex items-center gap-3">
       <span className="text-muted-foreground text-sm font-medium">{turnLabel}</span>
-      <button
-        className="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-semibold transition-colors"
-        style={{
-          backgroundColor: canSubmit ? "var(--primary)" : "var(--muted)",
-          color: canSubmit ? "var(--primary-foreground)" : "var(--muted-foreground)",
-          cursor: canSubmit ? "pointer" : "not-allowed",
-          border: "1px solid var(--border)",
+      <span
+        className="relative inline-flex"
+        onMouseEnter={() => {
+          setShowReasons(true);
         }}
-        disabled={!canSubmit}
-        title={title}
-        onClick={() => {
-          window.dispatchEvent(new CustomEvent("wvmap:submit-turn"));
+        onMouseLeave={() => {
+          setShowReasons(false);
         }}
       >
-        {buttonLabel}
-      </button>
+        <button
+          className="inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-semibold transition-colors"
+          style={{
+            backgroundColor: canSubmit ? "var(--primary)" : "var(--muted)",
+            color: canSubmit ? "var(--primary-foreground)" : "var(--muted-foreground)",
+            cursor: canSubmit ? "pointer" : "not-allowed",
+            border: "1px solid var(--border)",
+            // Let the wrapper receive hover when disabled so the popover still opens.
+            pointerEvents: canSubmit ? "auto" : "none",
+          }}
+          disabled={!canSubmit}
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("wvmap:submit-turn"));
+          }}
+        >
+          {buttonLabel}
+        </button>
+
+        {reasonsOpen && (
+          <div
+            className="bg-background absolute top-full left-1/2 z-50 mt-2 w-72 -translate-x-1/2 rounded-lg border p-3 text-left shadow-lg"
+            style={{ borderColor: "var(--border)" }}
+            role="tooltip"
+          >
+            <p className="text-foreground mb-1.5 text-xs font-semibold">Can’t submit your turn yet</p>
+            <ul className="space-y-1">
+              {blockingReasons.map((reason) => (
+                <li key={reason} className="text-muted-foreground flex gap-1.5 text-xs">
+                  <span className="text-destructive leading-4">•</span>
+                  <span>{reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </span>
       <span className="text-muted-foreground text-sm">
         {round}/{roundCount} round{counterpart}
       </span>

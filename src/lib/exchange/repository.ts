@@ -1,25 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/db/database.types";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
+import { isMapWellFormed } from "@/lib/debate/connectivity";
 import type { OpenExchangeInput } from "./schemas";
 
 type DB = SupabaseClient<Database>;
 type ExchangeRow = Database["public"]["Tables"]["exchanges"]["Row"];
-
-// Pure helper shared with Phase-4 UI flag: reject if any connective node has <2
-// inbound link relations. Seeds a tally from all connective ids (so ones with
-// zero inbound links are not silently skipped) and counts inbound link targets.
-export function isMapWellFormed(connectiveIds: string[], linkTargetNodeIds: string[]): boolean {
-  const tally = new Map<string, number>();
-  for (const id of connectiveIds) tally.set(id, 0);
-  for (const targetId of linkTargetNodeIds) {
-    if (tally.has(targetId)) tally.set(targetId, (tally.get(targetId) ?? 0) + 1);
-  }
-  for (const count of tally.values()) {
-    if (count < 2) return false;
-  }
-  return true;
-}
 
 export async function openExchange(supabase: DB, input: OpenExchangeInput, advocateId: string): Promise<ExchangeRow> {
   // (a) Load the debate — null means unknown or RLS-scoped out.

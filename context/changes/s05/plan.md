@@ -383,14 +383,14 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [x] 2.1 Type checking passes: `npx astro check`
-- [x] 2.2 Lint passes: `npm run lint`
-- [x] 2.3 Unit: `computeTurnGate` counts an invalid mark as unmarked: `npm run test:unit`
-- [x] 2.4 Integration: `getDebateMarks` returns `valid`: `npm run test:integration`
+- [x] 2.1 Type checking passes: `npx astro check` — 17232aa
+- [x] 2.2 Lint passes: `npm run lint` — 17232aa
+- [x] 2.3 Unit: `computeTurnGate` counts an invalid mark as unmarked: `npm run test:unit` — 17232aa
+- [x] 2.4 Integration: `getDebateMarks` returns `valid`: `npm run test:integration` — 17232aa
 
 #### Manual
 
-- [ ] 2.5 Invalid mark renders dimmed + "Needs re-evaluation"; "Submit turn" disabled until re-mark
+- [x] 2.5 Invalid mark renders dimmed + "Needs re-evaluation"; "Submit turn" disabled until re-mark — 17232aa
 
   > **Agent-automatable**: No — visual opacity/label state and the disabled submit button require a browser session.
 
@@ -398,14 +398,14 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [ ] 3.1 Unit: `reachableFromRoot` reaches root / severed / never-connected: `npm run test:unit`
-- [ ] 3.2 Unit: `computeTurnGate` sets `danglingCount` and suppresses it in mini-turn: `npm run test:unit`
-- [ ] 3.3 Integration: summary tags an orphaned statement, keeps its stance: `npm run test:integration`
-- [ ] 3.4 Type + lint: `npx astro check` && `npm run lint`
+- [x] 3.1 Unit: `reachableFromRoot` reaches root / severed / never-connected: `npm run test:unit`
+- [x] 3.2 Unit: `computeTurnGate` sets `danglingCount` and suppresses it in mini-turn: `npm run test:unit`
+- [x] 3.3 Integration: summary tags an orphaned statement, keeps its stance: `npm run test:integration`
+- [x] 3.4 Type + lint: `npx astro check` && `npm run lint`
 
 #### Manual
 
-- [ ] 3.5 After A's delete severs B's statement, B sees it highlighted at turn start and cannot submit until delete/reconnect
+- [x] 3.5 After A's delete severs B's statement, B sees it highlighted at turn start and cannot submit until delete/reconnect
 
   > **Agent-automatable**: Partial — the submit-block (gate) and the orphan row in the summary are checkable via SQL/HTTP, but the canvas highlight is visual and needs a browser.
 
@@ -416,7 +416,7 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
   select id, kind, author_id from public.nodes where debate_id = '<debateId>' and kind = 'statement';
   ```
 
-- [ ] 3.6 Orphaned statement that reaches a closed exchange appears in the summary tagged "orphaned" under its stance bucket
+- [x] 3.6 Orphaned statement that reaches a closed exchange appears in the summary tagged "orphaned" under its stance bucket
 
   > **Agent-automatable**: Partial — `/api/debates/[id]/summary` JSON carries `isOrphaned`; the badge rendering is visual.
 

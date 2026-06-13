@@ -2,7 +2,13 @@ import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { useRef, useState, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { roleDescriptors, markStanceDescriptors, CHALLENGER_TINT, MENU_VIEWPORT_MARGIN } from "../mapVisualLanguage";
+import {
+  roleDescriptors,
+  markStanceDescriptors,
+  CHALLENGER_TINT,
+  CHALLENGER_BORDER,
+  MENU_VIEWPORT_MARGIN,
+} from "../mapVisualLanguage";
 import type { StatementRole, MarkStance } from "../mapVisualLanguage";
 import { useStore, useShallow } from "../store";
 import { NODE_CONSTRAINTS, isValidUrl } from "@/lib/debate/nodeConstraints";
@@ -38,6 +44,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
     marks,
     setMark,
     viewer,
+    isOrphanedOwn,
   } = useStore(
     useShallow((s) => ({
       inEditNodeId: s.inEditNodeId,
@@ -51,6 +58,8 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
       marks: s.marks,
       setMark: s.setMark,
       viewer: s.viewer,
+      // This node is one of the viewer's own statements that no longer reaches root.
+      isOrphanedOwn: s.orphanedOwnNodeIds().includes(id),
     })),
   );
 
@@ -67,7 +76,14 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
   // turn flips. In round 1 only one party marks, so any present mark is unambiguous; the
   // bar is interactive only while `canMarkThisNode`.
   const showMarkBar = canMarkThisNode || currentMark !== undefined;
+  // Flag an orphaned own statement only while it's the viewer's turn, so they know what to
+  // delete or reconnect before submitting (the submit-gate is the hard block). Pre-exchange
+  // mid-build nodes aren't flagged — the advocate's invite guard handles that case instead.
+  const showOrphanWarning = isOrphanedOwn && (viewer?.isMyTurn ?? false);
   const isChallenger = data.authorId !== undefined && viewer !== null && data.authorId !== viewer.advocateId;
+  // Card chrome (outer border + section dividers) uses a warm rosy line on the challenger's
+  // tinted card so a cold neutral gray doesn't read muddy over the tint; advocate cards keep gray.
+  const cardBorder = isChallenger ? CHALLENGER_BORDER : "var(--border)";
   const role = data.isRoot ? "claim" : (data.role ?? "claim");
   const descriptor = roleDescriptors[role];
   const badge = data.isRoot ? "ROOT" : descriptor.badge;
@@ -300,9 +316,9 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
         />
       )}
       <div
-        className="relative flex max-w-[300px] min-w-[180px] overflow-hidden rounded-lg shadow-sm"
+        className="relative flex max-w-[300px] min-w-[210px] overflow-hidden rounded-lg shadow-sm"
         style={{
-          border: `1px solid ${isEditing ? descriptor.accent : isActiveTarget ? "var(--primary)" : "var(--border)"}`,
+          border: `1px solid ${isEditing ? descriptor.accent : isActiveTarget ? "var(--primary)" : cardBorder}`,
           boxShadow: isActiveTarget ? "0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent)" : undefined,
           backgroundColor: isChallenger ? CHALLENGER_TINT : "var(--card)",
           color: "var(--card-foreground)",
@@ -328,10 +344,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
         <div className="w-1 shrink-0" style={{ backgroundColor: descriptor.accent }} />
         <div className="min-w-0 flex-1">
           {/* Header: badge + title */}
-          <div
-            className={`border-b py-1.5 pl-3 ${isEditing ? "pr-6" : "pr-3"}`}
-            style={{ borderColor: "var(--border)" }}
-          >
+          <div className={`border-b py-1.5 pl-3 ${isEditing ? "pr-6" : "pr-3"}`} style={{ borderColor: cardBorder }}>
             <div className="flex items-center gap-2">
               {badge && (
                 <span
@@ -439,7 +452,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
                   </span>
                 )}
               </div>
-              <div className="mx-3 mb-1" style={{ height: 1, backgroundColor: "var(--border)" }} />
+              <div className="mx-3 mb-1" style={{ height: 1, backgroundColor: cardBorder }} />
             </>
           )}
 
@@ -501,7 +514,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
             <div
               className="nodrag nopan flex flex-col border-t"
               style={{
-                borderColor: "var(--border)",
+                borderColor: cardBorder,
                 // The tint reads as "challenger touched this" only on an advocate (white)
                 // card; a challenger card is already tinted, so the bar blends in there.
                 backgroundColor: isChallenger ? "var(--card)" : CHALLENGER_TINT,
@@ -547,6 +560,18 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
             </div>
           )}
         </div>
+        {/* Orphan emphasis drawn as an overlay on TOP of all content (incl. the full-bleed mark
+            bar), so the amber ring is never covered. Inset shadows keep it inside the card —
+            a solid inner ring that bites slightly into the content, then a glow fading inward.
+            pointer-events:none so it never intercepts clicks on the node/mark bar. */}
+        {showOrphanWarning && (
+          <div
+            className="pointer-events-none absolute inset-0 z-20 rounded-lg"
+            style={{
+              boxShadow: "inset 0 0 40px 12px color-mix(in srgb, #d97706 40%, transparent)",
+            }}
+          />
+        )}
       </div>
       <Handle
         type="target"

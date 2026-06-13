@@ -11,6 +11,7 @@ import type { Database } from "@/db/database.types";
 import { isValidUrl } from "@/lib/debate/nodeConstraints";
 import type { UpdateNodeInput } from "@/lib/debate/schemas";
 import type { DebateGraph } from "@/lib/debate/repository";
+import { ownGraphIssues } from "./connectivityGraph";
 import {
   apiCreateNode,
   apiUpdateNode,
@@ -130,6 +131,16 @@ export interface RFState {
   /** Whether a node can carry a mark from this viewer (other party's statement) — turn-agnostic,
    * so the mark bar stays visible read-only after the turn is submitted. */
   isMarkableNode: (nodeId: string) => boolean;
+  /** Ids of the viewer's own statement nodes that no longer reach the root claim (orphaned by
+   * a delete that severed their path). Pre-exchange this covers every statement (all the
+   * advocate's). Excludes not-yet-saved (pending) nodes so a node mid-creation isn't flagged.
+   * Compute-at-read over the relation graph — drives the canvas highlight, the submit-gate,
+   * and the advocate's pre-invite guard. */
+  orphanedOwnNodeIds: () => string[];
+  /** Ids of the viewer's own AND/OR connectives that don't yet have ≥2 operands (incomplete).
+   * Drives the connective highlight and the submit/invite gates; pre-exchange covers all
+   * connectives. Reuses the FR-007 well-formedness rule. */
+  incompleteOwnConnectiveIds: () => string[];
   /** Optimistically upsert a mark on a node; rolls back on server error. */
   setMark: (nodeId: string, stance: MarkStance) => void;
   /** Submit the challenger's turn; locks the board on success. */
@@ -365,7 +376,12 @@ export async function reconcileFromServer(): Promise<void> {
 /** Translate a UI field patch into the API's UpdateNode shape, dropping values that aren't safe to persist yet. */
 function toApiNodePatch(patch: NodeFieldPatch): UpdateNodeInput {
   const apiPatch: UpdateNodeInput = {};
-  if (patch.title !== undefined) apiPatch.title = patch.title;
+  // Only persist a non-blank title. The server's required-title rule 400s on an empty title,
+  // and that failure triggers reconcileFromServer() — which would discard the in-progress edit
+  // and revert the field. While the box is empty the local state still shows "Title is required";
+  // it's persisted again as soon as a non-blank value is typed (and exiting edit is blocked on
+  // empty by isInEditBlocked, so the saved value can never diverge on close). Mirrors the url rule.
+  if (patch.title?.trim()) apiPatch.title = patch.title;
   if (patch.body !== undefined) apiPatch.body = patch.body;
   if (patch.statementType !== undefined) apiPatch.statementType = patch.statementType;
   if (patch.connectiveOp !== undefined) apiPatch.connectiveOp = patch.connectiveOp;
@@ -805,6 +821,18 @@ export const useStore = create<RFState>()((set, get) => ({
     if (node?.type !== "statement") return false;
     // Only the other party's statements carry a mark — symmetric for challenger (S-03) and advocate (S-04).
     return node.data.authorId !== viewer.viewerId;
+  },
+
+  orphanedOwnNodeIds: () => {
+    const { nodes, edges, viewer } = get();
+    // During an exchange only the viewer's own statements block them; pre-exchange (no viewer)
+    // every statement is the advocate's, so no author filter is applied.
+    return ownGraphIssues({ nodes, edges, authorId: viewer?.viewerId }).orphanStatementIds;
+  },
+
+  incompleteOwnConnectiveIds: () => {
+    const { nodes, edges, viewer } = get();
+    return ownGraphIssues({ nodes, edges, authorId: viewer?.viewerId }).incompleteConnectiveIds;
   },
 
   setMark: (nodeId, stance) => {

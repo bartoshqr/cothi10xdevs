@@ -433,11 +433,11 @@ One additive migration (`20260612000002_invalidate_marks_on_edit.sql`): two new 
 
 #### Automated
 
-- [x] 4.1 Unit: content gates false but `canMarkNode` true for challenger-in-mini-turn: `npm run test:unit`
-- [x] 4.2 Type + lint: `npx astro check` && `npm run lint`
+- [x] 4.1 Unit: content gates false but `canMarkNode` true for challenger-in-mini-turn: `npm run test:unit` — ea68bc7
+- [x] 4.2 Type + lint: `npx astro check` && `npm run lint` — ea68bc7
 
 #### Manual
 
-- [x] 4.3 In the mini-turn, add/drag/edit/delete unavailable, mark bar interactive, no error banner
+- [x] 4.3 In the mini-turn, add/drag/edit/delete unavailable, mark bar interactive, no error banner — ea68bc7
 
   > **Agent-automatable**: No — requires driving an exchange to the mini-turn and visually confirming the controls and absence of the error banner in a browser.

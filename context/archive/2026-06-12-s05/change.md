@@ -1,10 +1,10 @@
 ---
 change_id: s05
 title: Multi-round edit/delete with mark invalidation
-status: impl_reviewed
+status: archived
 created: 2026-06-12
 updated: 2026-06-13
-archived_at: null
+archived_at: 2026-06-13T15:50:41Z
 ---
 
 ## Notes

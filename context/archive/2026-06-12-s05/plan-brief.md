@@ -17,16 +17,16 @@ Editing a statement's content flips the counterpart's mark to `valid=false`; the
 
 ## Key Decisions Made
 
-| Decision | Choice | Why (1 sentence) | Source |
-| --- | --- | --- | --- |
-| Invalidation mechanism | One SECURITY DEFINER edit-RPC, re-checks write-gate inside | The flip can't be a normal UPDATE (marker-only RLS); folding it into the edit RPC keeps one round-trip | Research |
-| Flip trigger | Only when a content value actually changed | Position drags and identical re-saves must not nag the counterpart | Plan |
-| Orphan detection | Compute-at-read reachability traversal | Schema-free, one pure util powers canvas + gate + summary | Research |
-| Orphan resolution | Submit-gate blocks own dangling statements; counterpart fixes theirs on their turn | You're only gated on what you can actually delete/reconnect | Plan |
-| Canvas highlight | Own orphaned statements, at turn start (not freshly-added mid-build) | Matches "not flagged during edition"; surfaces the damage from the counterpart's turn | Plan |
-| Mini-turn | Stays full content-freeze (UI-only fix, no DB change); orphans tolerated | Allowing delete/reattach there needs a risky RLS relaxation — defer it | Plan |
-| Summary `isOrphaned` | Restored (kept), orphan ≠ invalid | Orphans can survive a frozen mini-turn into a closed exchange; the summary is where parties "come back" to them | Plan |
-| Close / 7-day timeout | Out of scope → S-08 | Split into `advocate-close-and-timeout` | Research |
+| Decision               | Choice                                                                             | Why (1 sentence)                                                                                                | Source   |
+| ---------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------- |
+| Invalidation mechanism | One SECURITY DEFINER edit-RPC, re-checks write-gate inside                         | The flip can't be a normal UPDATE (marker-only RLS); folding it into the edit RPC keeps one round-trip          | Research |
+| Flip trigger           | Only when a content value actually changed                                         | Position drags and identical re-saves must not nag the counterpart                                              | Plan     |
+| Orphan detection       | Compute-at-read reachability traversal                                             | Schema-free, one pure util powers canvas + gate + summary                                                       | Research |
+| Orphan resolution      | Submit-gate blocks own dangling statements; counterpart fixes theirs on their turn | You're only gated on what you can actually delete/reconnect                                                     | Plan     |
+| Canvas highlight       | Own orphaned statements, at turn start (not freshly-added mid-build)               | Matches "not flagged during edition"; surfaces the damage from the counterpart's turn                           | Plan     |
+| Mini-turn              | Stays full content-freeze (UI-only fix, no DB change); orphans tolerated           | Allowing delete/reattach there needs a risky RLS relaxation — defer it                                          | Plan     |
+| Summary `isOrphaned`   | Restored (kept), orphan ≠ invalid                                                  | Orphans can survive a frozen mini-turn into a closed exchange; the summary is where parties "come back" to them | Plan     |
+| Close / 7-day timeout  | Out of scope → S-08                                                                | Split into `advocate-close-and-timeout`                                                                         | Research |
 
 ## Scope
 
@@ -40,12 +40,12 @@ DB core first: a SECURITY DEFINER `patch_node_and_invalidate` RPC (+ a `can_writ
 
 ## Phases at a Glance
 
-| Phase | What it delivers | Key risk |
-| --- | --- | --- |
-| 1. Invalidation RPC (DB) | SECURITY DEFINER edit-RPC flips counterpart marks on real content change | DEFINER bypasses RLS — auth predicate must be re-checked and not drift from `nodes_update` |
-| 2. Thread `valid` + UI | `MarkState` payload end-to-end; turn-gate + mark-bar surface stale marks | Wide type change touching SSR, store, canvas — easy to miss a boundary |
-| 3. Orphan resolution | Reachability util; canvas highlight; submit-gate; pre-invite guard; summary tag | False-positive flags on freshly-added nodes; pre-invite island has no store access |
-| 4. Mini-turn UI freeze | Shared content-write gate; controls match the DB freeze | Must not also freeze the mark bar |
+| Phase                    | What it delivers                                                                | Key risk                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1. Invalidation RPC (DB) | SECURITY DEFINER edit-RPC flips counterpart marks on real content change        | DEFINER bypasses RLS — auth predicate must be re-checked and not drift from `nodes_update` |
+| 2. Thread `valid` + UI   | `MarkState` payload end-to-end; turn-gate + mark-bar surface stale marks        | Wide type change touching SSR, store, canvas — easy to miss a boundary                     |
+| 3. Orphan resolution     | Reachability util; canvas highlight; submit-gate; pre-invite guard; summary tag | False-positive flags on freshly-added nodes; pre-invite island has no store access         |
+| 4. Mini-turn UI freeze   | Shared content-write gate; controls match the DB freeze                         | Must not also freeze the mark bar                                                          |
 
 **Prerequisites:** local Supabase running (`npx supabase start`); S-04 migrations applied; a round-2+ exchange with marks for manual checks.
 **Estimated effort:** ~3-4 sessions across 4 phases; Phase 1 (DB/RLS) and Phase 3 (orphan) are the heaviest.

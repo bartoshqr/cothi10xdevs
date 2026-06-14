@@ -3,7 +3,7 @@ project: WVMap
 version: 1
 status: draft
 created: 2026-05-25
-updated: 2026-06-13
+updated: 2026-06-14
 prd_version: 1
 main_goal: market-feedback
 top_blocker: capacity
@@ -52,7 +52,7 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 | S-03 | challenger-first-turn        | mark every advocate statement and add own statements, submit turn                                  | S-02          | US-02, FR-011, FR-012, FR-013, FR-014                 | done     |
 | S-04 | first-divergence-summary     | respond, complete round 1, and view the divergence summary                                         | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | done     |
 | S-05 | multiround-edit-invalidation | edit/delete across rounds with mark invalidation + orphan highlight                                | S-04          | US-04, FR-026                                         | done     |
-| S-06 | debate-list-and-inbox        | see all own debates with state, and an inbox of invites/exchanges                                  | S-02          | FR-024, FR-025                                        | proposed |
+| S-06 | debate-list-and-inbox        | see all own debates with state, and an inbox of invites/exchanges                                  | S-02          | FR-024, FR-025                                        | done     |
 | S-07 | parent-debate-linking        | link a new debate to a parent statement and navigate between them                                  | S-01          | FR-022, FR-023                                        | proposed |
 | S-08 | advocate-close-and-timeout   | advocate closes an exchange explicitly or after 7-day challenger inactivity                        | S-05          | FR-019, FR-027                                        | proposed |
 | T-01 | polling-hook-unification     | (cleanup) no user-visible change — dedupe the visibility-gated polling boilerplate into one hook   | S-06          | — (tech-debt)                                         | proposed |
@@ -238,7 +238,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Low-risk navigation surface; without it the product has no entry point after the first session. Marked parallel-with the exchange slices so it can be batched against the critical path — the most actionable lever given the capacity blocker.
-- **Status:** proposed
+- **Status:** done
 
 ### S-07: Parent debate linking
 
@@ -311,3 +311,4 @@ The debate list dedup loop (`exchangeByDebate`) contains a "prefer newer complet
 - **S-03: challenger can mark every unmarked advocate statement (Accept/Challenge/Abstain), add their own typed statements with sources and directed relations, and submit their turn, which activates the advocate's turn.** — Archived 2026-06-10 → `context/archive/2026-06-09-challenger-first-turn/`. Lesson: —.
 - **S-04: respond, complete round 1, and view the divergence summary** — Archived 2026-06-12 → `context/archive/2026-06-10-first-divergence-summary/`. Lesson: —.
 - **S-05: across rounds 2+, each party can edit/delete only their own statements during their active turn; an edit invalidates the other party's mark on that statement (flag flip, re-mark required by turn-end — not ordered within the turn); a delete cascades the deleted node's own marks but **preserves** counterpart statements and their marks, recomputing only orphan status; orphaned statements (no path to the root claim) are highlighted in the canvas and labelled in the divergence summary; the final-round mini-turn (always opens; challenger may also revise valid marks) runs with content controls frozen in the UI. Close paths are **not** in this slice — see S-08.** — Archived 2026-06-13 → `context/archive/2026-06-12-s05/`. Lesson: —.
+- **S-06: see all own debates with state, and an inbox of invites/exchanges** — Archived 2026-06-14 → `context/archive/2026-06-12-s06/`. Lesson: —.

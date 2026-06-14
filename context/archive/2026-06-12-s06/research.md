@@ -57,15 +57,17 @@ status→label/colour map, and a nav link. Two product decisions are open (below
 ### Data model (no change needed)
 
 **`debates`** — `supabase/migrations/20260528000001_create_debate_graph.sql:21-29`
+
 - `id`, `owner_id` (FK auth.users — the advocate), `title` (≤120), `root_node_id`
   (nullable FK nodes), `created_at`.
 
 **`exchanges`** — `supabase/migrations/20260609000001_create_exchanges.sql:13-32`
+
 - `id`, `debate_id` (FK debates, ON DELETE CASCADE), `advocate_id`, `challenger_id`,
   `status` (`exchange_status` enum), `round_count` (1–5), `current_round`,
   `current_turn` (`turn_actor` = `challenger | advocate`), `in_mini_turn` (bool),
   `created_at`, `responded_at` (nullable).
-- **At most one *open* exchange per debate**: partial-unique index on `(debate_id)`
+- **At most one _open_ exchange per debate**: partial-unique index on `(debate_id)`
   WHERE `status IN ('pending','accepted')`. A `declined` or `completed` exchange does
   NOT occupy that slot, so a debate can carry historical declined/completed rows
   alongside a re-invite. (See Open Questions #2 — picking "the" exchange per debate.)
@@ -78,12 +80,12 @@ generated at `src/db/database.types.ts:389` and `:1080`:
 
 Per debate, from its exchange (or absence of one):
 
-| Condition | Display state |
-| --- | --- |
-| No exchange row, OR only `declined` exchange(s) | **Drafting** (advocate-only, map-building) |
-| `status = 'pending'` | **Awaiting response** (invite sent) |
-| `status = 'accepted'` | **In progress** (turns live; show `current_round`/`round_count`) |
-| `status = 'completed'` | **Closed** |
+| Condition                                       | Display state                                                    |
+| ----------------------------------------------- | ---------------------------------------------------------------- |
+| No exchange row, OR only `declined` exchange(s) | **Drafting** (advocate-only, map-building)                       |
+| `status = 'pending'`                            | **Awaiting response** (invite sent)                              |
+| `status = 'accepted'`                           | **In progress** (turns live; show `current_round`/`round_count`) |
+| `status = 'completed'`                          | **Closed**                                                       |
 
 This maps cleanly onto the roadmap's "drafting / in progress / closed" with one extra
 "awaiting response" sub-state that already has UI vocabulary (see InviteChallenger below).
@@ -101,17 +103,18 @@ This maps cleanly onto the roadmap's "drafting / in progress / closed" with one 
 - SECURITY DEFINER helpers (`is_accepted_challenger`, `can_write_as_current_actor`,
   `can_add_content_as_current_actor`) live in
   `20260610000001_create_marks_and_authorship.sql:54-96` and
-  `20260611000002_...sql:46-66`. These are about *writes*/recursion-breaking and are not
+  `20260611000002_...sql:46-66`. These are about _writes_/recursion-breaking and are not
   needed for the read-only list page, but confirm the read predicates above are inline
   EXISTS and safe to reuse as-is.
 
 ### Repository layer
 
 **Exists** — `src/lib/exchange/repository.ts`:
+
 - `listInvites(supabase, userId)` — `:216-267`. Returns `ChallengerInvite[]` (`:201-212`):
   `{ id, debate_id, debate_title, debate_root_node_id, debate_root_claim_title,
-  debate_root_claim_body, advocate_id, round_count, status: 'pending'|'accepted',
-  created_at }`. Filters `challenger_id = userId` AND `status IN ('pending','accepted')`,
+debate_root_claim_body, advocate_id, round_count, status: 'pending'|'accepted',
+created_at }`. Filters `challenger_id = userId` AND `status IN ('pending','accepted')`,
   ordered newest-first; denormalizes debate title + root-claim metadata. **This is the
   challenger section, ready to reuse.** Note: it does **not** include `completed`.
 - `respondToInvite(supabase, exchangeId, accept)` — `:80-93`. UPDATE to
@@ -141,7 +144,7 @@ and keep the query inside the repository (lessons: "Keep all Supabase calls in a
 ### Routing, auth, and page pattern
 
 - **Protected routes** — `src/middleware.ts:4`: `PROTECTED_ROUTES = ["/dashboard",
-  "/debates", "/invites"]`. A new `/debates` (index) or `/dashboard` list page is
+"/debates", "/invites"]`. A new `/debates` (index) or `/dashboard` list page is
   **already covered** — no middleware edit needed (lessons/Hard-rule on PROTECTED_ROUTES
   is already satisfied for these prefixes).
 - **User in frontmatter** — `const { user } = Astro.locals;` (set in middleware via
@@ -166,6 +169,7 @@ and keep the query inside the repository (lessons: "Keep all Supabase calls in a
 ### Status display vocabulary already in the codebase
 
 Reuse these so the list matches the detail page:
+
 - `invites.astro:40-48` — pending = yellow pill "Pending"; accepted = green pill "Accepted".
 - `src/components/debate/InviteChallenger.tsx:213-233` — advocate status line:
   pending → "Invite sent … awaiting response" + Revoke; otherwise "Challenger {who}
@@ -218,7 +222,7 @@ closed=gray) centralizes this for the new section.
 - `context/archive/2026-06-09-challenger-first-turn/` (S-03) — `listInvites` /
   `invites.astro` were built here as the challenger inbox; S-06 inherits and absorbs them.
 - `context/archive/2026-06-10-first-divergence-summary/` (S-04) — added `completed` status
-  + mini-turn; the "closed" display state for the advocate list comes from this.
+  - mini-turn; the "closed" display state for the advocate list comes from this.
 
 ## Related Research
 

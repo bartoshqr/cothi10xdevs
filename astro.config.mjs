@@ -26,6 +26,10 @@ const SERVER_OPTIMIZE_DEPS = [
   "clsx",
   "tailwind-merge",
   "zod",
+  // Astro internal backing the `astro:env` secrets we declare below. Without this it is
+  // discovered lazily on the first SSR request, triggering a worker reload mid-render that
+  // nulls React's hook dispatcher — the last remaining source of the invalid-hook-call crash.
+  "astro/env/runtime",
 ];
 
 // Under @cloudflare/vite-plugin, SSR is its OWN Vite environment and the top-level

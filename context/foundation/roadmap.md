@@ -55,6 +55,7 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 | S-06 | debate-list-and-inbox        | see all own debates with state, and an inbox of invites/exchanges                                  | S-02          | FR-024, FR-025                                        | proposed |
 | S-07 | parent-debate-linking        | link a new debate to a parent statement and navigate between them                                  | S-01          | FR-022, FR-023                                        | proposed |
 | S-08 | advocate-close-and-timeout   | advocate closes an exchange explicitly or after 7-day challenger inactivity                        | S-05          | FR-019, FR-027                                        | proposed |
+| T-01 | polling-hook-unification     | (cleanup) no user-visible change — dedupe the visibility-gated polling boilerplate into one hook   | S-06          | — (tech-debt)                                         | proposed |
 
 ## Streams
 
@@ -210,6 +211,23 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Lower-volume than S-05 but the close transition is irreversible and feeds the summary's unresolved counts — the Abstain-defaulting at close must be exact. Sequenced after S-05 because it depends on the mark-invalidation state and the orphan/mini-turn machinery landing first.
 - **Status:** proposed
 
+### T-01: Visibility-gated polling hook unification (cleanup / tech-debt)
+
+- **Type:** cleanup slice — internal refactor, **no user-visible behaviour change**. Not a product slice; carries no FR. Success = identical runtime behaviour with the duplication removed and the same tests green.
+- **Outcome:** the visibility-gated polling lifecycle (start/stop the timer, pause when the tab is hidden, fetch immediately on focus/visibility return, tear down listeners on unmount) lives in a single reusable hook instead of being hand-copied across four components. Each call site collapses from ~30 lines of identical scaffold to a one-line call.
+- **Change ID:** polling-hook-unification
+- **PRD refs:** — (tech-debt; supports maintainability, no functional requirement)
+- **Prerequisites:** S-06 (all four call sites — `AdvocateSection`, `ChallengerSection`, `InviteChallenger`, `MapEditor` — must exist and be stable before consolidating them)
+- **Parallel with:** S-07, S-08 (touches only the polling lifecycle, not the exchange/close state machine)
+- **Blockers:** —
+- **Scope:**
+  - **Layer 1 (in scope):** extract `useVisibilityPolling(check, { intervalMs, enabled, immediate })`. Folds the four varying knobs — interval (1000ms vs 15000ms), the `check` body, whether to fire immediately on mount, and the enable condition — into hook params. The per-site `stopped` flag is replaced by an `AbortSignal` (or an `isMounted` getter) the hook passes into `check`, so each body checks `signal.aborted` instead of a local closure flag. `check` is stored in a ref inside the hook so a fresh closure each render doesn't tear down and rebuild the timer.
+  - **Layer 2 (optional, decide separately):** `AdvocateSection` and `ChallengerSection` both poll `/api/debates` every 15s independently, and (per S-06) render on the **same page** — so they currently fire two timers for identical data. Optionally lift that into a shared `useDebateList()` (one timer, one request, two consumers) or hoist the poll to the parent page. This changes data flow, not just lifecycle, so it is a separate go/no-go from Layer 1. Verify both sections actually mount simultaneously before committing.
+- **Unknowns:**
+  - Whether to also do Layer 2 (shared debate-list poll) now or leave the two list sections independent. Owner: user. Block: no (Layer 1 ships regardless).
+- **Risk:** Low — purely structural, behind unchanged behaviour. The one correctness-sensitive piece is the `stopped`/`AbortSignal` reshaping: today each `check()` guards against a post-`await` state update on an unmounted component, and that guard must survive the move into the hook. Note this slice is a **prerequisite cleanup for the Supabase Realtime upgrade** in the S-06 Technical Notes — once the lifecycle is one hook, swapping polling for a `postgres_changes` subscription is a single-site change.
+- **Status:** proposed
+
 ### S-06: Debate list and challenger inbox
 
 - **Outcome:** a user can view all their debates with current state (drafting / in progress / closed) and an inbox of pending invites and active exchanges where they are the challenger, and navigate to each.
@@ -247,19 +265,20 @@ The debate list dedup loop (`exchangeByDebate`) contains a "prefer newer complet
 
 ## Backlog Handoff
 
-| Roadmap ID | Change ID                    | Suggested issue title                                        | Ready for `/10x-plan` | Notes                                                    |
-| ---------- | ---------------------------- | ------------------------------------------------------------ | --------------------- | -------------------------------------------------------- |
-| F-01       | username-profiles            | Add unique-username registration and user lookup             | yes                   | Run `/10x-plan username-profiles`                        |
-| S-00       | landing-page-refresh         | Refresh the landing page for WVMap's target community        | no                    | Confirm copy/visual scope first                          |
-| F-02       | map-visual-spike             | Static React Flow Toulmin map to design node/edge visuals    | yes                   | Disposable design spike; run `/10x-new map-visual-spike` |
-| S-01       | advocate-map-builder         | Advocate builds a structured Toulmin map                     | no                    | Prereq F-01, F-02                                        |
-| S-02       | invite-and-open-exchange     | Open an exchange and invite a challenger                     | no                    | Prereq S-01                                              |
-| S-03       | challenger-first-turn        | Challenger marks and adds statements (turn 1)                | no                    | Prereq S-02                                              |
-| S-04       | first-divergence-summary     | Complete round 1 and generate the divergence summary         | no                    | North star; prereq S-03                                  |
-| S-05       | multiround-edit-invalidation | Multi-round edit/delete, mark invalidation, orphan highlight | no                    | Prereq S-04; heaviest slice; close paths split to S-08   |
-| S-06       | debate-list-and-inbox        | Debate list and challenger inbox                             | no                    | Prereq S-02; parallelizable                              |
-| S-07       | parent-debate-linking        | Link debates to a parent statement                           | no                    | Prereq S-01; parallelizable                              |
-| S-08       | advocate-close-and-timeout   | Advocate explicit close + 7-day challenger-inactivity close  | no                    | Prereq S-05; split out of S-05                           |
+| Roadmap ID | Change ID                    | Suggested issue title                                               | Ready for `/10x-plan` | Notes                                                                   |
+| ---------- | ---------------------------- | ------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
+| F-01       | username-profiles            | Add unique-username registration and user lookup                    | yes                   | Run `/10x-plan username-profiles`                                       |
+| S-00       | landing-page-refresh         | Refresh the landing page for WVMap's target community               | no                    | Confirm copy/visual scope first                                         |
+| F-02       | map-visual-spike             | Static React Flow Toulmin map to design node/edge visuals           | yes                   | Disposable design spike; run `/10x-new map-visual-spike`                |
+| S-01       | advocate-map-builder         | Advocate builds a structured Toulmin map                            | no                    | Prereq F-01, F-02                                                       |
+| S-02       | invite-and-open-exchange     | Open an exchange and invite a challenger                            | no                    | Prereq S-01                                                             |
+| S-03       | challenger-first-turn        | Challenger marks and adds statements (turn 1)                       | no                    | Prereq S-02                                                             |
+| S-04       | first-divergence-summary     | Complete round 1 and generate the divergence summary                | no                    | North star; prereq S-03                                                 |
+| S-05       | multiround-edit-invalidation | Multi-round edit/delete, mark invalidation, orphan highlight        | no                    | Prereq S-04; heaviest slice; close paths split to S-08                  |
+| S-06       | debate-list-and-inbox        | Debate list and challenger inbox                                    | no                    | Prereq S-02; parallelizable                                             |
+| S-07       | parent-debate-linking        | Link debates to a parent statement                                  | no                    | Prereq S-01; parallelizable                                             |
+| S-08       | advocate-close-and-timeout   | Advocate explicit close + 7-day challenger-inactivity close         | no                    | Prereq S-05; split out of S-05                                          |
+| T-01       | polling-hook-unification     | Unify visibility-gated polling into one `useVisibilityPolling` hook | no                    | Cleanup; prereq S-06; no user-visible change; unblocks Realtime upgrade |
 
 ## Open Roadmap Questions
 

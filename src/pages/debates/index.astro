@@ -69,13 +69,13 @@ const challengerItems: ChallengerItem[] = allDebates
         </div>
       </div>
 
-      <!-- As advocate — React island: polls every 15s for any-field updates -->
+      <!-- As advocate — React island: polls every 1s for any-field updates -->
       <section class="mb-8">
         <h2 class="text-foreground mb-3 text-base font-semibold">As advocate</h2>
         <AdvocateSection client:load initialItems={advocateItems} />
       </section>
 
-      <!-- As challenger — React island: polls every 15s for any-field updates -->
+      <!-- As challenger — React island: polls every 1s for any-field updates -->
       <section>
         <h2 class="text-foreground mb-3 text-base font-semibold">As challenger</h2>
         <ChallengerSection client:load initialItems={challengerItems} />

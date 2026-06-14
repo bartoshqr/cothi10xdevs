@@ -117,7 +117,7 @@ export default function MapLegend() {
             className="text-xs"
             style={{
               width: 290,
-              maxHeight: "80vh",
+              maxHeight: "85vh",
               overflowY: "auto",
               backgroundColor: "var(--card)",
               border: "1px solid var(--border)",

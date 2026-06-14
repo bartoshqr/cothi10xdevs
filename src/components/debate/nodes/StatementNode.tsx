@@ -528,7 +528,7 @@ export default function StatementNode({ id, data }: NodeProps<StatementNodeType>
             >
               {isStale && (
                 <div className="pb-1 text-center text-xs font-bold" style={{ color: "var(--muted-foreground)" }}>
-                  CHANGED: Need re-evaluation
+                  CHANGED: Needs re-evaluation
                 </div>
               )}
               <div className="flex" style={{ gap: 2 }}>

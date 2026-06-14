@@ -237,6 +237,10 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ## Technical Notes
 
+### Polling cadence and Supabase Realtime (S-06)
+
+The `/debates` page and the `InviteChallenger` freshness check both poll at 1-second intervals. At MVP user counts this is fine, but at scale (many concurrent open sessions) the request rate grows linearly with active tabs. The natural upgrade path is Supabase Realtime: subscribe to `debates` + `exchanges` table changes scoped to the viewer's RLS-visible rows — each change pushes a WebSocket frame instead of the client hammering a REST endpoint every second. No API-shape change is needed; only the polling loop in `AdvocateSection`, `ChallengerSection`, and `InviteChallenger` would swap for a `supabase.channel(…).on('postgres_changes', …)` subscription. Defer until polling latency or server load becomes a measured problem.
+
 ### Exchange deduplication (S-06)
 
 The debate list dedup loop (`exchangeByDebate`) contains a "prefer newer completed" branch that is currently dead code. The DB's partial unique index (`exchanges_one_open_per_debate`) prevents two open exchanges per debate, and the UI has no re-invite path after completion — so each debate will have at most one `completed` row in practice. If a future slice adds re-invite after close, the branch becomes load-bearing and no change is needed (logic is already correct). See `context/changes/s06/notes-exchange-dedup.md` for the full analysis.

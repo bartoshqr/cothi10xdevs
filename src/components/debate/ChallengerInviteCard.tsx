@@ -11,13 +11,15 @@ interface Props {
   advocateUsername: string | null;
   roundCount: number | null;
   currentRound: number | null;
-  initialStatus: "pending" | "accepted";
+  initialStatus: "pending" | "accepted" | "completed";
   /** Called after the card is declined so the parent list can remove the entry. */
   onRemoved?: () => void;
 }
 
-function deriveState(status: "pending" | "accepted"): DebateListState {
-  return status === "pending" ? "awaiting" : "in_progress";
+function deriveState(status: "pending" | "accepted" | "completed"): DebateListState {
+  if (status === "pending") return "awaiting";
+  if (status === "accepted") return "in_progress";
+  return "closed";
 }
 
 export default function ChallengerInviteCard({
@@ -31,7 +33,7 @@ export default function ChallengerInviteCard({
   initialStatus,
   onRemoved,
 }: Props) {
-  const [status, setStatus] = useState<"pending" | "accepted">(initialStatus);
+  const [status, setStatus] = useState<"pending" | "accepted" | "completed">(initialStatus);
   const [dismissed, setDismissed] = useState(false);
 
   if (dismissed) return null;
@@ -67,7 +69,14 @@ export default function ChallengerInviteCard({
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        {status === "accepted" ? (
+        {status === "completed" ? (
+          <a
+            href={`/debates/${debateId}`}
+            className="text-primary text-sm font-medium underline-offset-4 hover:underline"
+          >
+            View debate
+          </a>
+        ) : status === "accepted" ? (
           <a
             href={`/debates/${debateId}`}
             className="text-primary text-sm font-medium underline-offset-4 hover:underline"

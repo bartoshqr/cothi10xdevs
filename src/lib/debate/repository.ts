@@ -149,6 +149,12 @@ export interface DebateGraph {
   relations: RelationRow[];
 }
 
+export async function deleteDebate(supabase: DB, debateId: string): Promise<void> {
+  const { data, error } = await supabase.from("debates").delete().eq("id", debateId).select("id");
+  if (error) throw error;
+  if (data.length === 0) throw new NotFoundError();
+}
+
 export async function createDebate(supabase: DB, input: CreateDebateInput): Promise<string> {
   // The RPC also asserts auth.uid() is not null as DB-layer defense-in-depth.
   // That branch is unreachable here — withAuth guarantees a user before this runs

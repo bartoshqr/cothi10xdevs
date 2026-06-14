@@ -165,4 +165,37 @@ describeIntegration("S-04 divergence summary — gate + RLS read", () => {
     // The outsider is neither advocate nor challenger — RLS scopes the exchange out entirely.
     expect(await getDivergenceSummary({ supabase: outsiderClient, debateId })).toBeNull();
   });
+
+  // S-05 orphan tag: a statement severed from the root claim keeps its stance bucket but is
+  // flagged `isOrphaned`, while a statement that reaches root is not. `data` is connected to
+  // the root (via a relation); `warrant` is left dangling. Both are Challenged, so both land in
+  // openDivergences — proving the orphan flag is orthogonal to the stance bucket.
+  it("tags an orphaned statement isOrphaned while preserving its stance bucket", async () => {
+    const { debateId, rootNodeId, dataId, warrantId, exchangeId } = await seedMarkedDebate(1);
+
+    // Re-mark both statements as Challenge so they share the openDivergences bucket.
+    await service.from("marks").update({ stance: "challenge" }).eq("node_id", warrantId);
+    // Connect `data` → root so it reaches the root; `warrant` stays orphaned.
+    const { error: relErr } = await service.from("relations").insert({
+      debate_id: debateId,
+      author_id: advocateId,
+      source_node_id: dataId,
+      target_node_id: rootNodeId,
+      kind: "supports",
+    });
+    if (relErr) throw relErr;
+
+    await service.from("exchanges").update({ status: "completed" }).eq("id", exchangeId);
+
+    const summary = await getDivergenceSummary({ supabase: advocateClient, debateId });
+    if (!summary) throw new Error("expected a summary on a completed exchange");
+
+    const data = summary.openDivergences.find((i) => i.id === dataId);
+    const warrant = summary.openDivergences.find((i) => i.id === warrantId);
+    expect(data).toMatchObject({ statementType: "data", gap: "factual", isOrphaned: false });
+    expect(warrant).toMatchObject({ statementType: "warrant", gap: "values", isOrphaned: true });
+
+    // The root itself is never tagged orphaned (it is the sink, not a dangling node).
+    expect(summary.commonGround.find((i) => i.id === rootNodeId)?.isOrphaned).toBe(false);
+  });
 });

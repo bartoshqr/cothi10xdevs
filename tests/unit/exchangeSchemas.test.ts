@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openExchangeSchema, respondInviteSchema, usernameSearchSchema } from "@/lib/exchange/schemas";
 import { ROUND_COUNT } from "@/lib/exchange/constants";
-import { isMapWellFormed } from "@/lib/exchange/repository";
 
 const VALID_UUID = "00000000-0000-4000-8000-000000000001";
 const OTHER_UUID = "00000000-0000-4000-8000-000000000002";
@@ -84,36 +83,5 @@ describe("usernameSearchSchema", () => {
     const result = usernameSearchSchema.safeParse({ username: "user_name" });
     expect(result.success).toBe(true);
     expect(result.data?.username).toBe("user_name");
-  });
-});
-
-describe("isMapWellFormed", () => {
-  it("returns true for empty map (no connectives)", () => {
-    expect(isMapWellFormed([], [])).toBe(true);
-  });
-
-  it("returns false for a connective with zero inbound links", () => {
-    expect(isMapWellFormed(["c1"], [])).toBe(false);
-  });
-
-  it("returns false for a connective with only one inbound link", () => {
-    expect(isMapWellFormed(["c1"], ["c1"])).toBe(false);
-  });
-
-  it("returns true for a connective with exactly two inbound links", () => {
-    expect(isMapWellFormed(["c1"], ["c1", "c1"])).toBe(true);
-  });
-
-  it("returns true for multiple connectives each with ≥2 links", () => {
-    expect(isMapWellFormed(["c1", "c2"], ["c1", "c1", "c2", "c2", "c2"])).toBe(true);
-  });
-
-  it("returns false when one connective has <2 links even if another is fine", () => {
-    expect(isMapWellFormed(["c1", "c2"], ["c1", "c1", "c2"])).toBe(false);
-  });
-
-  it("ignores link targets that are not connective ids (e.g. statement targets)", () => {
-    // A link pointing at a non-connective id should not count toward any connective
-    expect(isMapWellFormed(["c1"], ["c1", "other-node"])).toBe(false);
   });
 });

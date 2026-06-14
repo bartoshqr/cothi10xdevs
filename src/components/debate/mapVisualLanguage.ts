@@ -7,6 +7,11 @@ export type StatementRole = "claim" | "source" | "data" | "warrant" | "backing" 
 import type { MarkStance } from "@/lib/mark/schemas";
 export type { MarkStance };
 
+export interface MarkState {
+  stance: MarkStance;
+  valid: boolean;
+}
+
 export type ConnectiveOp = "and" | "or";
 
 export type RelationKind = "supports" | "link" | "rephrases" | "rebuts" | "pending";
@@ -79,6 +84,14 @@ export const markStanceDescriptors: Record<MarkStance, MarkStanceDescriptor> = {
  * hue (`var(--destructive)` at 12%, the same mix the Challenge button uses).
  */
 export const CHALLENGER_TINT = "color-mix(in srgb, var(--destructive) 12%, var(--card))";
+
+/**
+ * Border/divider colour for a challenger-tinted card. A neutral gray (`var(--border)`) reads
+ * muddy laid over the warm tint, so we use a low-opacity slice of the same red hue — a soft
+ * rosy hairline that belongs to the card's colour family. Advocate (white) cards keep
+ * `var(--border)`.
+ */
+export const CHALLENGER_BORDER = "color-mix(in srgb, var(--destructive) 25%, transparent)";
 
 export const relationDescriptors: Record<RelationKind, RelationDescriptor> = {
   supports: {

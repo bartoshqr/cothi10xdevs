@@ -6,10 +6,10 @@ import { apiGetSummary } from "./persistence";
 
 interface Props {
   debateId: string;
+  /** The debate owner's user id — used with viewerId to derive role without relying on exchange state. */
+  ownerId: string;
   /** The viewer's user id — splits each bucket into "my" vs "counterpart" statements. */
   viewerId?: string;
-  /** The viewer's role — labels the counterpart subsection (Challenger / Advocate). */
-  viewerRole?: "advocate" | "challenger";
   /** Server-initial completion flag — overridden live by the turn gate. */
   isCompleted?: boolean;
   /** Server-initial round number — overridden live by the turn gate. */
@@ -41,8 +41,19 @@ const byKindThenTitle = (a: SummaryItem, b: SummaryItem) =>
 function Row({ item }: { item: SummaryItem }) {
   return (
     <li className="grid grid-cols-[4.5rem_1fr] items-baseline gap-2">
-      <span className="justify-self-end">
+      {/* Kind badge, with the orphaned tag stacked directly beneath it (both right-aligned so
+          they share the badge column's right edge). An orphaned statement keeps its stance
+          bucket — the tag just flags that it no longer connects to the root claim. */}
+      <span className="flex flex-col items-end gap-1 justify-self-end">
         <TypeBadge statementType={item.statementType} />
+        {item.isOrphaned && (
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
+            style={{ color: "#d97706", border: "1px solid #d97706" }}
+          >
+            ORPHANED
+          </span>
+        )}
       </span>
       <p className="text-foreground text-sm">{item.title}</p>
     </li>
@@ -101,11 +112,16 @@ function SectionHeading({ title, subtitle }: { title: string; subtitle: string }
 // No writes — purely a derived view of where the pair agrees, diverges, or hasn't resolved.
 export default function DivergenceSummary({
   debateId,
+  ownerId,
   viewerId,
-  viewerRole,
   isCompleted = false,
   currentRound = 1,
 }: Props) {
+  const viewerRole: "advocate" | "challenger" | undefined = viewerId
+    ? viewerId === ownerId
+      ? "advocate"
+      : "challenger"
+    : undefined;
   const [gate, setGate] = useState<TurnGateDetail | null>(null);
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<DivergenceSummary | null>(null);

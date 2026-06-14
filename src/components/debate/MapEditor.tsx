@@ -29,10 +29,11 @@ import AddNodeMenu from "./AddNodeMenu";
 import NodeContextMenu from "./NodeContextMenu";
 import EdgeContextMenu from "./EdgeContextMenu";
 import ConnectKindPicker from "./ConnectKindPicker";
-import { useStore, useShallow, reconcileFromServer } from "./store";
-import type { DebateNode, ViewerContext } from "./store";
+import { useStore, useShallow, reconcileFromServer, canWriteContentNow } from "./store";
+import type { DebateNode, DebateEdge, ViewerContext, RFState } from "./store";
 import type { DebateGraph } from "@/lib/debate/repository";
-import type { MarkStance } from "./mapVisualLanguage";
+import { ownGraphIssues } from "./connectivityGraph";
+import type { MarkState } from "./mapVisualLanguage";
 
 // Cross-island contract for the "Submit turn" button, which lives in the page
 // header (a separate hydration root that cannot read this store). MapEditor pushes
@@ -50,22 +51,65 @@ export interface TurnGateDetail {
   isCompleted: boolean;
   /** Current round (1-based) — drives the header's "round" counter live for either seat. */
   currentRound: number;
+  /** Count of the viewer's own statements that no longer reach the root (orphaned). Blocks
+   * "Submit turn" until they delete/reconnect each. Forced to 0 in the mini-turn (content is
+   * frozen there, so orphans are tolerated and surface in the summary instead). */
+  danglingCount: number;
+  /** Titles of those dangling statements, so the header can name them in the disabled reason. */
+  danglingTitles: string[];
+  /** Count of the viewer's own AND/OR connectives with <2 operands. Also blocks submit (a map
+   * with an incomplete connective is malformed). Suppressed in the mini-turn like dangling. */
+  incompleteConnectiveCount: number;
+}
+
+/** Cross-island connectivity signal: the viewer's own graph problems (orphaned statements +
+ * incomplete connectives), broadcast on every nodes/edges change. Drives the advocate's
+ * pre-invite guard (InviteChallenger), which lives in a separate hydration root and can't read
+ * this store. */
+export interface ConnectivityDetail {
+  danglingIds: string[];
+  danglingTitles: string[];
+  incompleteConnectiveIds: string[];
 }
 
 // Both parties have a marking-driven live gate: you must mark every one of the
 // counterpart's statements before submitting your turn. We count the counterpart's
 // statements via `authorId !== viewerId` — the same test as `isMarkableNode` — which
 // works for advocate and challenger alike without needing a `challengerId` on the viewer.
+// An invalid mark (valid=false) counts as unmarked, mirroring the DB gate in submit_turn.
 export function computeTurnGate(
   nodes: DebateNode[],
-  marks: Partial<Record<string, MarkStance>>,
+  marks: Partial<Record<string, MarkState>>,
   viewer: ViewerContext | null,
+  edges: DebateEdge[] = [],
 ): TurnGateDetail {
   if (!viewer) {
-    return { isMyTurn: false, markedCount: 0, total: 0, isMiniTurn: false, isCompleted: false, currentRound: 1 };
+    return {
+      isMyTurn: false,
+      markedCount: 0,
+      total: 0,
+      isMiniTurn: false,
+      isCompleted: false,
+      currentRound: 1,
+      danglingCount: 0,
+      danglingTitles: [],
+      incompleteConnectiveCount: 0,
+    };
   }
   const counterpartStatements = nodes.filter((n) => n.type === "statement" && n.data.authorId !== viewer.viewerId);
-  const markedCount = counterpartStatements.filter((n) => marks[n.id] !== undefined).length;
+  const markedCount = counterpartStatements.filter((n) => marks[n.id]?.valid === true).length;
+
+  // The viewer's own structural problems: statements that no longer reach root, and AND/OR
+  // connectives with <2 operands. Both block submit. Suppressed in the mini-turn: the challenger
+  // can't edit/delete/reattach there (frozen), so blocking on them would trap them.
+  const { orphanStatementIds: danglingOwnIds, incompleteConnectiveIds: incompleteOwnIds } = viewer.inMiniTurn
+    ? { orphanStatementIds: [], incompleteConnectiveIds: [] }
+    : ownGraphIssues({ nodes, edges, authorId: viewer.viewerId });
+  const danglingTitles = danglingOwnIds.map((id) => {
+    const n = nodes.find((node) => node.id === id);
+    return n?.type === "statement" ? n.data.title : "";
+  });
+
   return {
     isMyTurn: viewer.isMyTurn,
     markedCount,
@@ -73,11 +117,74 @@ export function computeTurnGate(
     isMiniTurn: viewer.inMiniTurn,
     isCompleted: viewer.isCompleted,
     currentRound: viewer.currentRound,
+    danglingCount: danglingOwnIds.length,
+    danglingTitles,
+    incompleteConnectiveCount: incompleteOwnIds.length,
   };
 }
 
 function broadcastTurnGate(detail: TurnGateDetail) {
   window.dispatchEvent(new CustomEvent<TurnGateDetail>("wvmap:turn-gate", { detail }));
+}
+
+function broadcastConnectivity(detail: ConnectivityDetail) {
+  window.dispatchEvent(new CustomEvent<ConnectivityDetail>("wvmap:connectivity", { detail }));
+}
+
+// Build the connectivity payload for the header islands from the current store state. Uses the
+// turn-agnostic selectors (so it also covers the advocate's pre-exchange invite guard, where
+// there's no turn) and resolves the dangling statement titles for the offending nodes.
+function computeConnectivity(s: ReturnType<typeof useStore.getState>): ConnectivityDetail {
+  const danglingIds = s.orphanedOwnNodeIds();
+  return {
+    danglingIds,
+    danglingTitles: danglingIds.map((id) => {
+      const n = s.nodes.find((node) => node.id === id);
+      return n?.type === "statement" ? n.data.title : "";
+    }),
+    incompleteConnectiveIds: s.incompleteOwnConnectiveIds(),
+  };
+}
+
+// The exact store slice MapEditorInner subscribes to (via useShallow). Exported so a unit test
+// can pin the subscription contract — notably that `canEdit` is part of the slice, so a revoke's
+// setCanEdit(true) re-renders the canvas and re-enables it (regression: it was previously omitted,
+// and only the never-changing myTurnOrPreExchange function reference was selected).
+export function selectMapEditorState(s: RFState) {
+  return {
+    nodes: s.nodes,
+    edges: s.edges,
+    debateId: s.debateId,
+    error: s.error,
+    clearError: s.clearError,
+    onNodesChange: s.onNodesChange,
+    onEdgesChange: s.onEdgesChange,
+    stagePendingConnection: s.stagePendingConnection,
+    pendingConnection: s.pendingConnection,
+    cancelConnection: s.cancelConnection,
+    deleteNodes: s.deleteNodes,
+    createStatementNode: s.createStatementNode,
+    setRootNode: s.setRootNode,
+    addPendingPreview: s.addPendingPreview,
+    inEditNodeId: s.inEditNodeId,
+    inEditEdgeId: s.inEditEdgeId,
+    setInEditEdgeId: s.setInEditEdgeId,
+    isInEditBlocked: s.isInEditBlocked,
+    tryExitNodeEdit: s.tryExitNodeEdit,
+    // Subscribe to canEdit (not the myTurnOrPreExchange function, whose reference never
+    // changes) so a revoke's setCanEdit(true) actually re-renders and re-enables the board.
+    canEdit: s.canEdit,
+    canEditNode: s.canEditNode,
+    viewer: s.viewer,
+    marks: s.marks,
+  };
+}
+
+// Whether the board is writable for the viewer right now (their turn, or pre-exchange advocate).
+// Derived from the subscribed primitives so it tracks canEdit/viewer flips; mirrors the store's
+// myTurnOrPreExchange(). Exported for the same selector-contract test.
+export function deriveCanAdd({ viewer, canEdit }: { viewer: ViewerContext | null; canEdit: boolean }): boolean {
+  return viewer ? canWriteContentNow(viewer) : canEdit;
 }
 
 // Per-instance screen-coord cursor ref, provided by MapEditorInner. The connection
@@ -116,6 +223,8 @@ function FloatingConnectionLine({ fromX, fromY, fromPosition }: ConnectionLineCo
     </g>
   );
 }
+
+const UserIdContext = createContext<string | null>(null);
 
 const nodeTypes: NodeTypes = {
   statement: StatementNode,
@@ -166,40 +275,13 @@ function MapEditorInner() {
     setInEditEdgeId,
     isInEditBlocked,
     tryExitNodeEdit,
-    myTurnOrPreExchange,
+    canEdit,
     canEditNode,
     viewer,
     marks,
-  } = useStore(
-    useShallow((s) => ({
-      nodes: s.nodes,
-      edges: s.edges,
-      debateId: s.debateId,
-      error: s.error,
-      clearError: s.clearError,
-      onNodesChange: s.onNodesChange,
-      onEdgesChange: s.onEdgesChange,
-      stagePendingConnection: s.stagePendingConnection,
-      pendingConnection: s.pendingConnection,
-      cancelConnection: s.cancelConnection,
-      deleteNodes: s.deleteNodes,
-      createStatementNode: s.createStatementNode,
-      setRootNode: s.setRootNode,
-      addPendingPreview: s.addPendingPreview,
-      inEditNodeId: s.inEditNodeId,
-      inEditEdgeId: s.inEditEdgeId,
-      setInEditEdgeId: s.setInEditEdgeId,
-      isInEditBlocked: s.isInEditBlocked,
-      tryExitNodeEdit: s.tryExitNodeEdit,
-      myTurnOrPreExchange: s.myTurnOrPreExchange,
-      canEditNode: s.canEditNode,
-      viewer: s.viewer,
-      marks: s.marks,
-    })),
-  );
+  } = useStore(useShallow(selectMapEditorState));
 
-  // Derived: whether the board is writable for the viewer right now (their turn, or pre-exchange advocate).
-  const canAdd = myTurnOrPreExchange();
+  const canAdd = deriveCanAdd({ viewer, canEdit });
 
   const closeConnectionPicker = useCallback(() => {
     setInEditEdgeId(null);
@@ -237,28 +319,76 @@ function MapEditorInner() {
     };
   }, []);
 
+  const userId = useContext(UserIdContext);
+
+  // When the advocate's page loaded with a pending exchange (viewer=null), the turn-change
+  // poll below never starts. InviteChallenger's freshness poll fires `wvmap:exchange-accepted`
+  // the moment the challenger accepts — initialise the store viewer here so the poll can start.
+  useEffect(() => {
+    function onExchangeAccepted(e: Event) {
+      const {
+        exchangeId: eid,
+        currentTurn,
+        currentRound,
+        inMiniTurn,
+      } = (e as CustomEvent<{ exchangeId: string; currentTurn: string; currentRound: number; inMiniTurn: boolean }>)
+        .detail;
+      if (!userId) return;
+      useStore.setState({
+        viewer: {
+          viewerId: userId,
+          viewerRole: "advocate",
+          advocateId: userId,
+          isMyTurn: currentTurn === "advocate",
+          inMiniTurn,
+          isCompleted: false,
+          currentRound,
+        },
+        exchangeId: eid,
+      });
+      void reconcileFromServer();
+    }
+    window.addEventListener("wvmap:exchange-accepted", onExchangeAccepted);
+    return () => {
+      window.removeEventListener("wvmap:exchange-accepted", onExchangeAccepted);
+    };
+  }, [userId]);
+
   // Push the turn-submit gate state to the header's "Submit turn" button (separate
   // hydration root). Re-fires whenever the challenger marks a node so the count
   // stays live; after submit, `viewer.isMyTurn` flips false and the button hides.
   useEffect(() => {
-    broadcastTurnGate(computeTurnGate(nodes, marks, viewer));
-  }, [nodes, marks, viewer]);
+    broadcastTurnGate(computeTurnGate(nodes, marks, viewer, edges));
+  }, [nodes, marks, viewer, edges]);
+
+  // Broadcast the viewer's own dangling-statement info to the header islands (the advocate's
+  // pre-invite guard in InviteChallenger). Fires on every nodes/edges change regardless of
+  // viewer state, so it works pre-exchange (all the advocate's nodes) and during a turn.
+  useEffect(() => {
+    broadcastConnectivity(computeConnectivity(useStore.getState()));
+  }, [nodes, edges]);
 
   // Answer the button's mount-time request (handshake closes the island start-order
-  // race) and run the submit action it asks for.
+  // race) and run the submit action it asks for. The same handshake covers the
+  // connectivity signal for InviteChallenger.
   useEffect(() => {
     function onRequest() {
       const s = useStore.getState();
-      broadcastTurnGate(computeTurnGate(s.nodes, s.marks, s.viewer));
+      broadcastTurnGate(computeTurnGate(s.nodes, s.marks, s.viewer, s.edges));
     }
     function onSubmit() {
       void useStore.getState().submitTurn();
     }
+    function onRequestConnectivity() {
+      broadcastConnectivity(computeConnectivity(useStore.getState()));
+    }
     window.addEventListener("wvmap:request-turn-gate", onRequest);
     window.addEventListener("wvmap:submit-turn", onSubmit);
+    window.addEventListener("wvmap:request-connectivity", onRequestConnectivity);
     return () => {
       window.removeEventListener("wvmap:request-turn-gate", onRequest);
       window.removeEventListener("wvmap:submit-turn", onSubmit);
+      window.removeEventListener("wvmap:request-connectivity", onRequestConnectivity);
     };
   }, []);
 
@@ -571,7 +701,11 @@ interface MapEditorProps {
   /** Exchange id, required when viewer is set. */
   exchangeId?: string | null;
   /** Pre-loaded marks for the debate (server-side hydration). */
-  initialMarks?: Partial<Record<string, MarkStance>>;
+  initialMarks?: Partial<Record<string, MarkState>>;
+  /** Authenticated user's id. Stored in the store so cross-island events can build a
+   * ViewerContext when the exchange transitions from pending → accepted while the page
+   * is open (the InviteChallenger freshness poll fires `wvmap:exchange-accepted`). */
+  userId?: string | null;
 }
 
 export default function MapEditor({
@@ -581,6 +715,7 @@ export default function MapEditor({
   viewer = null,
   exchangeId = null,
   initialMarks = {},
+  userId = null,
 }: MapEditorProps) {
   // Hydrate the store synchronously, before the canvas first renders, so the local-only
   // auto-create effect sees the right debateId and there's no empty-canvas flash.
@@ -590,8 +725,10 @@ export default function MapEditor({
   });
 
   return (
-    <ReactFlowProvider>
-      <MapEditorInner />
-    </ReactFlowProvider>
+    <UserIdContext.Provider value={userId ?? null}>
+      <ReactFlowProvider>
+        <MapEditorInner />
+      </ReactFlowProvider>
+    </UserIdContext.Provider>
   );
 }

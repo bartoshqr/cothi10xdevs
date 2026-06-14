@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 
 interface Props {
   exchangeId: string;
+  onResolved: (accepted: boolean) => void;
 }
 
-export default function RespondInvite({ exchangeId }: Props) {
+export default function RespondInvite({ exchangeId, onResolved }: Props) {
   const [loading, setLoading] = useState<"accept" | "decline" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +24,7 @@ export default function RespondInvite({ exchangeId }: Props) {
         setError(typeof json.error === "string" ? json.error : "Something went wrong.");
         return;
       }
-      window.location.reload();
+      onResolved(accept);
     } catch {
       setError("Network error — please try again.");
     } finally {

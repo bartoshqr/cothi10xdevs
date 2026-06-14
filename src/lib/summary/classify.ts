@@ -11,6 +11,10 @@ export interface ClassifyNode {
   statementType: StatementType | null;
   title: string;
   authorId: string;
+  /** True when the statement no longer reaches the root claim (orphaned). Carried through to
+   * the summary item so the reader sees it needs attention; bucketing is unaffected. Optional
+   * so a caller that doesn't compute connectivity (unit tests) simply omits it. */
+  isOrphaned?: boolean;
 }
 
 /** A node's single counterpart mark. `valid` lets a future invalidated mark be ignored (S-05). */
@@ -30,6 +34,9 @@ export interface SummaryItem {
   title: string;
   /** Node author — lets the UI group each bucket into "mine" vs "counterpart". */
   authorId: string;
+  /** Carried from `ClassifyNode`: the statement is orphaned (severed from root). The UI tags it;
+   * the stance bucket is unchanged. Optional/undefined when connectivity wasn't computed. */
+  isOrphaned?: boolean;
 }
 
 export type DivergenceGap = "factual" | "values";
@@ -77,6 +84,7 @@ export function classifyDivergence({ nodes, marks }: ClassifyInput): DivergenceS
       statementType: node.statementType,
       title: node.title,
       authorId: node.authorId,
+      isOrphaned: node.isOrphaned,
     };
 
     const mark = marks[node.id];

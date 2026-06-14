@@ -2,6 +2,7 @@ import { Handle, Position, useConnection } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { connectiveDescriptors, CONNECTIVE_OPERAND_HANDLE, CONNECTIVE_OUTER_HANDLE } from "../mapVisualLanguage";
 import type { ConnectiveOp } from "../mapVisualLanguage";
+import { useStore, useShallow } from "../store";
 
 export interface ConnectiveNodeData extends Record<string, unknown> {
   op: ConnectiveOp;
@@ -15,6 +16,16 @@ export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeTyp
   const { inProgress, toNode } = useConnection();
   const isActiveTarget = inProgress && toNode?.id === id;
   const descriptor = connectiveDescriptors[data.op];
+  const { isIncompleteOwn, viewer } = useStore(
+    useShallow((s) => ({
+      // This connective is one of the viewer's own AND/OR groups still missing a 2nd operand.
+      isIncompleteOwn: s.incompleteOwnConnectiveIds().includes(id),
+      viewer: s.viewer,
+    })),
+  );
+  // Flag an incomplete own connective only while it's the viewer's turn (the submit-gate is the
+  // hard block); pre-exchange the advocate's invite-button guard surfaces it instead.
+  const showIncompleteWarning = isIncompleteOwn && (viewer?.isMyTurn ?? false);
 
   return (
     <>
@@ -39,7 +50,13 @@ export default function ConnectiveNode({ id, data }: NodeProps<ConnectiveNodeTyp
           height: "36px",
           backgroundColor: descriptor.bg,
           borderColor: isActiveTarget ? "var(--primary)" : descriptor.border,
-          boxShadow: isActiveTarget ? "0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent)" : undefined,
+          // Incomplete connective: same amber inset emphasis as an orphaned statement (drawn
+          // inside, no reflow), so a malformed AND/OR group is hard to miss.
+          boxShadow: isActiveTarget
+            ? "0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent)"
+            : showIncompleteWarning
+              ? "inset 0 0 20px 2px color-mix(in srgb, #d97706 40%, transparent)"
+              : undefined,
           color: descriptor.text,
           opacity: data.pending ? 0.6 : 1,
         }}

@@ -1,25 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/db/database.types";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
+import { isMapWellFormed } from "@/lib/debate/connectivity";
 import type { OpenExchangeInput } from "./schemas";
 
 type DB = SupabaseClient<Database>;
 type ExchangeRow = Database["public"]["Tables"]["exchanges"]["Row"];
-
-// Pure helper shared with Phase-4 UI flag: reject if any connective node has <2
-// inbound link relations. Seeds a tally from all connective ids (so ones with
-// zero inbound links are not silently skipped) and counts inbound link targets.
-export function isMapWellFormed(connectiveIds: string[], linkTargetNodeIds: string[]): boolean {
-  const tally = new Map<string, number>();
-  for (const id of connectiveIds) tally.set(id, 0);
-  for (const targetId of linkTargetNodeIds) {
-    if (tally.has(targetId)) tally.set(targetId, (tally.get(targetId) ?? 0) + 1);
-  }
-  for (const count of tally.values()) {
-    if (count < 2) return false;
-  }
-  return true;
-}
 
 export async function openExchange(supabase: DB, input: OpenExchangeInput, advocateId: string): Promise<ExchangeRow> {
   // (a) Load the debate — null means unknown or RLS-scoped out.
@@ -196,74 +182,6 @@ export async function revokeInvite(supabase: DB, exchangeId: string, advocateId:
     .select("id");
   if (error) throw error;
   if (data.length === 0) throw new NotFoundError();
-}
-
-export interface ChallengerInvite {
-  id: string;
-  debate_id: string;
-  debate_title: string;
-  debate_root_node_id: string | null;
-  debate_root_claim_title: string | null;
-  debate_root_claim_body: string | null;
-  advocate_id: string;
-  round_count: number;
-  status: "pending" | "accepted";
-  created_at: string;
-}
-
-// Returns the challenger's pending and accepted exchanges so the inbox can show
-// both "awaiting response" rows (with Accept/Decline) and "enter debate" rows.
-export async function listInvites(supabase: DB, userId: string): Promise<ChallengerInvite[]> {
-  const { data: exchanges, error } = await supabase
-    .from("exchanges")
-    .select("id, debate_id, round_count, created_at, advocate_id, status")
-    .eq("challenger_id", userId)
-    .in("status", ["pending", "accepted"])
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  if (exchanges.length === 0) return [];
-
-  const debateIds = [...new Set(exchanges.map((e) => e.debate_id))];
-  const { data: debates, error: debatesError } = await supabase
-    .from("debates")
-    .select("id, title, root_node_id")
-    .in("id", debateIds);
-  if (debatesError) throw debatesError;
-
-  const debateById = new Map(debates.map((d) => [d.id, d]));
-
-  // Fetch root claim content (title + body) for debates that have a root node.
-  const rootNodeIds = debates.map((d) => d.root_node_id).filter((id): id is string => id !== null);
-  const rootNodeById = new Map<string, { title: string | null; body: string | null }>();
-  if (rootNodeIds.length > 0) {
-    const { data: rootNodes, error: rootError } = await supabase
-      .from("nodes")
-      .select("id, metadata")
-      .in("id", rootNodeIds);
-    if (rootError) throw rootError;
-    for (const node of rootNodes) {
-      const meta = node.metadata as { title?: string; body?: string } | null;
-      rootNodeById.set(node.id, { title: meta?.title ?? null, body: meta?.body ?? null });
-    }
-  }
-
-  return exchanges.map((row) => {
-    const debate = debateById.get(row.debate_id);
-    const rootNodeId = debate?.root_node_id ?? null;
-    const rootClaim = rootNodeId ? (rootNodeById.get(rootNodeId) ?? null) : null;
-    return {
-      id: row.id,
-      debate_id: row.debate_id,
-      debate_title: debate?.title ?? "",
-      debate_root_node_id: rootNodeId,
-      debate_root_claim_title: rootClaim?.title ?? null,
-      debate_root_claim_body: rootClaim?.body ?? null,
-      advocate_id: row.advocate_id,
-      round_count: row.round_count,
-      status: row.status as "pending" | "accepted",
-      created_at: row.created_at,
-    };
-  });
 }
 
 export async function submitTurn(supabase: DB, exchangeId: string): Promise<ExchangeRow> {

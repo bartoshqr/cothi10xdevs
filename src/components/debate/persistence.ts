@@ -2,7 +2,7 @@ import type { Database } from "@/db/database.types";
 import type { CreateNodeInput, CreateRelationInput, UpdateNodeInput, UpdateRelationInput } from "@/lib/debate/schemas";
 import type { DebateGraph } from "@/lib/debate/repository";
 import type { DivergenceSummary } from "@/lib/summary/classify";
-import type { MarkStance } from "./mapVisualLanguage";
+import type { MarkState } from "./mapVisualLanguage";
 import { ApiError } from "./apiError";
 
 type MarkRow = Database["public"]["Tables"]["marks"]["Row"];
@@ -106,10 +106,10 @@ export async function apiGetGraph(debateId: string): Promise<DebateGraph> {
   return res.json() as Promise<DebateGraph>;
 }
 
-export async function apiGetMarks(debateId: string): Promise<Partial<Record<string, MarkStance>>> {
+export async function apiGetMarks(debateId: string): Promise<Partial<Record<string, MarkState>>> {
   const res = await fetch(`/api/debates/${debateId}/marks`);
   await expectOk(res, "Load marks");
-  return res.json() as Promise<Partial<Record<string, MarkStance>>>;
+  return res.json() as Promise<Partial<Record<string, MarkState>>>;
 }
 
 export async function apiGetSummary(debateId: string): Promise<DivergenceSummary> {

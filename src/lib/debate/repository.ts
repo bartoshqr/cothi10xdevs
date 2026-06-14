@@ -11,6 +11,134 @@ import type {
 } from "./schemas";
 
 type DB = SupabaseClient<Database>;
+
+export type DebateRole = "advocate" | "challenger";
+export type DebateListState = "drafting" | "awaiting" | "in_progress" | "closed";
+
+export interface MyDebate {
+  id: string;
+  title: string;
+  root_node_id: string | null;
+  root_claim_title: string | null;
+  role: DebateRole;
+  state: DebateListState;
+  exchange_id: string | null;
+  other_username: string | null;
+  round_count: number | null;
+  current_round: number | null;
+  created_at: string;
+}
+
+export async function listMyDebates(supabase: DB, viewerId: string): Promise<MyDebate[]> {
+  // Step 1: all debates visible to this viewer via RLS (owns OR is challenger of open/completed exchange)
+  const { data: debates, error: debatesError } = await supabase
+    .from("debates")
+    .select("id, title, root_node_id, owner_id, created_at");
+  if (debatesError) throw debatesError;
+  if (debates.length === 0) return [];
+
+  const debateIds = debates.map((d) => d.id);
+
+  // Step 2: all exchanges for these debates (RLS returns advocate- and challenger-side rows)
+  const { data: exchanges, error: exchangesError } = await supabase
+    .from("exchanges")
+    .select("id, debate_id, status, round_count, current_round, advocate_id, challenger_id, created_at")
+    .in("debate_id", debateIds);
+  if (exchangesError) throw exchangesError;
+
+  // Step 3: build exchange map per debate — representative = open first, else newest completed, else none
+  type ExchangeRow = (typeof exchanges)[number];
+  const exchangeByDebate = new Map<string, ExchangeRow>();
+  for (const ex of exchanges) {
+    const existing = exchangeByDebate.get(ex.debate_id);
+    const isOpen = ex.status === "pending" || ex.status === "accepted";
+    const isCompleted = ex.status === "completed";
+    if (!existing) {
+      if (isOpen || isCompleted) exchangeByDebate.set(ex.debate_id, ex);
+    } else {
+      const existingIsOpen = existing.status === "pending" || existing.status === "accepted";
+      if (isOpen && !existingIsOpen) {
+        // open beats completed
+        exchangeByDebate.set(ex.debate_id, ex);
+      } else if (!existingIsOpen && isCompleted) {
+        // prefer newer completed
+        if (new Date(ex.created_at) > new Date(existing.created_at)) {
+          exchangeByDebate.set(ex.debate_id, ex);
+        }
+      }
+    }
+  }
+
+  // Step 4: collect other-party ids for username resolution
+  const otherPartyIds = new Set<string>();
+  for (const debate of debates) {
+    const isAdvocate = debate.owner_id === viewerId;
+    const ex = exchangeByDebate.get(debate.id);
+    if (ex) {
+      otherPartyIds.add(isAdvocate ? ex.challenger_id : ex.advocate_id);
+    }
+  }
+  const usernameById = new Map<string, string>();
+  if (otherPartyIds.size > 0) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("id", [...otherPartyIds]);
+    if (profilesError) throw profilesError;
+    for (const p of profiles) {
+      usernameById.set(p.id, p.username);
+    }
+  }
+
+  // Step 5: resolve root-claim titles
+  const rootNodeIds = debates.map((d) => d.root_node_id).filter((id): id is string => id !== null);
+  const rootTitleById = new Map<string, string | null>();
+  if (rootNodeIds.length > 0) {
+    const { data: rootNodes, error: rootError } = await supabase
+      .from("nodes")
+      .select("id, metadata")
+      .in("id", rootNodeIds);
+    if (rootError) throw rootError;
+    for (const node of rootNodes) {
+      const meta = node.metadata as { title?: string } | null;
+      rootTitleById.set(node.id, meta?.title ?? null);
+    }
+  }
+
+  // Step 6: derive role + state per debate and shape into MyDebate[]
+  return debates.map((debate) => {
+    const role: DebateRole = debate.owner_id === viewerId ? "advocate" : "challenger";
+    const ex = exchangeByDebate.get(debate.id) ?? null;
+
+    let state: DebateListState;
+    if (!ex) {
+      state = "drafting";
+    } else if (ex.status === "pending") {
+      state = "awaiting";
+    } else if (ex.status === "accepted") {
+      state = "in_progress";
+    } else {
+      state = "closed";
+    }
+
+    const otherPartyId = ex ? (role === "advocate" ? ex.challenger_id : ex.advocate_id) : null;
+    const rootNodeId = debate.root_node_id;
+
+    return {
+      id: debate.id,
+      title: debate.title,
+      root_node_id: rootNodeId,
+      root_claim_title: rootNodeId ? (rootTitleById.get(rootNodeId) ?? null) : null,
+      role,
+      state,
+      exchange_id: ex?.id ?? null,
+      other_username: otherPartyId ? (usernameById.get(otherPartyId) ?? null) : null,
+      round_count: ex?.round_count ?? null,
+      current_round: ex?.current_round ?? null,
+      created_at: debate.created_at,
+    };
+  });
+}
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
 type DebateRow = Database["public"]["Tables"]["debates"]["Row"];
@@ -19,6 +147,12 @@ export interface DebateGraph {
   debate: DebateRow;
   nodes: NodeRow[];
   relations: RelationRow[];
+}
+
+export async function deleteDebate(supabase: DB, debateId: string): Promise<void> {
+  const { data, error } = await supabase.from("debates").delete().eq("id", debateId).select("id");
+  if (error) throw error;
+  if (data.length === 0) throw new NotFoundError();
 }
 
 export async function createDebate(supabase: DB, input: CreateDebateInput): Promise<string> {
@@ -126,8 +260,13 @@ export async function updateNode(supabase: DB, nodeId: string, patch: UpdateNode
   if (patch.statementType !== undefined) metadataPatch.statement_type = patch.statementType;
   if (patch.connectiveOp !== undefined) metadataPatch.op = patch.connectiveOp;
 
+  // Must be called with the per-request anon/RLS client (not a service-role client):
+  // patch_node_and_invalidate is SECURITY DEFINER and bypasses RLS on the marks
+  // invalidation, so it relies on auth.uid() being set to authorize the edit. It also
+  // trusts that the root-demotion guard above ran first — keep both checks at this
+  // call site. See migration 20260612000002 (impl-review F1/F2).
   const { data, error } = await supabase
-    .rpc("patch_node", {
+    .rpc("patch_node_and_invalidate", {
       p_node_id: nodeId,
       p_metadata_patch: Object.keys(metadataPatch).length > 0 ? metadataPatch : undefined,
       p_position_x: patch.positionX,

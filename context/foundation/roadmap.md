@@ -3,7 +3,7 @@ project: WVMap
 version: 1
 status: draft
 created: 2026-05-25
-updated: 2026-06-12
+updated: 2026-06-13
 prd_version: 1
 main_goal: market-feedback
 top_blocker: capacity
@@ -18,7 +18,7 @@ top_blocker: capacity
 ## Vision recap
 
 Worldview debates on social media are chaotic because free-form comment formats hide
-*what* people actually disagree on. WVMap gives an advocate a structured Toulmin map
+_what_ people actually disagree on. WVMap gives an advocate a structured Toulmin map
 (Claim → Data → Warrant) and runs a turn-based private exchange with a challenger who
 marks each statement Accept / Challenge / Abstain. The payoff is a deterministic
 **divergence summary** that separates common ground from genuine cruxes.
@@ -42,30 +42,31 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 
 ## At a glance
 
-| ID   | Change ID                   | Outcome (user can …)                                                | Prerequisites | PRD refs                                  | Status   |
-| ---- | --------------------------- | ------------------------------------------------------------------- | ------------- | ----------------------------------------- | -------- |
-| F-01 | username-profiles           | (foundation) register with a unique username; look users up by it   | —             | FR-001, FR-002                            | done     |
-| S-00 | landing-page-refresh        | land on a page that clearly pitches WVMap and directs them to sign up | —           | —                                         | done     |
-| F-02 | map-visual-spike            | (design spike) see a static example Toulmin map rendered in React Flow — node/edge visual language | —  | US-01 (visual), FR-004, FR-006 (visual)   | done |
-| S-01 | advocate-map-builder        | build a debate: root Claim, typed statements, sources, relations    | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006     | done     |
-| S-02 | invite-and-open-exchange    | set round count, invite a challenger by username, they accept | S-01          | US-01, FR-007, FR-008, FR-009, FR-010     | done     |
-| S-03 | challenger-first-turn       | mark every advocate statement and add own statements, submit turn   | S-02          | US-02, FR-011, FR-012, FR-013, FR-014     | done |
-| S-04 | first-divergence-summary    | respond, complete round 1, and view the divergence summary          | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | done |
-| S-05 | multiround-edit-invalidation| edit/delete across rounds with mark invalidation; close exchange    | S-04          | US-04, FR-019, FR-026, FR-027             | proposed |
-| S-06 | debate-list-and-inbox       | see all own debates with state, and an inbox of invites/exchanges   | S-02          | FR-024, FR-025                            | proposed |
-| S-07 | parent-debate-linking       | link a new debate to a parent statement and navigate between them   | S-01          | FR-022, FR-023                            | proposed |
+| ID   | Change ID                    | Outcome (user can …)                                                                               | Prerequisites | PRD refs                                              | Status   |
+| ---- | ---------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------- | -------- |
+| F-01 | username-profiles            | (foundation) register with a unique username; look users up by it                                  | —             | FR-001, FR-002                                        | done     |
+| S-00 | landing-page-refresh         | land on a page that clearly pitches WVMap and directs them to sign up                              | —             | —                                                     | done     |
+| F-02 | map-visual-spike             | (design spike) see a static example Toulmin map rendered in React Flow — node/edge visual language | —             | US-01 (visual), FR-004, FR-006 (visual)               | done     |
+| S-01 | advocate-map-builder         | build a debate: root Claim, typed statements, sources, relations                                   | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006                 | done     |
+| S-02 | invite-and-open-exchange     | set round count, invite a challenger by username, they accept                                      | S-01          | US-01, FR-007, FR-008, FR-009, FR-010                 | done     |
+| S-03 | challenger-first-turn        | mark every advocate statement and add own statements, submit turn                                  | S-02          | US-02, FR-011, FR-012, FR-013, FR-014                 | done     |
+| S-04 | first-divergence-summary     | respond, complete round 1, and view the divergence summary                                         | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | done     |
+| S-05 | multiround-edit-invalidation | edit/delete across rounds with mark invalidation + orphan highlight                                | S-04          | US-04, FR-026                                         | done     |
+| S-06 | debate-list-and-inbox        | see all own debates with state, and an inbox of invites/exchanges                                  | S-02          | FR-024, FR-025                                        | proposed |
+| S-07 | parent-debate-linking        | link a new debate to a parent statement and navigate between them                                  | S-01          | FR-022, FR-023                                        | proposed |
+| S-08 | advocate-close-and-timeout   | advocate closes an exchange explicitly or after 7-day challenger inactivity                        | S-05          | FR-019, FR-027                                        | proposed |
 
 ## Streams
 
 Navigation aid — groups items that share a Prerequisites chain. Canonical ordering still lives in the dependency graph below; this table is the proposed reading order across parallel tracks.
 
-| Stream | Theme               | Chain                                          | Note                                                              |
-| ------ | ------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
-| D      | Landing / onboarding | `S-00`                                        | Standalone; no prerequisites, parallel with everything. Ships whenever ready. |
-| A      | Core exchange loop  | `F-01` → `S-01` → `S-02` → `S-03` → `S-04` → `S-05` | The critical path to the north star (`S-04`) and the heavy state machine after it. |
-| E      | Visual foundation   | `F-02` → `S-01`                                 | Disposable design spike; proves the canvas's node/edge visual language before `S-01` commits to a schema. |
-| B      | Navigation & inbox  | `S-06`                                          | Joins Stream A at `S-02`; can be built in parallel with `S-03`/`S-04` (capacity lever). |
-| C      | Fractal linking     | `S-07`                                          | Branches from `S-01`; highest value once `S-04` summaries exist, parallel with `S-05`. |
+| Stream | Theme                | Chain                                                        | Note                                                                                                                  |
+| ------ | -------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| D      | Landing / onboarding | `S-00`                                                       | Standalone; no prerequisites, parallel with everything. Ships whenever ready.                                         |
+| A      | Core exchange loop   | `F-01` → `S-01` → `S-02` → `S-03` → `S-04` → `S-05` → `S-08` | The critical path to the north star (`S-04`), the heavy state machine (`S-05`), then the close/timeout tail (`S-08`). |
+| E      | Visual foundation    | `F-02` → `S-01`                                              | Disposable design spike; proves the canvas's node/edge visual language before `S-01` commits to a schema.             |
+| B      | Navigation & inbox   | `S-06`                                                       | Joins Stream A at `S-02`; can be built in parallel with `S-03`/`S-04` (capacity lever).                               |
+| C      | Fractal linking      | `S-07`                                                       | Branches from `S-01`; highest value once `S-04` summaries exist, parallel with `S-05`.                                |
 
 ## Baseline
 
@@ -168,7 +169,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Adds the three-state mark schema and turn-submission gating (cannot submit until every advocate statement is marked). This is half the input to the summary algorithm; correctness of the mark model matters more than UI polish. Ownership tracking and edit-permission checks must be enforced consistently to prevent data corruption across rounds.
 - **Status:** done
 
-### S-04: Advocate responds, round 1 completes, divergence summary appears  ⟵ north star
+### S-04: Advocate responds, round 1 completes, divergence summary appears ⟵ north star
 
 - **Outcome:** advocate can mark every challenger statement, add their own statements/relations, submit to complete round 1, and either party can trigger the deterministic divergence summary (common ground / open divergences / unresolved), private to the pair.
 - **Change ID:** first-divergence-summary
@@ -181,17 +182,32 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** This is the validation milestone — the first time the full loop produces the artifact the product exists to create. Round-completion semantics (both turns submitted) gate the summary trigger. Deterministic-only; no AI. The summary classification (contested Data → factual gap, contested Warrant → values gap) is the core deliverable.
 - **Status:** done
 
-### S-05: Multi-round exchange with edit/delete, mark invalidation, and close
+### S-05: Multi-round exchange with edit/delete, mark invalidation, and orphan highlight
 
-- **Outcome:** across rounds 2+, each party can edit/delete only their own statements during their active turn; edits/deletes invalidate the other party's marks (re-evaluation enforced for edits, auto-clear for deletes), orphaned statements are highlighted, the final-round mini turn runs, and the exchange closes (round exhaustion, explicit close, or 7-day challenger-inactivity) into immutability.
+- **Outcome:** across rounds 2+, each party can edit/delete only their own statements during their active turn; an edit invalidates the other party's mark on that statement (flag flip, re-mark required by turn-end — not ordered within the turn); a delete cascades the deleted node's own marks but **preserves** counterpart statements and their marks, recomputing only orphan status; orphaned statements (no path to the root claim) are highlighted in the canvas and labelled in the divergence summary; the final-round mini-turn (always opens; challenger may also revise valid marks) runs with content controls frozen in the UI. Close paths are **not** in this slice — see S-08.
 - **Change ID:** multiround-edit-invalidation
-- **PRD refs:** US-04, FR-019, FR-026, FR-027
+- **PRD refs:** US-04, FR-026 (see PRD §Shifts 2026-06-12 for the S-05 amendments)
 - **Prerequisites:** S-04
 - **Parallel with:** S-07
 - **Blockers:** —
+- **Scope decisions (PRD §Shifts):** re-eval ordering rule dropped (submit-gate is the only enforcement); orphaned counterpart statements keep their marks (no relation-delete clear cascade); orphans carry their stance into the summary under an "orphaned" sub-label per section; mini-turn always opens and permits change-of-mind on valid marks; own-statement connectivity is a UI-only soft-guard on invite/submit (client compute-at-read, not server-enforced).
 - **Unknowns:**
-  - "Silent" = no turn submission within 7 days; partial activity (login/view/draft) does not extend the clock. PRD documents the intended call — confirm at implementation. Owner: user / implementation. Block: no.
+  - Invalidation mechanism: a `SECURITY DEFINER` edit-RPC that flips the counterpart's `marks.valid=false` (the marker-only `marks_update` policy blocks the author from doing it as a plain UPDATE). `RETURNS SETOF`; integration-test the not-found branch. Owner: implementation. Block: no.
 - **Risk:** The heaviest, riskiest slice — the turn/mark-invalidation/orphaning/mini-turn state machine is where the data-integrity guardrail is won or lost. Deliberately sequenced AFTER the north star: market-feedback wants a working single-round loop in front of advocates before this complexity lands. A correctness bug here silently corrupts a user's reasoning map.
+- **Status:** done
+
+### S-08: Advocate-initiated close (explicit + 7-day challenger-inactivity)
+
+- **Outcome:** the advocate can end an exchange that isn't closing on its own — either by explicitly closing it, or, when it is the challenger's turn (regular or mini-turn) and they have not submitted within 7 days of the turn opening, by closing after the inactivity window elapses. **Close precondition** (FR-019): the advocate must first satisfy FR-015 (every challenger statement marked / re-evaluated). At close all statements become immutable; any still-invalidated marks and any still-unmarked advocate statements default to Abstain (counted as unresolved). The UI surfaces a countdown once the 7-day window becomes available.
+- **Change ID:** advocate-close-and-timeout
+- **PRD refs:** FR-019 (close paths), FR-027 (post-close immutability) — split out of S-05 per PRD §Shifts 2026-06-12 #6
+- **Prerequisites:** S-05
+- **Parallel with:** S-06, S-07
+- **Blockers:** —
+- **Unknowns:**
+  - "Silent" = no turn submission within 7 days; partial activity (login/view/draft) does not extend the clock (PRD Open Question 3 / FR-019). Owner: user / implementation. Block: yes (resolve at implementation time).
+  - 7-day clock storage & actuation: add an activity-clock column on `exchanges` (set when the challenger's turn opens, cleared on submit); no Cloudflare cron in this setup, so favour **lazy check-and-close on read** (the advocate's next visit) over a scheduler. Owner: implementation. Block: no.
+- **Risk:** Lower-volume than S-05 but the close transition is irreversible and feeds the summary's unresolved counts — the Abstain-defaulting at close must be exact. Sequenced after S-05 because it depends on the mark-invalidation state and the orphan/mini-turn machinery landing first.
 - **Status:** proposed
 
 ### S-06: Debate list and challenger inbox
@@ -219,26 +235,37 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Informational foreign-key link, no consistency check — low implementation risk. Most useful once S-04 summaries surface contested statements worth deepening, so its value lands late even though it only needs S-01 structurally.
 - **Status:** proposed
 
+## Technical Notes
+
+### Polling cadence and Supabase Realtime (S-06)
+
+The `/debates` page and the `InviteChallenger` freshness check both poll at 1-second intervals. At MVP user counts this is fine, but at scale (many concurrent open sessions) the request rate grows linearly with active tabs. The natural upgrade path is Supabase Realtime: subscribe to `debates` + `exchanges` table changes scoped to the viewer's RLS-visible rows — each change pushes a WebSocket frame instead of the client hammering a REST endpoint every second. No API-shape change is needed; only the polling loop in `AdvocateSection`, `ChallengerSection`, and `InviteChallenger` would swap for a `supabase.channel(…).on('postgres_changes', …)` subscription. Defer until polling latency or server load becomes a measured problem.
+
+### Exchange deduplication (S-06)
+
+The debate list dedup loop (`exchangeByDebate`) contains a "prefer newer completed" branch that is currently dead code. The DB's partial unique index (`exchanges_one_open_per_debate`) prevents two open exchanges per debate, and the UI has no re-invite path after completion — so each debate will have at most one `completed` row in practice. If a future slice adds re-invite after close, the branch becomes load-bearing and no change is needed (logic is already correct). See `context/changes/s06/notes-exchange-dedup.md` for the full analysis.
+
 ## Backlog Handoff
 
-| Roadmap ID | Change ID                    | Suggested issue title                                     | Ready for `/10x-plan` | Notes |
-| ---------- | ---------------------------- | --------------------------------------------------------- | --------------------- | ----- |
-| F-01       | username-profiles            | Add unique-username registration and user lookup          | yes                   | Run `/10x-plan username-profiles` |
-| S-00       | landing-page-refresh         | Refresh the landing page for WVMap's target community     | no                    | Confirm copy/visual scope first |
-| F-02       | map-visual-spike             | Static React Flow Toulmin map to design node/edge visuals | yes                   | Disposable design spike; run `/10x-new map-visual-spike` |
-| S-01       | advocate-map-builder         | Advocate builds a structured Toulmin map                  | no                    | Prereq F-01, F-02 |
-| S-02       | invite-and-open-exchange     | Open an exchange and invite a challenger                  | no                    | Prereq S-01 |
-| S-03       | challenger-first-turn        | Challenger marks and adds statements (turn 1)             | no                    | Prereq S-02 |
-| S-04       | first-divergence-summary     | Complete round 1 and generate the divergence summary      | no                    | North star; prereq S-03 |
-| S-05       | multiround-edit-invalidation | Multi-round edit/delete, mark invalidation, and close     | no                    | Prereq S-04; heaviest slice |
-| S-06       | debate-list-and-inbox        | Debate list and challenger inbox                          | no                    | Prereq S-02; parallelizable |
-| S-07       | parent-debate-linking        | Link debates to a parent statement                        | no                    | Prereq S-01; parallelizable |
+| Roadmap ID | Change ID                    | Suggested issue title                                        | Ready for `/10x-plan` | Notes                                                    |
+| ---------- | ---------------------------- | ------------------------------------------------------------ | --------------------- | -------------------------------------------------------- |
+| F-01       | username-profiles            | Add unique-username registration and user lookup             | yes                   | Run `/10x-plan username-profiles`                        |
+| S-00       | landing-page-refresh         | Refresh the landing page for WVMap's target community        | no                    | Confirm copy/visual scope first                          |
+| F-02       | map-visual-spike             | Static React Flow Toulmin map to design node/edge visuals    | yes                   | Disposable design spike; run `/10x-new map-visual-spike` |
+| S-01       | advocate-map-builder         | Advocate builds a structured Toulmin map                     | no                    | Prereq F-01, F-02                                        |
+| S-02       | invite-and-open-exchange     | Open an exchange and invite a challenger                     | no                    | Prereq S-01                                              |
+| S-03       | challenger-first-turn        | Challenger marks and adds statements (turn 1)                | no                    | Prereq S-02                                              |
+| S-04       | first-divergence-summary     | Complete round 1 and generate the divergence summary         | no                    | North star; prereq S-03                                  |
+| S-05       | multiround-edit-invalidation | Multi-round edit/delete, mark invalidation, orphan highlight | no                    | Prereq S-04; heaviest slice; close paths split to S-08   |
+| S-06       | debate-list-and-inbox        | Debate list and challenger inbox                             | no                    | Prereq S-02; parallelizable                              |
+| S-07       | parent-debate-linking        | Link debates to a parent statement                           | no                    | Prereq S-01; parallelizable                              |
+| S-08       | advocate-close-and-timeout   | Advocate explicit close + 7-day challenger-inactivity close  | no                    | Prereq S-05; split out of S-05                           |
 
 ## Open Roadmap Questions
 
 1. **Challenger account friction** — requiring challengers to create an account raises the barrier for the skeptic to engage. Owner: user (post-launch product team). Block: `roadmap-wide` (informs whether invite-acceptance is a success blocker; does not gate any slice).
 2. **Source format** — FR-005 / FR-013 allow free-text URL-or-citation with no validation or canonical format in MVP. Owner: user. Block: gates nothing (affects S-01, S-03 polish only).
-3. **"Silent" definition for the 7-day window** — clock starts at turn open; only turn submission stops it. Owner: user / implementation. Block: S-05 (must be resolved at implementation time, not before planning).
+3. **"Silent" definition for the 7-day window** — clock starts at turn open; only turn submission stops it. Owner: user / implementation. Block: S-08 (the 7-day close path was split out of S-05 per PRD §Shifts 2026-06-12 #6; resolve at S-08 implementation time, not before planning).
 4. **Cloudflare deploy path (infra)** — `infrastructure.md` flags an unresolved Astro 6 + Supabase Auth + Cloudflare adapter build failure (GitHub #15796), High likelihood, blocks first deploy; and preview URLs are public by default for a private-user app. Owner: user. Block: gates first production deploy of any slice — verify issue status and pin the adapter before deploying.
 
 ## Parked
@@ -264,3 +291,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-02: set round count, invite a challenger by username, they accept** — Archived 2026-06-09 → `context/archive/2026-06-08-invite-and-open-exchange/`. Lesson: —.
 - **S-03: challenger can mark every unmarked advocate statement (Accept/Challenge/Abstain), add their own typed statements with sources and directed relations, and submit their turn, which activates the advocate's turn.** — Archived 2026-06-10 → `context/archive/2026-06-09-challenger-first-turn/`. Lesson: —.
 - **S-04: respond, complete round 1, and view the divergence summary** — Archived 2026-06-12 → `context/archive/2026-06-10-first-divergence-summary/`. Lesson: —.
+- **S-05: across rounds 2+, each party can edit/delete only their own statements during their active turn; an edit invalidates the other party's mark on that statement (flag flip, re-mark required by turn-end — not ordered within the turn); a delete cascades the deleted node's own marks but **preserves** counterpart statements and their marks, recomputing only orphan status; orphaned statements (no path to the root claim) are highlighted in the canvas and labelled in the divergence summary; the final-round mini-turn (always opens; challenger may also revise valid marks) runs with content controls frozen in the UI. Close paths are **not** in this slice — see S-08.** — Archived 2026-06-13 → `context/archive/2026-06-12-s05/`. Lesson: —.

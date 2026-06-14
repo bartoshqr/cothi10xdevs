@@ -11,6 +11,7 @@ import type { Database } from "@/db/database.types";
 import { isValidUrl } from "@/lib/debate/nodeConstraints";
 import type { UpdateNodeInput } from "@/lib/debate/schemas";
 import type { DebateGraph } from "@/lib/debate/repository";
+import { ownGraphIssues } from "./connectivityGraph";
 import {
   apiCreateNode,
   apiUpdateNode,
@@ -25,7 +26,7 @@ import {
   apiSubmitTurn,
 } from "./persistence";
 import { ApiError } from "./apiError";
-import type { MarkStance } from "./mapVisualLanguage";
+import type { MarkStance, MarkState } from "./mapVisualLanguage";
 
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
@@ -49,6 +50,14 @@ export interface ViewerContext {
 
 export type DebateNode = StatementNodeType | ConnectiveNodeType;
 export type DebateEdge = Edge<RelationEdgeData, "relation">;
+
+/** Whether the viewer may write content (add/move/edit/delete) right now. It is their turn,
+ * EXCEPT the challenger during their closing mini-turn — that turn is marking-only (the DB
+ * already freezes content via `can_add_content_as_current_actor`), so the UI must match.
+ * Marking is gated separately on `isMyTurn`, so the mark bar stays live in the mini-turn. */
+export function canWriteContentNow(viewer: ViewerContext): boolean {
+  return viewer.isMyTurn && !(viewer.viewerRole === "challenger" && viewer.inMiniTurn);
+}
 
 export interface NodeFieldPatch {
   title?: string;
@@ -80,12 +89,12 @@ export interface RFState {
   viewer: ViewerContext | null;
   /** Exchange id, set when viewer is set. Needed to call submit_turn. */
   exchangeId: string | null;
-  /** Every mark in the debate: nodeId → stance. Loaded from server and updated
+  /** Every mark in the debate: nodeId → { stance, valid }. Loaded from server and updated
    * optimistically. Round 1 has a single marker (the challenger), so one map serves both
    * views — the challenger's own marks (interactive on their turn) and, for the advocate,
    * the challenger's marks shown read-only. Interactivity is gated by `canMarkNode`, not
    * by mark authorship. The two-stance case (both parties marking) is S-04. */
-  marks: Partial<Record<string, MarkStance>>;
+  marks: Partial<Record<string, MarkState>>;
 
   onNodesChange: OnNodesChange<DebateNode>;
   onEdgesChange: OnEdgesChange<DebateEdge>;
@@ -100,7 +109,7 @@ export interface RFState {
     canEdit?: boolean,
     viewer?: ViewerContext | null,
     exchangeId?: string | null,
-    initialMarks?: Partial<Record<string, MarkStance>>,
+    initialMarks?: Partial<Record<string, MarkState>>,
   ) => void;
   setGraph: (debate: DebateRow, nodes: NodeRow[], relations: RelationRow[]) => void;
   createStatementNode: (statementType: StatementRole, position: XYPosition) => string;
@@ -130,6 +139,16 @@ export interface RFState {
   /** Whether a node can carry a mark from this viewer (other party's statement) — turn-agnostic,
    * so the mark bar stays visible read-only after the turn is submitted. */
   isMarkableNode: (nodeId: string) => boolean;
+  /** Ids of the viewer's own statement nodes that no longer reach the root claim (orphaned by
+   * a delete that severed their path). Pre-exchange this covers every statement (all the
+   * advocate's). Excludes not-yet-saved (pending) nodes so a node mid-creation isn't flagged.
+   * Compute-at-read over the relation graph — drives the canvas highlight, the submit-gate,
+   * and the advocate's pre-invite guard. */
+  orphanedOwnNodeIds: () => string[];
+  /** Ids of the viewer's own AND/OR connectives that don't yet have ≥2 operands (incomplete).
+   * Drives the connective highlight and the submit/invite gates; pre-exchange covers all
+   * connectives. Reuses the FR-007 well-formedness rule. */
+  incompleteOwnConnectiveIds: () => string[];
   /** Optimistically upsert a mark on a node; rolls back on server error. */
   setMark: (nodeId: string, stance: MarkStance) => void;
   /** Submit the challenger's turn; locks the board on success. */
@@ -365,7 +384,12 @@ export async function reconcileFromServer(): Promise<void> {
 /** Translate a UI field patch into the API's UpdateNode shape, dropping values that aren't safe to persist yet. */
 function toApiNodePatch(patch: NodeFieldPatch): UpdateNodeInput {
   const apiPatch: UpdateNodeInput = {};
-  if (patch.title !== undefined) apiPatch.title = patch.title;
+  // Only persist a non-blank title. The server's required-title rule 400s on an empty title,
+  // and that failure triggers reconcileFromServer() — which would discard the in-progress edit
+  // and revert the field. While the box is empty the local state still shows "Title is required";
+  // it's persisted again as soon as a non-blank value is typed (and exiting edit is blocked on
+  // empty by isInEditBlocked, so the saved value can never diverge on close). Mirrors the url rule.
+  if (patch.title?.trim()) apiPatch.title = patch.title;
   if (patch.body !== undefined) apiPatch.body = patch.body;
   if (patch.statementType !== undefined) apiPatch.statementType = patch.statementType;
   if (patch.connectiveOp !== undefined) apiPatch.connectiveOp = patch.connectiveOp;
@@ -782,13 +806,13 @@ export const useStore = create<RFState>()((set, get) => ({
   myTurnOrPreExchange: () => {
     const { viewer, canEdit } = get();
     if (!viewer) return canEdit; // pre-exchange: use the old canEdit flag
-    return viewer.isMyTurn;
+    return canWriteContentNow(viewer);
   },
 
   canEditNode: (nodeId) => {
     const { viewer, canEdit, nodes } = get();
     if (!viewer) return canEdit; // pre-exchange: all nodes editable if canEdit
-    if (!viewer.isMyTurn) return false;
+    if (!canWriteContentNow(viewer)) return false;
     const node = nodes.find((n) => n.id === nodeId);
     return node?.data.authorId === viewer.viewerId;
   },
@@ -807,18 +831,36 @@ export const useStore = create<RFState>()((set, get) => ({
     return node.data.authorId !== viewer.viewerId;
   },
 
+  orphanedOwnNodeIds: () => {
+    const { nodes, edges, viewer } = get();
+    // During an exchange only the viewer's own statements block them; pre-exchange (no viewer)
+    // every statement is the advocate's, so no author filter is applied.
+    return ownGraphIssues({ nodes, edges, authorId: viewer?.viewerId }).orphanStatementIds;
+  },
+
+  incompleteOwnConnectiveIds: () => {
+    const { nodes, edges, viewer } = get();
+    return ownGraphIssues({ nodes, edges, authorId: viewer?.viewerId }).incompleteConnectiveIds;
+  },
+
   setMark: (nodeId, stance) => {
     const { debateId, viewer, marks } = get();
     if (!debateId || !viewer) return;
-    const prevStance = marks[nodeId];
-    // Optimistic update
-    set({ marks: { ...get().marks, [nodeId]: stance } });
+    const prevState = marks[nodeId];
+    // Optimistic update: re-marking always makes the mark valid again.
+    set({ marks: { ...get().marks, [nodeId]: { stance, valid: true } } });
     apiUpsertMark(debateId, nodeId, stance).catch((e: unknown) => {
       // Roll back the optimistic update for this node only: restore the previous
-      // stance, or drop the entry entirely if this was its first (unsaved) mark.
+      // MarkState, or drop the entry entirely if this was its first (unsaved) mark.
       const { [nodeId]: _discarded, ...rest } = get().marks;
-      set({ marks: prevStance === undefined ? rest : { ...rest, [nodeId]: prevStance } });
+      set({ marks: prevState === undefined ? rest : { ...rest, [nodeId]: prevState } });
       reportError(e instanceof Error ? e.message : "Failed to save mark");
+      // The captured prevState may be stale if a poll-driven reconcile landed between
+      // the optimistic write and this failure (e.g. the counterpart's edit just
+      // invalidated this mark) — restoring it could resurrect a valid=true mark the
+      // server now treats as invalid. Re-pull authoritative state to correct that
+      // (impl-review F3). Skipped for first-mark drops, where there is nothing server-side.
+      if (prevState !== undefined) void reconcileFromServer();
     });
   },
 

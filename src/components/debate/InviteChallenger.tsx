@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ROUND_COUNT } from "@/lib/exchange/constants";
 import { Button } from "@/components/ui/button";
+import TurnBar from "./TurnBar";
 
 interface UserResult {
   id: string;
@@ -13,6 +14,8 @@ interface ExistingExchange {
   challengerUsername: string | null;
   roundCount: number;
   currentRound: number;
+  currentTurn?: "advocate" | "challenger";
+  inMiniTurn?: boolean;
 }
 
 interface Props {
@@ -41,8 +44,35 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
   // the status line changes without a page reload (the editor lock is flipped via
   // the cross-island event below).
   const [activeExchange, setActiveExchange] = useState<ExistingExchange | null>(existingExchange);
+  // The advocate's own graph problems that must be fixed before opening the exchange (Decision 6
+  // + FR-007, UI-only — the server backstops both in `openExchange`): statements that don't reach
+  // the root, and AND/OR connectives with <2 operands. Fed live from MapEditor's
+  // `wvmap:connectivity` broadcast.
+  const [dangling, setDangling] = useState<{ ids: string[]; titles: string[] }>({ ids: [], titles: [] });
+  const [incompleteConnectiveIds, setIncompleteConnectiveIds] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Listen for the connectivity signal from the canvas island and request an immediate re-send
+  // on mount (handshake survives a slow island start order — mirrors TurnBar's gate handshake).
+  useEffect(() => {
+    function onConnectivity(e: Event) {
+      const detail = (
+        e as CustomEvent<{
+          danglingIds: string[];
+          danglingTitles: string[];
+          incompleteConnectiveIds: string[];
+        }>
+      ).detail;
+      setDangling({ ids: detail.danglingIds, titles: detail.danglingTitles });
+      setIncompleteConnectiveIds(detail.incompleteConnectiveIds);
+    }
+    window.addEventListener("wvmap:connectivity", onConnectivity);
+    window.dispatchEvent(new CustomEvent("wvmap:request-connectivity"));
+    return () => {
+      window.removeEventListener("wvmap:connectivity", onConnectivity);
+    };
+  }, []);
 
   // Close the panel on any click outside it — including the canvas. A backdrop
   // overlay won't work here: the header's `backdrop-blur` is a containing block,
@@ -105,12 +135,37 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
       try {
         const res = await fetch(`/api/exchanges/${activeId}`);
         if (!res.ok) return;
-        const json = (await res.json()) as { status: string };
+        const json = (await res.json()) as {
+          status: string;
+          currentTurn: string;
+          currentRound: number;
+          inMiniTurn: boolean;
+        };
         if (stopped || json.status === "pending") return;
         if (json.status === "accepted") {
           // Advocate stays locked (an accepted exchange still freezes edits) —
-          // just update the status line.
-          setActiveExchange((prev) => (prev ? { ...prev, status: "accepted" } : prev));
+          // update the status line and tell MapEditor to initialise its viewer so
+          // its turn-change poll can start (it was paused since viewer was null while pending).
+          setActiveExchange((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: "accepted",
+                  currentTurn: json.currentTurn as "advocate" | "challenger",
+                  inMiniTurn: json.inMiniTurn,
+                }
+              : prev,
+          );
+          window.dispatchEvent(
+            new CustomEvent("wvmap:exchange-accepted", {
+              detail: {
+                exchangeId: activeId,
+                currentTurn: json.currentTurn,
+                currentRound: json.currentRound,
+                inMiniTurn: json.inMiniTurn,
+              },
+            }),
+          );
         } else {
           // Declined: the exchange is closed → editing re-opens and the advocate
           // can re-invite. Clear the line and unlock the canvas.
@@ -224,9 +279,15 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
             </Button>
           </>
         ) : (
-          <span className="text-muted-foreground text-sm">
-            Challenger {who} {activeExchange.currentRound}/{activeExchange.roundCount} round
-          </span>
+          <TurnBar
+            viewerRole="advocate"
+            isMyTurn={activeExchange.currentTurn === "advocate"}
+            currentRound={activeExchange.currentRound}
+            roundCount={activeExchange.roundCount}
+            counterpartUsername={activeExchange.challengerUsername}
+            isCompleted={activeExchange.status === "completed"}
+            isMiniTurn={activeExchange.inMiniTurn ?? false}
+          />
         )}
         {error && <span className="text-xs text-red-500">{error}</span>}
       </div>
@@ -347,11 +408,23 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
             {/* Error message — surfaces server 422/409 via the message text */}
             {error && <p className="text-xs text-red-500">{error}</p>}
 
+            {/* Connectivity guard: block the invite while the advocate's map is malformed —
+                orphaned statements and/or AND/OR groups missing an operand — naming each. */}
+            {dangling.ids.length > 0 && (
+              <p className="text-xs text-red-500">
+                Reconnect or delete {dangling.ids.length > 1 ? "these orphaned statements" : "this orphaned statement"}{" "}
+                before inviting: {dangling.titles.join(", ")}
+              </p>
+            )}
+            {incompleteConnectiveIds.length > 0 && (
+              <p className="text-xs text-red-500">Give every AND/OR group at least two operands before inviting.</p>
+            )}
+
             <Button
               type="button"
               size="sm"
               className="w-full"
-              disabled={!selected || sending}
+              disabled={!selected || sending || dangling.ids.length > 0 || incompleteConnectiveIds.length > 0}
               onClick={() => void handleSend()}
             >
               {sending ? "Sending…" : "Send invite"}

@@ -311,6 +311,7 @@ export type Database = {
         Args: { p_debate_id: string }
         Returns: boolean
       }
+      can_write_node_content: { Args: { p_node_id: string }; Returns: boolean }
       create_debate_with_root: {
         Args: { p_root_body?: string; p_root_title: string; p_title: string }
         Returns: string
@@ -321,6 +322,30 @@ export type Database = {
       }
       is_debate_owner: { Args: { p_debate_id: string }; Returns: boolean }
       patch_node: {
+        Args: {
+          p_metadata_patch?: Json
+          p_node_id: string
+          p_position_x?: number
+          p_position_y?: number
+        }
+        Returns: {
+          author_id: string
+          created_at: string
+          debate_id: string
+          id: string
+          kind: Database["public"]["Enums"]["node_kind"]
+          metadata: Json
+          position_x: number
+          position_y: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "nodes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      patch_node_and_invalidate: {
         Args: {
           p_metadata_patch?: Json
           p_node_id: string

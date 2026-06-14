@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { withAuth } from "@/lib/api";
 import { debateIdParamSchema, updateDebateSchema } from "@/lib/debate/schemas";
-import { getDebateGraph, setDebateRoot } from "@/lib/debate/repository";
+import { getDebateGraph, setDebateRoot, deleteDebate, listMyDebates } from "@/lib/debate/repository";
+import { ValidationError } from "@/lib/errors";
 
 export const GET = withAuth(async (context, supabase) => {
   const idParsed = debateIdParamSchema.safeParse(context.params.id);
@@ -15,6 +16,27 @@ export const GET = withAuth(async (context, supabase) => {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
   return Response.json(graph);
+});
+
+// Only drafting debates (no open/accepted/completed exchange) may be deleted.
+// RLS already gates this to the owner; we add the drafting-state guard here.
+export const DELETE = withAuth(async (context, supabase, user) => {
+  const idParsed = debateIdParamSchema.safeParse(context.params.id);
+  if (!idParsed.success) {
+    return Response.json({ error: "Invalid debate id" }, { status: 400 });
+  }
+
+  const all = await listMyDebates(supabase, user.id);
+  const debate = all.find((d) => d.id === idParsed.data);
+  if (!debate) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+  if (debate.state !== "drafting") {
+    throw new ValidationError("Only drafting debates can be deleted.");
+  }
+
+  await deleteDebate(supabase, idParsed.data);
+  return new Response(null, { status: 204 });
 });
 
 // D3-3c: re-designate the root claim. The body is whitelisted by updateDebateSchema

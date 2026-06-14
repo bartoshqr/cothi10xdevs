@@ -513,3 +513,42 @@ handled by repointing the single inbound link and removing the page + its dead r
   grep -rn "/invites\|listInvites" src/ || echo "OK: no /invites or listInvites references"
   # Expected: OK line, no matches.
   ```
+
+---
+
+## Addendum — live updates (added during implementation, 2026-06-14)
+
+> Recorded retroactively via `/10x-impl-review` (F1/F2). The original plan scoped a
+> **read-only** list with advocate cards as server-rendered Astro and only the challenger
+> card as a React island. During implementation the slice grew to include live updates and a
+> delete control. This addendum documents what actually shipped so the plan matches reality;
+> the polling **duplication** it introduced is owned by the follow-up change
+> `context/changes/polling-hook-unification` (roadmap T-01).
+
+**What changed vs. the original plan:**
+
+- **Both groups are polling React islands**, not advocate=Astro + challenger=island. New
+  components `src/components/debate/AdvocateSection.tsx` and `ChallengerSection.tsx` own the
+  per-group list state and poll for any-field updates (badge/round/membership changes) with a
+  visibility-gated lifecycle (pause when tab hidden, refetch on focus/visibility return).
+- **New polling endpoint** `GET /api/debates` (`src/pages/api/debates/index.ts`) returns
+  `listMyDebates` for the viewer; the two sections poll it.
+- **Delete-drafting control on the advocate list** (supersedes the "read-only navigation" /
+  "no write paths" guardrail — see Addendum F2): `AdvocateSection` renders a Delete button on
+  `drafting` cards, backed by a new state-guarded `DELETE /api/debates/[id]`.
+- **Detail-page live-update plumbing** (outside the original `/debates` surface): cross-island
+  `wvmap:exchange-accepted` custom event so the advocate's canvas initialises its viewer the
+  moment the challenger accepts — `MapEditor.tsx` (userId context + event listener),
+  `InviteChallenger.tsx` (TurnBar + freshness poll), `DivergenceSummary.tsx` (derive role from
+  `ownerId`+`viewerId` instead of a passed `viewerRole`), and `viewer.ts` (treat `completed`
+  exchanges as viewable/read-only).
+
+**Known follow-ups / debt:**
+
+- Polling lifecycle is hand-copied across `AdvocateSection`, `ChallengerSection`,
+  `InviteChallenger`, `MapEditor` → extract `useVisibilityPolling` (T-01).
+- The two sections run **independent** timers against the same `/api/debates` data → optional
+  shared `useDebateList()` (T-01 Layer 2).
+- Poll interval is **1000ms** by design (near-real-time list); the page comments were corrected
+  to say 1s (impl-review F3). Each tick runs `listMyDebates` (~4 batched reads); acceptable for
+  MVP per-user debate counts, revisit if load grows (T-01 shared timer halves it).

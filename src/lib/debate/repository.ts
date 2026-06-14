@@ -139,6 +139,32 @@ export async function listMyDebates(supabase: DB, viewerId: string): Promise<MyD
     };
   });
 }
+
+export type DebateDeletability = "not_found" | "drafting" | "has_exchange";
+
+// Scoped drafting check for the delete path — avoids loading the viewer's whole list just to
+// read one debate's state. RLS scopes the debate read to rows the viewer can see; a debate is
+// "drafting" (deletable) only when it has no pending/accepted/completed exchange. A declined-only
+// exchange still counts as drafting, mirroring the listMyDebates derivation.
+export async function getDebateDeletability(supabase: DB, debateId: string): Promise<DebateDeletability> {
+  const { data: debate, error: debateError } = await supabase
+    .from("debates")
+    .select("id")
+    .eq("id", debateId)
+    .maybeSingle();
+  if (debateError) throw debateError;
+  if (!debate) return "not_found";
+
+  const { data: exchanges, error: exchangesError } = await supabase
+    .from("exchanges")
+    .select("id")
+    .eq("debate_id", debateId)
+    .in("status", ["pending", "accepted", "completed"])
+    .limit(1);
+  if (exchangesError) throw exchangesError;
+  return exchanges.length > 0 ? "has_exchange" : "drafting";
+}
+
 type NodeRow = Database["public"]["Tables"]["nodes"]["Row"];
 type RelationRow = Database["public"]["Tables"]["relations"]["Row"];
 type DebateRow = Database["public"]["Tables"]["debates"]["Row"];

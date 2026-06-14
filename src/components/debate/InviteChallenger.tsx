@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ROUND_COUNT } from "@/lib/exchange/constants";
 import { Button } from "@/components/ui/button";
+import TurnBar from "./TurnBar";
 
 interface UserResult {
   id: string;
@@ -13,6 +14,8 @@ interface ExistingExchange {
   challengerUsername: string | null;
   roundCount: number;
   currentRound: number;
+  currentTurn?: "advocate" | "challenger";
+  inMiniTurn?: boolean;
 }
 
 interface Props {
@@ -143,7 +146,16 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
           // Advocate stays locked (an accepted exchange still freezes edits) —
           // update the status line and tell MapEditor to initialise its viewer so
           // its turn-change poll can start (it was paused since viewer was null while pending).
-          setActiveExchange((prev) => (prev ? { ...prev, status: "accepted" } : prev));
+          setActiveExchange((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: "accepted",
+                  currentTurn: json.currentTurn as "advocate" | "challenger",
+                  inMiniTurn: json.inMiniTurn,
+                }
+              : prev,
+          );
           window.dispatchEvent(
             new CustomEvent("wvmap:exchange-accepted", {
               detail: {
@@ -267,9 +279,15 @@ export default function InviteChallenger({ debateId, existingExchange }: Props) 
             </Button>
           </>
         ) : (
-          <span className="text-muted-foreground text-sm">
-            Challenger {who} {activeExchange.currentRound}/{activeExchange.roundCount} round
-          </span>
+          <TurnBar
+            viewerRole="advocate"
+            isMyTurn={activeExchange.currentTurn === "advocate"}
+            currentRound={activeExchange.currentRound}
+            roundCount={activeExchange.roundCount}
+            counterpartUsername={activeExchange.challengerUsername}
+            isCompleted={activeExchange.status === "completed"}
+            isMiniTurn={activeExchange.inMiniTurn ?? false}
+          />
         )}
         {error && <span className="text-xs text-red-500">{error}</span>}
       </div>

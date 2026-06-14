@@ -6,10 +6,10 @@ import { apiGetSummary } from "./persistence";
 
 interface Props {
   debateId: string;
+  /** The debate owner's user id — used with viewerId to derive role without relying on exchange state. */
+  ownerId: string;
   /** The viewer's user id — splits each bucket into "my" vs "counterpart" statements. */
   viewerId?: string;
-  /** The viewer's role — labels the counterpart subsection (Challenger / Advocate). */
-  viewerRole?: "advocate" | "challenger";
   /** Server-initial completion flag — overridden live by the turn gate. */
   isCompleted?: boolean;
   /** Server-initial round number — overridden live by the turn gate. */
@@ -112,11 +112,16 @@ function SectionHeading({ title, subtitle }: { title: string; subtitle: string }
 // No writes — purely a derived view of where the pair agrees, diverges, or hasn't resolved.
 export default function DivergenceSummary({
   debateId,
+  ownerId,
   viewerId,
-  viewerRole,
   isCompleted = false,
   currentRound = 1,
 }: Props) {
+  const viewerRole: "advocate" | "challenger" | undefined = viewerId
+    ? viewerId === ownerId
+      ? "advocate"
+      : "challenger"
+    : undefined;
   const [gate, setGate] = useState<TurnGateDetail | null>(null);
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<DivergenceSummary | null>(null);

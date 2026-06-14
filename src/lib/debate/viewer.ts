@@ -11,8 +11,6 @@ interface DeriveViewerArgs {
 }
 
 export interface ViewerDerivation {
-  /** Role on the canvas — `null` until an exchange exists and (for the challenger) is accepted. */
-  viewerRole: "advocate" | "challenger" | null;
   /** Interactive viewer context (turn state); present only on an accepted exchange. */
   viewer: ViewerContext | null;
   /** Exchange id to submit turns against; present only on an accepted exchange. */
@@ -24,24 +22,23 @@ export interface ViewerDerivation {
 // an accepted exchange. The interactive viewer (with turn state) likewise exists
 // only once accepted — a pending invite is read-only, so it yields a null viewer.
 export function deriveViewer({ user, graph, isOwner, exchange }: DeriveViewerArgs): ViewerDerivation {
-  if (!graph || !user) return { viewerRole: null, viewer: null, viewerExchangeId: null };
+  if (!graph || !user) return { viewer: null, viewerExchangeId: null };
 
   // A completed exchange stays viewable (read-only) so both parties keep seeing the board
   // and every mark; only an accepted exchange is interactive (someone is on turn).
   const isViewable = exchange != null && (exchange.status === "accepted" || exchange.status === "completed");
-  const viewerRole: ViewerDerivation["viewerRole"] = isOwner
+  const viewerRole: "advocate" | "challenger" | null = isOwner
     ? "advocate"
     : isViewable && exchange.challengerId === user.id
       ? "challenger"
       : null;
 
   if (!viewerRole || !isViewable) {
-    return { viewerRole, viewer: null, viewerExchangeId: null };
+    return { viewer: null, viewerExchangeId: null };
   }
 
   const isCompleted = exchange.status === "completed";
   return {
-    viewerRole,
     viewerExchangeId: exchange.id,
     viewer: {
       viewerId: user.id,

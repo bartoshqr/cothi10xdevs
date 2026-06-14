@@ -49,13 +49,6 @@ if (viewer && supabase && debateId) {
 // canEdit (the old pre-exchange flag): true only for the advocate before any exchange exists.
 const canEdit = isOwner && exchange === null;
 
-// The summary island mounts whenever an exchange exists and decides its *own* visibility
-// from the live turn gate — never from this SSR value. Its SSR round/completion props are
-// only a first-paint fallback, since the counterpart's page may have rendered before the
-// round closed. Mounting on any exchange (not just accepted/completed) means no SSR state
-// can ever suppress a button the live gate would show.
-const showSummary = exchange != null;
-
 if (!graph) {
   Astro.response.status = 404;
 }
@@ -67,31 +60,15 @@ if (!graph) {
       <div class="flex h-screen flex-col">
         <DebateHeader user={user} username={username} title={graph.debate.title}>
           <div slot="header-actions" class="flex items-center gap-3">
-            {showSummary && (
-              <DivergenceSummary
-                client:only="react"
-                debateId={graph.debate.id}
-                viewerId={viewer?.viewerId}
-                viewerRole={viewer?.viewerRole}
-                isCompleted={exchange.status === "completed"}
-                currentRound={exchange.currentRound}
-              />
-            )}
-            {isOwner &&
-              (exchange?.status === "accepted" || exchange?.status === "completed" ? (
-                <TurnBar
-                  client:only="react"
-                  viewerRole="advocate"
-                  isMyTurn={viewer?.isMyTurn ?? exchange.currentTurn === "advocate"}
-                  currentRound={exchange.currentRound}
-                  roundCount={exchange.roundCount}
-                  counterpartUsername={exchange.challengerUsername}
-                  isCompleted={exchange.status === "completed"}
-                  isMiniTurn={exchange.inMiniTurn}
-                />
-              ) : (
-                <InviteChallenger client:load debateId={graph.debate.id} existingExchange={exchange} />
-              ))}
+            <DivergenceSummary
+              client:only="react"
+              debateId={graph.debate.id}
+              ownerId={graph.debate.owner_id}
+              viewerId={user?.id}
+              isCompleted={exchange?.status === "completed"}
+              currentRound={exchange?.currentRound ?? 1}
+            />
+            {isOwner && <InviteChallenger client:load debateId={graph.debate.id} existingExchange={exchange} />}
             {!isOwner &&
               exchange?.advocateUsername &&
               (exchange.status === "accepted" || exchange.status === "completed" ? (

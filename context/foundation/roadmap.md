@@ -3,7 +3,7 @@ project: WVMap
 version: 1
 status: draft
 created: 2026-05-25
-updated: 2026-06-14
+updated: 2026-06-20
 prd_version: 1
 main_goal: market-feedback
 top_blocker: capacity
@@ -265,20 +265,14 @@ The debate list dedup loop (`exchangeByDebate`) contains a "prefer newer complet
 
 ## Backlog Handoff
 
-| Roadmap ID | Change ID                    | Suggested issue title                                               | Ready for `/10x-plan` | Notes                                                                   |
-| ---------- | ---------------------------- | ------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
-| F-01       | username-profiles            | Add unique-username registration and user lookup                    | yes                   | Run `/10x-plan username-profiles`                                       |
-| S-00       | landing-page-refresh         | Refresh the landing page for WVMap's target community               | no                    | Confirm copy/visual scope first                                         |
-| F-02       | map-visual-spike             | Static React Flow Toulmin map to design node/edge visuals           | yes                   | Disposable design spike; run `/10x-new map-visual-spike`                |
-| S-01       | advocate-map-builder         | Advocate builds a structured Toulmin map                            | no                    | Prereq F-01, F-02                                                       |
-| S-02       | invite-and-open-exchange     | Open an exchange and invite a challenger                            | no                    | Prereq S-01                                                             |
-| S-03       | challenger-first-turn        | Challenger marks and adds statements (turn 1)                       | no                    | Prereq S-02                                                             |
-| S-04       | first-divergence-summary     | Complete round 1 and generate the divergence summary                | no                    | North star; prereq S-03                                                 |
-| S-05       | multiround-edit-invalidation | Multi-round edit/delete, mark invalidation, orphan highlight        | no                    | Prereq S-04; heaviest slice; close paths split to S-08                  |
-| S-06       | debate-list-and-inbox        | Debate list and challenger inbox                                    | no                    | Prereq S-02; parallelizable                                             |
-| S-07       | parent-debate-linking        | Link debates to a parent statement                                  | no                    | Prereq S-01; parallelizable                                             |
-| S-08       | advocate-close-and-timeout   | Advocate explicit close + 7-day challenger-inactivity close         | no                    | Prereq S-05; split out of S-05                                          |
-| T-01       | polling-hook-unification     | Unify visibility-gated polling into one `useVisibilityPolling` hook | no                    | Cleanup; prereq S-06; no user-visible change; unblocks Realtime upgrade |
+Only the open work is tracked here; shipped slices (F-01, S-00, F-02, S-01–S-06)
+are recorded in the "Done" section below. Updated 2026-06-20.
+
+| Roadmap ID | Change ID                  | Suggested issue title                                               | Status   | Next step                                                                                                                                                                                   |
+| ---------- | -------------------------- | ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T-01       | polling-hook-unification   | Unify visibility-gated polling into one `useVisibilityPolling` hook | planned  | Plan written (`context/changes/polling-hook-unification/plan.md`) — run `/10x-implement polling-hook-unification`. Prereq S-06 satisfied; no user-visible change; unblocks Realtime upgrade |
+| S-07       | parent-debate-linking      | Link debates to a parent statement                                  | proposed | Run `/10x-plan parent-debate-linking`. Prereq S-01 satisfied; parallelizable                                                                                                                |
+| S-08       | advocate-close-and-timeout | Advocate explicit close + 7-day challenger-inactivity close         | proposed | Run `/10x-plan advocate-close-and-timeout`. Prereq S-05 satisfied; resolve Open Question 3 ("silent" definition) at plan time                                                               |
 
 ## Open Roadmap Questions
 

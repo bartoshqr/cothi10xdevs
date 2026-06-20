@@ -42,32 +42,33 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 
 ## At a glance
 
-| ID   | Change ID                    | Outcome (user can …)                                                                               | Prerequisites | PRD refs                                              | Status   |
-| ---- | ---------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------- | -------- |
-| F-01 | username-profiles            | (foundation) register with a unique username; look users up by it                                  | —             | FR-001, FR-002                                        | done     |
-| S-00 | landing-page-refresh         | land on a page that clearly pitches WVMap and directs them to sign up                              | —             | —                                                     | done     |
-| F-02 | map-visual-spike             | (design spike) see a static example Toulmin map rendered in React Flow — node/edge visual language | —             | US-01 (visual), FR-004, FR-006 (visual)               | done     |
-| S-01 | advocate-map-builder         | build a debate: root Claim, typed statements, sources, relations                                   | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006                 | done     |
-| S-02 | invite-and-open-exchange     | set round count, invite a challenger by username, they accept                                      | S-01          | US-01, FR-007, FR-008, FR-009, FR-010                 | done     |
-| S-03 | challenger-first-turn        | mark every advocate statement and add own statements, submit turn                                  | S-02          | US-02, FR-011, FR-012, FR-013, FR-014                 | done     |
-| S-04 | first-divergence-summary     | respond, complete round 1, and view the divergence summary                                         | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | done     |
-| S-05 | multiround-edit-invalidation | edit/delete across rounds with mark invalidation + orphan highlight                                | S-04          | US-04, FR-026                                         | done     |
-| S-06 | debate-list-and-inbox        | see all own debates with state, and an inbox of invites/exchanges                                  | S-02          | FR-024, FR-025                                        | done     |
-| S-07 | parent-debate-linking        | link a new debate to a parent statement and navigate between them                                  | S-01          | FR-022, FR-023                                        | proposed |
-| S-08 | advocate-close-and-timeout   | advocate closes an exchange explicitly or after 7-day challenger inactivity                        | S-05          | FR-019, FR-027                                        | proposed |
-| T-01 | polling-hook-unification     | (cleanup) no user-visible change — dedupe the visibility-gated polling boilerplate into one hook   | S-06          | — (tech-debt)                                         | proposed |
+| ID   | Change ID                    | Outcome (user can …)                                                                                      | Prerequisites | PRD refs                                              | Status   |
+| ---- | ---------------------------- | --------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------- | -------- |
+| F-01 | username-profiles            | (foundation) register with a unique username; look users up by it                                         | —             | FR-001, FR-002                                        | done     |
+| S-00 | landing-page-refresh         | land on a page that clearly pitches WVMap and directs them to sign up                                     | —             | —                                                     | done     |
+| F-02 | map-visual-spike             | (design spike) see a static example Toulmin map rendered in React Flow — node/edge visual language        | —             | US-01 (visual), FR-004, FR-006 (visual)               | done     |
+| S-01 | advocate-map-builder         | build a debate: root Claim, typed statements, sources, relations                                          | F-01, F-02    | US-01, FR-003, FR-004, FR-005, FR-006                 | done     |
+| S-02 | invite-and-open-exchange     | set round count, invite a challenger by username, they accept                                             | S-01          | US-01, FR-007, FR-008, FR-009, FR-010                 | done     |
+| S-03 | challenger-first-turn        | mark every advocate statement and add own statements, submit turn                                         | S-02          | US-02, FR-011, FR-012, FR-013, FR-014                 | done     |
+| S-04 | first-divergence-summary     | respond, complete round 1, and view the divergence summary                                                | S-03          | US-03, FR-015, FR-016, FR-017, FR-018, FR-020, FR-021 | done     |
+| S-05 | multiround-edit-invalidation | edit/delete across rounds with mark invalidation + orphan highlight                                       | S-04          | US-04, FR-026                                         | done     |
+| S-06 | debate-list-and-inbox        | see all own debates with state, and an inbox of invites/exchanges                                         | S-02          | FR-024, FR-025                                        | done     |
+| S-07 | parent-debate-linking        | link a new debate to a parent statement and navigate between them                                         | S-01          | FR-022, FR-023                                        | proposed |
+| S-08 | advocate-close-and-timeout   | advocate closes an exchange explicitly or after 7-day challenger inactivity                               | S-05          | FR-019, FR-027                                        | proposed |
+| S-09 | publishable-debate-showcase  | publish a completed debate to a public read-only URL; newcomers view a real map + summary unauthenticated | S-04          | — (new; opt-in reopen of parked "public maps")        | proposed |
+| T-01 | polling-hook-unification     | (cleanup) no user-visible change — dedupe the visibility-gated polling boilerplate into one hook          | S-06          | — (tech-debt)                                         | proposed |
 
 ## Streams
 
 Navigation aid — groups items that share a Prerequisites chain. Canonical ordering still lives in the dependency graph below; this table is the proposed reading order across parallel tracks.
 
-| Stream | Theme                | Chain                                                        | Note                                                                                                                  |
-| ------ | -------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| D      | Landing / onboarding | `S-00`                                                       | Standalone; no prerequisites, parallel with everything. Ships whenever ready.                                         |
-| A      | Core exchange loop   | `F-01` → `S-01` → `S-02` → `S-03` → `S-04` → `S-05` → `S-08` | The critical path to the north star (`S-04`), the heavy state machine (`S-05`), then the close/timeout tail (`S-08`). |
-| E      | Visual foundation    | `F-02` → `S-01`                                              | Disposable design spike; proves the canvas's node/edge visual language before `S-01` commits to a schema.             |
-| B      | Navigation & inbox   | `S-06`                                                       | Joins Stream A at `S-02`; can be built in parallel with `S-03`/`S-04` (capacity lever).                               |
-| C      | Fractal linking      | `S-07`                                                       | Branches from `S-01`; highest value once `S-04` summaries exist, parallel with `S-05`.                                |
+| Stream | Theme                | Chain                                                        | Note                                                                                                                           |
+| ------ | -------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| D      | Landing / onboarding | `S-00` → `S-09`                                              | `S-00` standalone; `S-09` (public showcase) attaches the live demo to the landing page once the exchange loop (`S-04`) exists. |
+| A      | Core exchange loop   | `F-01` → `S-01` → `S-02` → `S-03` → `S-04` → `S-05` → `S-08` | The critical path to the north star (`S-04`), the heavy state machine (`S-05`), then the close/timeout tail (`S-08`).          |
+| E      | Visual foundation    | `F-02` → `S-01`                                              | Disposable design spike; proves the canvas's node/edge visual language before `S-01` commits to a schema.                      |
+| B      | Navigation & inbox   | `S-06`                                                       | Joins Stream A at `S-02`; can be built in parallel with `S-03`/`S-04` (capacity lever).                                        |
+| C      | Fractal linking      | `S-07`                                                       | Branches from `S-01`; highest value once `S-04` summaries exist, parallel with `S-05`.                                         |
 
 ## Baseline
 
@@ -211,6 +212,26 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Lower-volume than S-05 but the close transition is irreversible and feeds the summary's unresolved counts — the Abstain-defaulting at close must be exact. Sequenced after S-05 because it depends on the mark-invalidation state and the orphan/mini-turn machinery landing first.
 - **Status:** proposed
 
+### S-09: Publishable debates + public showcase view
+
+- **Outcome:** the advocate can **publish** a debate whose round is complete (a divergence summary exists), making its map **and** divergence summary readable by anyone — logged in or not — at a public, read-only URL. The landing page links a featured published debate as a live, interactive demo so a newcomer sees a real structured exchange before signing up.
+- **Change ID:** publishable-debate-showcase
+- **PRD refs:** — (net-new; supports `main_goal: market-feedback`. Deliberately reopens the parked "Public debate maps / map gallery" Non-Goal in a **scoped, opt-in** form — only debates the advocate explicitly publishes become public; no user-generated gallery, no discovery feed.)
+- **Prerequisites:** S-04 (a completed round with a divergence summary is the publishable artifact). Reuses the S-01 canvas and S-04 summary; does **not** depend on S-08 (close).
+- **Parallel with:** S-07, S-08, T-01
+- **Blockers:** —
+- **Scope decisions (from shaping 2026-06-20):**
+  - **Asset form:** an interactive read-only map (the live React Flow canvas in a frozen mode — precedent: S-05 final-round "content controls frozen"), not a recorded video. Always fresh; no Playwright-recording staleness pipeline.
+  - **Publish authority:** advocate-only, **no challenger consent** in MVP — accepted because the launch showcase is authored by two accounts the team controls. Publishing exposes the challenger's statements too; general-user consent is **deferred** to a later slice and must be revisited before publish is offered to ordinary users at scale.
+  - **Publishable precondition:** round complete (summary present). An in-progress/private exchange cannot be published.
+  - **Showcase content:** authored by two ordinary accounts the team owns (e.g. `wvmap-advocate` / `wvmap-challenger`) running a real climate debate end-to-end, then publishing it. **No admin role / RBAC** — "admin" means "accounts we control to author showcase content." The feature is content-agnostic: more topics (abortion, veganism, …) are added later by publishing more debates, with **zero new code**.
+  - **Launch content:** one climate debate for v1 (on-brand for the Polish climate-advocate launch community).
+- **Unknowns:**
+  - Public route shape and middleware: a new route (e.g. `/showcase/[id]`) deliberately kept **out** of `PROTECTED_ROUTES` (inverse of the usual auth rule). Owner: implementation. Block: no.
+  - Anon read RLS: `SELECT` policies gated on `debates.public = true`, joined through **every** graph table (debates, statements, relations, marks, exchange, summary). This is the integrity-critical surface. Owner: implementation. Block: no (resolve in `/10x-plan`).
+- **Risk:** **Intersects the top project risk** (test-plan Risk #1 — private pair content leaking / IDOR / RLS gap). A publish flag that over-exposes is exactly that failure class: the anon read path must expose **only** rows reachable from a `public = true` debate and nothing else. Requires integration tests proving an **un**published debate is not anon-readable through any table. Otherwise low product risk — additive, opt-in, no change to the private exchange flow.
+- **Status:** proposed
+
 ### T-01: Visibility-gated polling hook unification (cleanup / tech-debt)
 
 - **Type:** cleanup slice — internal refactor, **no user-visible behaviour change**. Not a product slice; carries no FR. Success = identical runtime behaviour with the duplication removed and the same tests green.
@@ -268,11 +289,12 @@ The debate list dedup loop (`exchangeByDebate`) contains a "prefer newer complet
 Only the open work is tracked here; shipped slices (F-01, S-00, F-02, S-01–S-06)
 are recorded in the "Done" section below. Updated 2026-06-20.
 
-| Roadmap ID | Change ID                  | Suggested issue title                                               | Status   | Next step                                                                                                                                                                                   |
-| ---------- | -------------------------- | ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T-01       | polling-hook-unification   | Unify visibility-gated polling into one `useVisibilityPolling` hook | planned  | Plan written (`context/changes/polling-hook-unification/plan.md`) — run `/10x-implement polling-hook-unification`. Prereq S-06 satisfied; no user-visible change; unblocks Realtime upgrade |
-| S-07       | parent-debate-linking      | Link debates to a parent statement                                  | proposed | Run `/10x-plan parent-debate-linking`. Prereq S-01 satisfied; parallelizable                                                                                                                |
-| S-08       | advocate-close-and-timeout | Advocate explicit close + 7-day challenger-inactivity close         | proposed | Run `/10x-plan advocate-close-and-timeout`. Prereq S-05 satisfied; resolve Open Question 3 ("silent" definition) at plan time                                                               |
+| Roadmap ID | Change ID                   | Suggested issue title                                               | Status   | Next step                                                                                                                                                                                   |
+| ---------- | --------------------------- | ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T-01       | polling-hook-unification    | Unify visibility-gated polling into one `useVisibilityPolling` hook | planned  | Plan written (`context/changes/polling-hook-unification/plan.md`) — run `/10x-implement polling-hook-unification`. Prereq S-06 satisfied; no user-visible change; unblocks Realtime upgrade |
+| S-07       | parent-debate-linking       | Link debates to a parent statement                                  | proposed | Run `/10x-plan parent-debate-linking`. Prereq S-01 satisfied; parallelizable                                                                                                                |
+| S-08       | advocate-close-and-timeout  | Advocate explicit close + 7-day challenger-inactivity close         | proposed | Run `/10x-plan advocate-close-and-timeout`. Prereq S-05 satisfied; resolve Open Question 3 ("silent" definition) at plan time                                                               |
+| S-09       | publishable-debate-showcase | Publish a completed debate to a public read-only showcase URL       | proposed | Run `/10x-new publishable-debate-showcase`. Prereq S-04 satisfied; RLS-critical (test-plan Risk #1) — anon read path must leak nothing from unpublished debates                             |
 
 ## Open Roadmap Questions
 
@@ -283,7 +305,7 @@ are recorded in the "Done" section below. Updated 2026-06-20.
 
 ## Parked
 
-- **Public debate maps / map gallery** — Why parked: PRD §Non-Goals; prevents scope creep toward a social platform before the core mechanic is proven.
+- **Public debate maps / map gallery** — Why parked: PRD §Non-Goals; prevents scope creep toward a social platform before the core mechanic is proven. **Partially reopened (2026-06-20) by S-09** in a scoped, opt-in form: an advocate can publish a _specific_ completed debate to a public URL. The full Non-Goal — user-generated gallery, discovery feed, social surface — stays parked.
 - **Team / org accounts** — Why parked: PRD §Non-Goals; individual accounts only in MVP.
 - **Mobile-native UX** — Why parked: PRD §Non-Goals; desktop web only.
 - **Real-time collaborative editing** — Why parked: PRD §Non-Goals; turn model owns the map one party at a time.

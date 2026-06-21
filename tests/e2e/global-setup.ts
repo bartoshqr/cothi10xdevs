@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readIntegrationEnv } from "../integration/env";
 
 export interface DemoUser {
@@ -12,6 +12,19 @@ export const CHALLENGER_USERNAME = "skeptic";
 
 /** Fixed password for both demo users — test-only, not a real secret. */
 export const DEMO_PASSWORD = "pwd123!";
+
+/**
+ * Deletes every debate owned by the given users. `debates.owner_id` cascades
+ * to nodes/relations/marks/exchanges, and deleting the user themselves would
+ * cascade this away too — but global setup's idempotent-reuse path keeps the
+ * user around, so debates from a prior (possibly interrupted) run would
+ * otherwise pile up. Called from both global setup (on reuse) and the
+ * standalone teardown script.
+ */
+export async function deleteDebatesOwnedBy(admin: SupabaseClient, userIds: string[]): Promise<void> {
+  const { error } = await admin.from("debates").delete().in("owner_id", userIds);
+  if (error) throw error;
+}
 
 /**
  * Provisions the two demo users for the critical-path e2e walkthrough:
@@ -61,6 +74,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const advocate = await getOrCreateUser(ADVOCATE_USERNAME);
   const challenger = await getOrCreateUser(CHALLENGER_USERNAME);
 
+  // Clean slate for reused users — a prior interrupted run may have left debates behind.
+  await deleteDebatesOwnedBy(admin, [advocate.userId, challenger.userId]);
+
   // eslint-disable-next-line no-console -- visible in the e2e run output so the demo users are easy to spot
   console.log("[e2e:global-setup] provisioned demo users:", {
     advocate: advocate.email,
@@ -68,6 +84,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   });
 
   return async () => {
+    await deleteDebatesOwnedBy(admin, [advocate.userId, challenger.userId]);
     await admin.auth.admin.deleteUser(advocate.userId);
     await admin.auth.admin.deleteUser(challenger.userId);
   };

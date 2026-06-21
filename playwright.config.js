@@ -16,6 +16,9 @@ export default defineConfig({
   testDir: "./tests/e2e",
   /* Provisions the advocate/challenger demo users before the run, deletes them after. */
   globalSetup: "./tests/e2e/global-setup.ts",
+  /* Generous timeout — the chromium project's slowMo (demo pacing) adds ~1s per
+     action, including each keystroke from pressSequentially, well past the 30s default. */
+  timeout: 5 * 60_000,
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -40,7 +43,7 @@ export default defineConfig({
     {
       name: "chromium",
       // slowMo paces out each action for demo recording; run with `--headed` to watch it.
-      use: { ...devices["Desktop Chrome"], launchOptions: { slowMo: 1000 } },
+      use: { ...devices["Desktop Chrome"], launchOptions: { slowMo: 100 } },
     },
 
     // Firefox gated off until the first spec is green (per research: fewer flakes

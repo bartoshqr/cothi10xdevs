@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { readIntegrationEnv } from "../integration/env";
-import { ADVOCATE_USERNAME, CHALLENGER_USERNAME } from "./global-setup";
+import { ADVOCATE_USERNAME, CHALLENGER_USERNAME, deleteDebatesOwnedBy } from "./global-setup";
 
 /**
  * Deletes the advocate/challenger demo users if they're still around — e.g.
@@ -32,6 +32,11 @@ async function main(): Promise<void> {
     console.log("[teardown-demo-users] nothing to clean up");
     return;
   }
+
+  await deleteDebatesOwnedBy(
+    admin,
+    stale.map((u) => u.id),
+  );
 
   for (const user of stale) {
     await admin.auth.admin.deleteUser(user.id);

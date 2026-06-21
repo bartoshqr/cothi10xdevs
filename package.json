@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
+    "test:e2e:teardown": "npx tsx tests/e2e/teardown-demo-users.ts",
     "db:types": "supabase gen types typescript --local --schema graphql_public,pgbouncer,public,storage > src/db/database.types.ts",
     "db:reset": "supabase db reset",
     "prepare": "husky"

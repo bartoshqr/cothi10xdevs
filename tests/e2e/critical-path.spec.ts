@@ -13,21 +13,20 @@ declare global {
 const TYPE_DELAY = 30;
 
 /**
- * Waits until a fill *survives* on `locator` — proof the Astro island has
- * hydrated and React now controls the input. Before hydration a fill lands on
- * the plain native input and sticks; the instant React hydrates it resets the
- * value to its (empty) controlled state, wiping an early fill. Without this
- * guard the first field typed into a form gets silently cleared once hydration
- * commits — invisible at slowMo:100 (the delay let hydration finish first), but
- * fatal at slowMo:0. `toPass` polls a throwaway probe until it sticks.
+ * Waits until the Astro island controlling `locator` has hydrated — WITHOUT
+ * mutating the field. React's `hydrateRoot` attaches internal `__reactFiber$…`
+ * / `__reactProps$…` properties to every DOM node it manages; the SSR'd HTML
+ * has neither. Once they appear, React owns the input (its onChange is wired),
+ * so an early fill won't be silently wiped. Without this guard the first field
+ * typed into a form gets cleared the instant hydration commits — invisible at
+ * slowMo:100 (the delay lets hydration finish first), but fatal at slowMo:0.
+ * (Couples to a React internal naming detail; that's the price of not writing a
+ * throwaway probe value.)
  */
 async function waitForHydration(locator: Locator): Promise<void> {
-  const probe = "ready";
-  await expect(async () => {
-    await locator.fill(probe);
-    expect(await locator.inputValue()).toBe(probe);
-  }).toPass({ timeout: 15_000 });
-  await locator.clear();
+  await expect
+    .poll(() => locator.evaluate((el) => Object.keys(el).some((k) => k.startsWith("__react"))), { timeout: 15_000 })
+    .toBe(true);
 }
 
 /** Clears the field and types `text` once. */
@@ -96,15 +95,26 @@ function insidePane(vp: Viewport, p: { x: number; y: number }, margin = 50): boo
  * points it cares about, this also serves the "move to a selected subset"
  * case — it frames exactly that bounding box, not the whole graph. (To frame
  * existing *nodes* by id instead, `window.__rfInstance.fitView({ nodes })`.)
+ *
+ * The points are node *anchors* (top-left corners) and cards render down-right
+ * from there, so the raw bbox would clip the bottom/right-most cards. We grow it
+ * by roughly one card (NODE_W right, NODE_H down) plus a little MARGIN slack on
+ * every side, so whole cards stay on-screen.
  */
-async function frameView(page: Page, points: FlowPoint[], padding = 0.25): Promise<void> {
+const NODE_W = 300;
+const NODE_H = 170;
+const FRAME_MARGIN = 40;
+
+async function frameView(page: Page, points: FlowPoint[], padding = 0.15): Promise<void> {
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
   const bounds = {
-    x: Math.min(...xs),
-    y: Math.min(...ys),
-    width: Math.max(...xs) - Math.min(...xs),
-    height: Math.max(...ys) - Math.min(...ys),
+    x: minX - FRAME_MARGIN,
+    y: minY - FRAME_MARGIN,
+    width: Math.max(...xs) - minX + NODE_W + 2 * FRAME_MARGIN,
+    height: Math.max(...ys) - minY + NODE_H + 2 * FRAME_MARGIN,
   };
   await page.waitForFunction(() => window.__rfInstance !== undefined);
   await page.evaluate(({ bounds, padding }) => window.__rfInstance?.fitBounds(bounds, { padding }), {

@@ -43,7 +43,20 @@ export default defineConfig({
     {
       name: "chromium",
       // slowMo paces out each action for demo recording; run with `--headed` to watch it.
-      use: { ...devices["Desktop Chrome"], launchOptions: { slowMo: 100 } },
+      // viewport:null + --kiosk makes the *page* fill the whole screen in headed mode
+      // (no chrome/toolbar), so nothing runs off-screen — the fixed preset viewport
+      // (1280x720) was opening a window taller/wider than the screen, clipping the
+      // canvas's right/bottom (incl. the "How it works?" button). Pin a 16:9 window
+      // (smaller than the 1920x1080 screen) anchored at the top-left, so the whole
+      // horizontal canvas fits; headless ignores window args and frameView adapts.
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: null,
+        // Desktop Chrome sets deviceScaleFactor:1, which Playwright forbids with a null
+        // viewport — clear it so the page can size itself to the window.
+        deviceScaleFactor: undefined,
+        launchOptions: { slowMo: 100, args: ["--window-position=0,0", "--window-size=1536,864"] },
+      },
     },
 
     // Firefox gated off until the first spec is green (per research: fewer flakes

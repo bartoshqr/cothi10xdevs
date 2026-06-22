@@ -1,6 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import type { ReactFlowInstance } from "@xyflow/react";
-import { ADVOCATE_USERNAME, DEMO_PASSWORD } from "./global-setup";
+import { ADVOCATE_USERNAME, CHALLENGER_USERNAME, DEMO_PASSWORD } from "./global-setup";
 
 declare global {
   interface Window {
@@ -37,6 +37,36 @@ async function typeInto(locator: Locator, text: string) {
   await locator.clear();
   await locator.pressSequentially(text, { delay: TYPE_DELAY });
   await expect(locator).toHaveValue(text);
+}
+
+/** The debate the demo builds — its title is reused as a stable locator anchor. */
+const DEBATE_TITLE = "Is human activity driving climate change?";
+
+/**
+ * Signs in through the UI as `<username>@example.com` with the shared demo
+ * password and lands on /debates. Factored out because the demo signs two users
+ * in (advocate, then challenger) over its course — each via the real sign-in
+ * form, not a pre-baked session.
+ */
+async function signIn(page: Page, username: string) {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Sign in" }).click();
+  await page.waitForURL("**/auth/signin");
+
+  const emailField = page.getByLabel("Email address");
+  await waitForHydration(emailField);
+  await typeInto(emailField, `${username}@example.com`);
+  await typeInto(page.getByLabel("Password", { exact: true }), DEMO_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.waitForURL("**/debates");
+}
+
+/** Signs out via the header button; the server redirects to the public landing
+ *  page, so we confirm by waiting for its "Sign in" link to reappear. */
+async function signOut(page: Page) {
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("link", { name: "Sign in" }).waitFor();
 }
 
 /** A point in flow space — the canvas's own coordinate system. The root claim
@@ -307,25 +337,15 @@ async function connect(
   await expect(page.getByText("Choose relation kind")).toHaveCount(0);
 }
 
-test("advocate signs in and starts a debate", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("link", { name: "Sign in" }).click();
-  await page.waitForURL("**/auth/signin");
-
-  const emailField = page.getByLabel("Email address");
-  await waitForHydration(emailField);
-  await typeInto(emailField, `${ADVOCATE_USERNAME}@example.com`);
-  await typeInto(page.getByLabel("Password", { exact: true }), DEMO_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  await page.waitForURL("**/debates");
+test("advocate builds a debate and invites the challenger, who reviews and accepts", async ({ page }) => {
+  await signIn(page, ADVOCATE_USERNAME);
 
   await page.getByRole("link", { name: /New debate/ }).click();
   await page.waitForURL("**/debates/new");
 
   const debateTitleField = page.getByLabel("Debate title");
   await waitForHydration(debateTitleField);
-  await typeInto(debateTitleField, "Is human activity driving climate change?");
+  await typeInto(debateTitleField, DEBATE_TITLE);
   await typeInto(page.getByLabel("Root claim", { exact: true }), "Humans are causing climate change");
   await typeInto(
     page.getByLabel(/Root claim details/),
@@ -390,4 +410,45 @@ test("advocate signs in and starts a debate", async ({ page }) => {
 
   await expect(page.locator(".react-flow__edge")).toHaveCount(4);
   await expect(page.locator(".react-flow__node")).toHaveCount(5);
+
+  // ── Advocate invites the challenger for 3 rounds ──────────────────────────
+  // Open the invite panel, search the challenger by username, pick 3 rounds (the
+  // default — clicked explicitly so the demo shows the choice), and send. The
+  // search box is debounced, so we wait for the result button to appear before
+  // clicking it. Sending freezes the canvas and swaps the trigger for a pending
+  // status line.
+  await page.getByRole("button", { name: "Invite challenger" }).click();
+  await page.getByPlaceholder("Search users…").fill(CHALLENGER_USERNAME);
+  await page.getByRole("button", { name: CHALLENGER_USERNAME, exact: true }).click();
+  await page.getByRole("button", { name: "3", exact: true }).click();
+  await page.getByRole("button", { name: "Send invite" }).click();
+  await expect(page.getByText(`Invite sent to @${CHALLENGER_USERNAME} for 3 rounds — awaiting response`)).toBeVisible();
+
+  // ── Hand over to the challenger ───────────────────────────────────────────
+  await signOut(page);
+  await signIn(page, CHALLENGER_USERNAME);
+
+  // The pending invite shows in the "As challenger" section as a card carrying the
+  // debate title. The challenger peeks at the advocate's graph first (RLS lets a
+  // pending challenger read the debate), then returns to the inbox to respond.
+  const inviteCard = page.getByRole("listitem").filter({ hasText: DEBATE_TITLE });
+  await inviteCard.getByRole("link", { name: "View debate" }).click();
+
+  await page.waitForURL(/\/debates\/[0-9a-f-]+$/);
+  await expect(statementNode(page, "Humans are causing climate change")).toBeVisible();
+  await expect(page.locator(".react-flow__node")).toHaveCount(5);
+
+  // Back to the inbox and accept — the card flips from a pending invite (View +
+  // Accept/Decline) to an accepted one with an "Enter debate" link.
+  await page.getByRole("link", { name: "My debates" }).click();
+  await page.waitForURL("**/debates");
+
+  await inviteCard.getByRole("button", { name: "Accept" }).click();
+  const enterDebate = inviteCard.getByRole("link", { name: "Enter debate" });
+  await expect(enterDebate).toBeVisible();
+
+  // Go into the now-accepted debate.
+  await enterDebate.click();
+  await page.waitForURL(/\/debates\/[0-9a-f-]+$/);
+  await expect(statementNode(page, "Humans are causing climate change")).toBeVisible();
 });

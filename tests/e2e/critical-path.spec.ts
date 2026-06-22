@@ -12,6 +12,9 @@ declare global {
 /** Per-character delay for demo typing — kept as one constant so every field types at the same pace. */
 const TYPE_DELAY = 30;
 
+/** Demo-pacing pause (ms) after a node/edge action so a viewer can see it land. Not a sync wait. */
+const DEMO_PAUSE = 500;
+
 /**
  * Waits until the Astro island controlling `locator` has hydrated — WITHOUT
  * mutating the field. React's `hydrateRoot` attaches internal `__reactFiber$…`
@@ -170,6 +173,7 @@ async function addStatementNode(
 ) {
   const { role, flow, title, body, url } = options;
   await openAddMenuAt(page, flow);
+  await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the new node register on screen
   await page.getByRole("button", { name: role }).click();
 
   // The node opens in edit mode: title (textarea), an optional URL <input> for
@@ -195,6 +199,7 @@ async function addStatementNode(
  */
 async function addConnectiveNode(page: Page, options: { op: "AND" | "OR"; flow: FlowPoint }) {
   await openAddMenuAt(page, options.flow);
+  await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the new node register on screen
   await page.getByRole("button", { name: options.op }).click();
 }
 
@@ -248,6 +253,7 @@ async function connect(
   await page.mouse.move(tx, ty, { steps: 15 });
   await page.mouse.up();
 
+  await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the kind picker settle before choosing
   await page.getByRole("button", { name: new RegExp(`^${kind}\\b`, "i") }).click();
   await expect(page.getByText("Choose relation kind")).toHaveCount(0);
 }

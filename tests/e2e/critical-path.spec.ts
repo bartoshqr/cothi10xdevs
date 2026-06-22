@@ -12,6 +12,24 @@ declare global {
 /** Per-character delay for demo typing — kept as one constant so every field types at the same pace. */
 const TYPE_DELAY = 30;
 
+/**
+ * Waits until a fill *survives* on `locator` — proof the Astro island has
+ * hydrated and React now controls the input. Before hydration a fill lands on
+ * the plain native input and sticks; the instant React hydrates it resets the
+ * value to its (empty) controlled state, wiping an early fill. Without this
+ * guard the first field typed into a form gets silently cleared once hydration
+ * commits — invisible at slowMo:100 (the delay let hydration finish first), but
+ * fatal at slowMo:0. `toPass` polls a throwaway probe until it sticks.
+ */
+async function waitForHydration(locator: Locator): Promise<void> {
+  const probe = "ready";
+  await expect(async () => {
+    await locator.fill(probe);
+    expect(await locator.inputValue()).toBe(probe);
+  }).toPass({ timeout: 15_000 });
+  await locator.clear();
+}
+
 /** Clears the field and types `text` once. */
 async function typeInto(locator: Locator, text: string) {
   await locator.clear();
@@ -170,12 +188,67 @@ async function addConnectiveNode(page: Page, options: { op: "AND" | "OR"; flow: 
   await page.getByRole("button", { name: options.op }).click();
 }
 
+/** Fits every current node in view (real measured sizes, not just anchor points)
+ *  via the exposed instance — so handles and full cards are reachable for drags. */
+async function fitAllNodes(page: Page, padding = 0.2): Promise<void> {
+  await page.waitForFunction(() => window.__rfInstance !== undefined);
+  await page.evaluate((p) => window.__rfInstance?.fitView({ padding: p }), padding);
+}
+
+/** A statement node located by its (unique) title text. */
+function statementNode(page: Page, title: string): Locator {
+  return page.locator(".react-flow__node-statement", { hasText: title });
+}
+
+/** The sole connective node on the canvas. */
+function connectiveNode(page: Page): Locator {
+  return page.locator(".react-flow__node-connective");
+}
+
+/**
+ * Draws a relation edge by dragging from `from`'s source handle (top of the
+ * node) onto `to`, then picking `kind` in the popup. The drag is done with raw
+ * mouse events and intermediate steps: React Flow only arms the target node's
+ * full-area drop handle *while a connection is in progress*, so the pointer must
+ * actually travel (down → move → move → up), not teleport. The kind popup
+ * (`ConnectKindPicker`) opens at the drop point; its buttons are named by the
+ * relation word, so we match it and confirm the picker closed.
+ */
+async function connect(
+  page: Page,
+  opts: { from: Locator; to: Locator; kind: "supports" | "rephrases" | "rebuts" | "link" },
+) {
+  const { from, to, kind } = opts;
+  const sBox = await from.locator(".react-flow__handle.source").boundingBox();
+  const tBox = await to.boundingBox();
+  if (!sBox || !tBox) throw new Error("connect: source handle or target node is not visible");
+  // The source handle sits centered on the node's top edge (translateY(-50%)),
+  // so its *center* lands on the card border — occluded by the header. Grab its
+  // protruding top edge instead (a couple px below the box top, still above the
+  // card), where nothing covers it.
+  const sx = sBox.x + sBox.width / 2;
+  const sy = sBox.y + 2;
+  const tx = tBox.x + tBox.width / 2;
+  const ty = tBox.y + tBox.height / 2;
+
+  // Drag with steps so the pointer actually travels — React Flow only arms the
+  // target's full-area drop handle while a connection is in progress.
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(tx, ty, { steps: 15 });
+  await page.mouse.up();
+
+  await page.getByRole("button", { name: new RegExp(`^${kind}\\b`, "i") }).click();
+  await expect(page.getByText("Choose relation kind")).toHaveCount(0);
+}
+
 test("advocate signs in and starts a debate", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Sign in" }).click();
   await page.waitForURL("**/auth/signin");
 
   const emailField = page.getByLabel("Email address");
+  await waitForHydration(emailField);
   await typeInto(emailField, `${ADVOCATE_USERNAME}@example.com`);
   await typeInto(page.getByLabel("Password", { exact: true }), DEMO_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -186,6 +259,7 @@ test("advocate signs in and starts a debate", async ({ page }) => {
   await page.waitForURL("**/debates/new");
 
   const debateTitleField = page.getByLabel("Debate title");
+  await waitForHydration(debateTitleField);
   await typeInto(debateTitleField, "Is human activity driving climate change?");
   await typeInto(page.getByLabel("Root claim", { exact: true }), "Humans are causing climate change");
   await typeInto(
@@ -231,4 +305,24 @@ test("advocate signs in and starts a debate", async ({ page }) => {
   });
 
   await addConnectiveNode(page, { op: "AND", flow: andPos });
+
+  // Re-fit on the real (measured) nodes so every card + handle is fully on-screen,
+  // then wire the advocate's support structure exactly as the seed does:
+  //   data → and (link), warrant → and (link), and → root (supports),
+  //   source → data (rephrases).
+  await fitAllNodes(page);
+
+  const root = statementNode(page, "Humans are causing climate change");
+  const data = statementNode(page, "CO₂ levels at record highs");
+  const warrant = statementNode(page, "CO₂ is a greenhouse gas");
+  const source = statementNode(page, "NOAA Global Monitoring Laboratory");
+  const and = connectiveNode(page);
+
+  await connect(page, { from: data, to: and, kind: "link" });
+  await connect(page, { from: warrant, to: and, kind: "link" });
+  await connect(page, { from: and, to: root, kind: "supports" });
+  await connect(page, { from: source, to: data, kind: "rephrases" });
+
+  await expect(page.locator(".react-flow__edge")).toHaveCount(4);
+  await expect(page.locator(".react-flow__node")).toHaveCount(5);
 });

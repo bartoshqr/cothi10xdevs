@@ -78,6 +78,29 @@ function flowToScreen(vp: Viewport, flow: FlowPoint): { x: number; y: number } {
   return { x: vp.box.x + vp.tx + flow.x * vp.zoom, y: vp.box.y + vp.ty + flow.y * vp.zoom };
 }
 
+/**
+ * Blocks until the painted `.react-flow__viewport` transform matches `target`
+ * (the viewport the RF instance computed). fitBounds/fitView update the store
+ * synchronously, but the DOM transform only changes on the next React render +
+ * paint — so reading geometry right after the call races that repaint and can
+ * see the stale transform. Polling for the exact target removes the race with
+ * no fixed sleep.
+ */
+async function waitForViewport(page: Page, target: { x: number; y: number; zoom: number }): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const { tx, ty, zoom } = await page.locator(".react-flow__viewport").evaluate((el) => {
+          const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+          return { tx: m.e, ty: m.f, zoom: m.a };
+        });
+        return Math.abs(tx - target.x) < 1 && Math.abs(ty - target.y) < 1 && Math.abs(zoom - target.zoom) < 0.01;
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+}
+
 /** True when a screen point sits at least `margin` px inside every pane edge. */
 function insidePane(vp: Viewport, p: { x: number; y: number }, margin = 50): boolean {
   const { box } = vp;
@@ -120,10 +143,15 @@ async function frameView(page: Page, points: FlowPoint[], padding = 0.15): Promi
     height: Math.max(...ys) - minY + NODE_H + 2 * FRAME_MARGIN,
   };
   await page.waitForFunction(() => window.__rfInstance !== undefined);
-  await page.evaluate(({ bounds, padding }) => window.__rfInstance?.fitBounds(bounds, { padding }), {
-    bounds,
-    padding,
-  });
+  const target = await page.evaluate(
+    async ({ bounds, padding }) => {
+      await window.__rfInstance?.fitBounds(bounds, { padding });
+      const v = window.__rfInstance?.getViewport() ?? { x: 0, y: 0, zoom: 1 };
+      return { x: v.x, y: v.y, zoom: v.zoom };
+    },
+    { bounds, padding },
+  );
+  await waitForViewport(page, target);
 }
 
 /**
@@ -207,7 +235,12 @@ async function addConnectiveNode(page: Page, options: { op: "AND" | "OR"; flow: 
  *  via the exposed instance — so handles and full cards are reachable for drags. */
 async function fitAllNodes(page: Page, padding = 0.2): Promise<void> {
   await page.waitForFunction(() => window.__rfInstance !== undefined);
-  await page.evaluate((p) => window.__rfInstance?.fitView({ padding: p }), padding);
+  const target = await page.evaluate(async (p) => {
+    await window.__rfInstance?.fitView({ padding: p });
+    const v = window.__rfInstance?.getViewport() ?? { x: 0, y: 0, zoom: 1 };
+    return { x: v.x, y: v.y, zoom: v.zoom };
+  }, padding);
+  await waitForViewport(page, target);
 }
 
 /** A statement node located by its (unique) title text. */
@@ -234,8 +267,24 @@ async function connect(
   opts: { from: Locator; to: Locator; kind: "supports" | "rephrases" | "rebuts" | "link" },
 ) {
   const { from, to, kind } = opts;
-  const sBox = await from.locator(".react-flow__handle.source").boundingBox();
-  const tBox = await to.boundingBox();
+  // A freshly created node is optimistic + `pending` until the server round-trip
+  // swaps its temp id (store.ts): the source handle only mounts once `!pending`,
+  // AND the id swap *remounts* the node (React re-keys on id), so a one-shot read
+  // can catch the element mid-detach and return null. Poll both measurements until
+  // they land stably — this rides out the pending→reconcile remount window.
+  const sourceHandle = from.locator(".react-flow__handle.source");
+  let sBox = await sourceHandle.boundingBox();
+  let tBox = await to.boundingBox();
+  await expect
+    .poll(
+      async () => {
+        sBox = await sourceHandle.boundingBox();
+        tBox = await to.boundingBox();
+        return sBox !== null && tBox !== null;
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
   if (!sBox || !tBox) throw new Error("connect: source handle or target node is not visible");
   // The source handle sits centered on the node's top edge (translateY(-50%)),
   // so its *center* lands on the card border — occluded by the header. Grab its

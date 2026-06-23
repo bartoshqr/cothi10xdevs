@@ -330,20 +330,24 @@ async function deleteStatementNode(page: Page, node: Locator) {
 }
 
 /**
- * Edits a statement node's body via its right-click context menu ("Edit"), which
- * opens the card in edit mode (title textarea, then body textarea — same shape as
- * creation). Rewrites the body and commits with Ctrl+Enter. A real content change
- * to your own node flips the counterpart's existing valid marks on it to stale
- * (S-05 / patch_node_and_invalidate), forcing them to re-mark it before they can
- * submit — which is exactly what this exercises.
+ * Edits a statement node via its right-click context menu ("Edit"), which opens
+ * the card in edit mode (title textarea, then body textarea — same shape as
+ * creation). Appends `suffix` to the end of the existing body (cursor → end, then
+ * type) rather than rewriting it, and commits with Ctrl+Enter. A real content
+ * change to your own node flips the counterpart's existing valid marks on it to
+ * stale (S-05 / patch_node_and_invalidate), forcing them to re-mark it before they
+ * can submit — which is exactly what this exercises.
  */
-async function editStatementBody(page: Page, node: Locator, newBody: string) {
+async function appendToStatementBody(page: Page, node: Locator, suffix: string) {
   await node.scrollIntoViewIfNeeded();
   await node.click({ button: "right" });
   await page.waitForTimeout(DEMO_HOLD); // demo pacing only — hold the open context menu so Edit is visible
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   const body = page.locator("textarea").nth(1);
-  await typeInto(body, newBody);
+  await body.focus();
+  await body.press("Control+End"); // cursor to the end of the existing body — append, don't overwrite
+  await body.pressSequentially(suffix, { delay: TYPE_DELAY });
+  await expect(body).toHaveValue(new RegExp(`${suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
   await body.press("Control+Enter");
   await expect(page.locator("textarea")).toHaveCount(0); // edit committed, card back to read mode
   await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the edit settle
@@ -779,14 +783,15 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   await markStatement(page, statementNode(page, "CO₂ forcing is logarithmic and largely saturated"), "Challenge");
   await markStatement(page, statementNode(page, "Abrupt natural shifts have happened before"), "Challenge");
 
-  // Tweak the warrant's wording. Editing one of his own statements invalidates the
-  // challenger's existing mark on it, so in the closing mini-turn the challenger
-  // must re-evaluate (re-mark) the warrant before he can submit.
+  // Tweak the warrant by appending a clause to its body. Editing one of his own
+  // statements invalidates the challenger's existing mark on it, so in the closing
+  // mini-turn the challenger must re-evaluate (re-mark) the warrant before he can
+  // submit.
   await frameView(page, [warrantPos]);
-  await editStatementBody(
+  await appendToStatementBody(
     page,
     statementNode(page, "CO₂ is a greenhouse gas"),
-    "Higher CO₂ concentrations trap outgoing infrared radiation, warming the surface — the core mechanism of the greenhouse effect.",
+    " This is the core mechanism of the greenhouse effect.",
   );
 
   // Answer each — without yet deleting the two now-orphaned nodes (Second Law,

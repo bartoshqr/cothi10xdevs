@@ -21,7 +21,7 @@ const DEMO_PAUSE = FAST ? 0 : 500;
 
 /** Longer demo-pacing hold (ms) used to linger on a state a viewer should read (a graph, a
  *  blocking-reason popover, the final summary). Not a sync wait — assertions gate correctness. */
-const DEMO_HOLD = FAST ? 0 : 3000;
+const DEMO_HOLD = FAST ? 0 : 1000;
 
 /** Demo-pacing pause (ms) to review the whole graph (fit-to-view) just before a submit. */
 const DEMO_REVIEW = FAST ? 0 : 2000;

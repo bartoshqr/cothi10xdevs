@@ -98,5 +98,8 @@ export default defineConfig({
     command: "npm run dev",
     url: "http://localhost:4321",
     reuseExistingServer: !process.env.CI,
+    // Disable Astro's dev toolbar for this server only (astro.config reads it), so the
+    // floating pill never shows in a recording. Normal `npm run dev` keeps the toolbar.
+    env: { DISABLE_DEV_TOOLBAR: "1" },
   },
 });

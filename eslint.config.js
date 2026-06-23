@@ -84,7 +84,7 @@ export default tseslint.config(
   { ignores: ["src/db/database.types.ts"] },
 
   {
-    files: ["*.config.{js,ts}", "eslint.config.js"],
+    files: ["*.config.{js,mjs,ts}", "eslint.config.js"],
     languageOptions: {
       globals: {
         process: "readonly",

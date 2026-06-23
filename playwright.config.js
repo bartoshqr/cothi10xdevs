@@ -42,13 +42,14 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      // slowMo paces out each action for demo recording; run with `--headed` to watch it.
-      // viewport:null + --kiosk makes the *page* fill the whole screen in headed mode
-      // (no chrome/toolbar), so nothing runs off-screen — the fixed preset viewport
-      // (1280x720) was opening a window taller/wider than the screen, clipping the
-      // canvas's right/bottom (incl. the "How it works?" button). Pin a 16:9 window
-      // (smaller than the 1920x1080 screen) anchored at the top-left, so the whole
-      // horizontal canvas fits; headless ignores window args and frameView adapts.
+      // viewport:null lets the *page* fill the window in headed mode, so the canvas isn't
+      // clipped (a fixed preset viewport opened a window larger than the screen). We want
+      // the page *content* at YouTube's 16:9 for recording, but viewport:null means the
+      // page is the window minus its chrome. Measured on this machine, the chrome eats
+      // 131px vertically (WM title bar + tab strip + URL bar) and 44px horizontally
+      // (window borders), so a 1580x995 window yields a 1536x864 page = exactly 16:9
+      // (verified), still inside the 1920x1080 screen. headless ignores the window args
+      // and frameView adapts.
       use: {
         ...devices["Desktop Chrome"],
         viewport: null,
@@ -56,7 +57,10 @@ export default defineConfig({
         // viewport — clear it so the page can size itself to the window.
         deviceScaleFactor: undefined,
         // slowMo paces actions for demo recording; E2E_FAST=1 zeroes it for quick verification.
-        launchOptions: { slowMo: process.env.E2E_FAST ? 0 : 100, args: ["--window-position=0,0", "--window-size=1536,864"] },
+        launchOptions: {
+          slowMo: process.env.E2E_FAST ? 0 : 100,
+          args: ["--window-position=0,0", "--window-size=1580,995"],
+        },
       },
     },
 

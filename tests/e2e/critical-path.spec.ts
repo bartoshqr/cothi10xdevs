@@ -412,17 +412,16 @@ test("advocate builds a debate and invites the challenger, who reviews and accep
   await expect(page.locator(".react-flow__node")).toHaveCount(5);
 
   // ── Advocate invites the challenger for 3 rounds ──────────────────────────
-  // Open the invite panel, search the challenger by username, pick 3 rounds (the
-  // default — clicked explicitly so the demo shows the choice), and send. The
-  // search box is debounced, so we wait for the result button to appear before
-  // clicking it. Sending freezes the canvas and swaps the trigger for a pending
-  // status line.
+  // Open the invite panel, search the challenger by username, pick 2 rounds
+  // (clicked explicitly so the demo shows the choice), and send. The search box
+  // is debounced, so we wait for the result button to appear before clicking it.
+  // Sending freezes the canvas and swaps the trigger for a pending status line.
   await page.getByRole("button", { name: "Invite challenger" }).click();
   await page.getByPlaceholder("Search users…").fill(CHALLENGER_USERNAME);
   await page.getByRole("button", { name: CHALLENGER_USERNAME, exact: true }).click();
-  await page.getByRole("button", { name: "3", exact: true }).click();
+  await page.getByRole("button", { name: "2", exact: true }).click();
   await page.getByRole("button", { name: "Send invite" }).click();
-  await expect(page.getByText(`Invite sent to @${CHALLENGER_USERNAME} for 3 rounds — awaiting response`)).toBeVisible();
+  await expect(page.getByText(`Invite sent to @${CHALLENGER_USERNAME} for 2 rounds — awaiting response`)).toBeVisible();
 
   // ── Hand over to the challenger ───────────────────────────────────────────
   await signOut(page);

@@ -355,7 +355,9 @@ async function connect(
   await expect(page.getByText("Choose relation kind")).toHaveCount(0);
 }
 
-test("advocate builds a debate and invites the challenger, who reviews and accepts", async ({ page }) => {
+test("advocate builds a debate; challenger accepts, rebuts in round 1, and submits back to the advocate", async ({
+  page,
+}) => {
   await signIn(page, ADVOCATE_USERNAME);
 
   await page.getByRole("link", { name: /New debate/ }).click();
@@ -485,4 +487,83 @@ test("advocate builds a debate and invites the challenger, who reviews and accep
   await markStatement(page, statementNode(page, "CO₂ is a greenhouse gas"), "Challenge");
   await markStatement(page, statementNode(page, "CO₂ levels at record highs"), "Accept");
   await markStatement(page, statementNode(page, "NOAA Global Monitoring Laboratory"), "Accept");
+
+  // ── Challenger builds a counter-structure (round 1) ───────────────────────
+  // Having challenged the root claim and the warrant, the skeptic now plants one
+  // rebuttal against each, plus a source that rephrases the warrant rebuttal —
+  // the cited paper IS the thermodynamics argument, so "rephrases" reads true and
+  // mirrors the advocate's own source→data move. Placed to the right of the
+  // advocate's structure (same coordinate frame: root at origin). Frame the new
+  // spots plus the two rebut targets so every click/drag lands on-screen.
+  const naturalCyclesPos: FlowPoint = { x: 517, y: 100 };
+  const thermoPos: FlowPoint = { x: 517, y: 450 };
+  const challengerSourcePos: FlowPoint = { x: 520, y: 700 };
+  await frameView(page, [rootPos, warrantPos, naturalCyclesPos, thermoPos, challengerSourcePos]);
+
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: naturalCyclesPos,
+    title: "Natural cycles argument",
+    body: "Climate shifted dramatically before humans existed — glacial cycles and the medieval warm period were driven by orbital and solar variation, so warming need not be anthropogenic.",
+  });
+
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: thermoPos,
+    title: "Greenhouse effect breaks thermodynamics",
+    body: "A cooler atmosphere cannot transfer net heat to the warmer surface, so CO₂ back-radiation cannot raise surface temperature without violating the Second Law of Thermodynamics.",
+  });
+
+  await addStatementNode(page, {
+    role: "SOURCE",
+    flow: challengerSourcePos,
+    title: "Gerlich & Tscheuschner (2009)",
+    url: "https://arxiv.org/abs/0707.1161",
+  });
+
+  // Re-fit on the real (measured) nodes so every card + handle is reachable, then
+  // wire the challenger's rebuttals: natural-cycles → root (rebuts), thermo →
+  // warrant (rebuts), source → thermo (rephrases).
+  await fitAllNodes(page);
+
+  const naturalCycles = statementNode(page, "Natural cycles argument");
+  const thermo = statementNode(page, "Greenhouse effect breaks thermodynamics");
+  const challengerSource = statementNode(page, "Gerlich & Tscheuschner (2009)");
+  const rootClaim = statementNode(page, "Humans are causing climate change");
+  const warrantClaim = statementNode(page, "CO₂ is a greenhouse gas");
+
+  await connect(page, { from: naturalCycles, to: rootClaim, kind: "rebuts" });
+  await connect(page, { from: thermo, to: warrantClaim, kind: "rebuts" });
+  await connect(page, { from: challengerSource, to: thermo, kind: "rephrases" });
+
+  await expect(page.locator(".react-flow__node")).toHaveCount(8);
+  await expect(page.locator(".react-flow__edge")).toHaveCount(7);
+
+  // ── Challenger submits round 1 ─────────────────────────────────────────────
+  // All four counterpart statements are marked and the counter-structure is fully
+  // connected, so the turn gate opens "Submit turn". Submitting flips the turn to
+  // the advocate (2-round exchange, still round 1). Wait on the submit-turn
+  // response, then confirm the bar flipped to the advocate's seat.
+  const submitTurn = page.getByRole("button", { name: /^Submit turn/ });
+  await expect(submitTurn).toBeEnabled();
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/submit-turn") && r.request().method() === "POST" && r.ok()),
+    submitTurn.click(),
+  ]);
+  await expect(page.getByText("Advocate's turn")).toBeVisible();
+
+  // ── Hand back to the advocate, who reviews the challenger's round ──────────
+  await signOut(page);
+  await signIn(page, ADVOCATE_USERNAME);
+
+  // The advocate opens their own debate from the "As advocate" list and now sees
+  // the full graph — their support structure plus the challenger's submitted
+  // rebuttals — with the turn now theirs.
+  const advocateCard = page.getByRole("listitem").filter({ hasText: DEBATE_TITLE });
+  await advocateCard.getByRole("link", { name: "Open debate" }).click();
+  await page.waitForURL(/\/debates\/[0-9a-f-]+$/);
+
+  await expect(statementNode(page, "Natural cycles argument")).toBeVisible();
+  await expect(page.locator(".react-flow__node")).toHaveCount(8);
+  await expect(page.getByText("My Turn")).toBeVisible();
 });

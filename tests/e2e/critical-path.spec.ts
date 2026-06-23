@@ -302,6 +302,22 @@ async function markStatement(page: Page, node: Locator, stance: "Accept" | "Chal
 }
 
 /**
+ * Deletes a node via its right-click context menu (NodeContextMenu's "Delete").
+ * Right-clicking the card opens the menu at the cursor; we click Delete and wait
+ * for the node to leave the DOM. Used in the round phases where a party retracts
+ * a statement from an earlier round — RLS allows deleting your own node on your
+ * turn regardless of which round created it, and the relations→nodes FK cascade
+ * removes its incident edges.
+ */
+async function deleteStatementNode(page: Page, node: Locator) {
+  await node.scrollIntoViewIfNeeded();
+  await node.click({ button: "right" });
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(node).toHaveCount(0);
+  await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the removal settle
+}
+
+/**
  * Draws a relation edge by dragging from `from`'s source handle (top of the
  * node) onto `to`, then picking `kind` in the popup. The drag is done with raw
  * mouse events and intermediate steps: React Flow only arms the target node's
@@ -355,7 +371,7 @@ async function connect(
   await expect(page.getByText("Choose relation kind")).toHaveCount(0);
 }
 
-test("advocate builds a debate; challenger accepts, rebuts in round 1, and submits back to the advocate", async ({
+test("advocate and challenger argue a debate through two rounds: build, invite, accept, rebut, respond, and rework", async ({
   page,
 }) => {
   await signIn(page, ADVOCATE_USERNAME);
@@ -616,4 +632,84 @@ test("advocate builds a debate; challenger accepts, rebuts in round 1, and submi
 
   await expect(page.locator(".react-flow__node")).toHaveCount(11);
   await expect(page.locator(".react-flow__edge")).toHaveCount(10);
+
+  // ── Advocate submits round 1 ───────────────────────────────────────────────
+  // All three challenger statements are marked and the response is connected, so
+  // the gate opens. A non-final-round submit advances the round: the turn flips
+  // back to the challenger and the round ticks to 2.
+  const advocateSubmit = page.getByRole("button", { name: /^Submit turn/ });
+  await expect(advocateSubmit).toBeEnabled();
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/submit-turn") && r.request().method() === "POST" && r.ok()),
+    advocateSubmit.click(),
+  ]);
+  await expect(page.getByText("Challenger's turn")).toBeVisible();
+
+  // ── Hand to the challenger for round 2 ─────────────────────────────────────
+  await signOut(page);
+  await signIn(page, CHALLENGER_USERNAME);
+
+  const round2Card = page.getByRole("listitem").filter({ hasText: DEBATE_TITLE });
+  await round2Card.getByRole("link", { name: "Enter debate" }).click();
+  await page.waitForURL(/\/debates\/[0-9a-f-]+$/);
+  await expect(statementNode(page, "Humans are causing climate change")).toBeVisible();
+  await expect(page.locator(".react-flow__node")).toHaveCount(11);
+  await expect(page.getByText("My Turn")).toBeVisible();
+
+  // ── Challenger reworks the warrant attack (round 2) ────────────────────────
+  // The thermodynamics rebuttal was refuted (Halpern), so the skeptic retracts it
+  // and its source — conceding that branch — and rebuilds the warrant attack on
+  // firmer ground: CO₂ forcing is logarithmic/saturated (grant the physics,
+  // dispute the magnitude). He also opens a new front against the advocate's
+  // "too fast for natural cycles" rebuttal.
+  await fitAllNodes(page);
+
+  await deleteStatementNode(page, statementNode(page, "Gerlich & Tscheuschner (2009)"));
+  await deleteStatementNode(page, statementNode(page, "Greenhouse effect breaks thermodynamics"));
+  await expect(page.locator(".react-flow__node")).toHaveCount(9);
+
+  // New counter-nodes, wired as they're created (round pattern). Reuse the freed
+  // slot below the warrant for the new warrant rebuttal; open a fresh column to
+  // the right for the natural-cycles counter.
+  const logSaturationPos: FlowPoint = { x: 517, y: 450 };
+  const abruptShiftsPos: FlowPoint = { x: 1380, y: 100 };
+  await frameView(page, [warrantPos, fastWarmingPos, logSaturationPos, abruptShiftsPos]);
+
+  const warrantTarget = statementNode(page, "CO₂ is a greenhouse gas");
+  const fastWarmingTarget = statementNode(page, "Current warming is too fast for natural cycles");
+
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: logSaturationPos,
+    title: "CO₂ forcing is logarithmic and largely saturated",
+    body: "CO₂'s main absorption bands are already near-saturated, so radiative forcing rises only with the logarithm of concentration — doubling CO₂ yields ~1 °C directly. Larger warming hinges on uncertain positive feedbacks, so CO₂ is at most a weak driver.",
+  });
+  const logSaturation = statementNode(page, "CO₂ forcing is logarithmic and largely saturated");
+  await connect(page, { from: logSaturation, to: warrantTarget, kind: "rebuts" });
+
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: abruptShiftsPos,
+    title: "Abrupt natural shifts have happened before",
+    body: "Dansgaard–Oeschger events and the Younger Dryas saw multi-°C regional swings within decades, so a fast rate of change is not a unique fingerprint of human causation.",
+  });
+  const abruptShifts = statementNode(page, "Abrupt natural shifts have happened before");
+  await connect(page, { from: abruptShifts, to: fastWarmingTarget, kind: "rebuts" });
+
+  await expect(page.locator(".react-flow__node")).toHaveCount(11);
+  await expect(page.locator(".react-flow__edge")).toHaveCount(9);
+
+  // ── Challenger marks the advocate's round-1 response ───────────────────────
+  // Challenge the natural-cycles rebuttal he's now attacking; abstain on the two
+  // thermodynamics-branch nodes, conceding that line (the rebuttal they answered
+  // is gone). Re-fit so every mark bar is reachable.
+  await fitAllNodes(page);
+
+  await markStatement(page, fastWarmingTarget, "Challenge");
+  await markStatement(page, statementNode(page, "Second Law governs net heat flow"), "Abstain");
+  await markStatement(page, statementNode(page, "Halpern et al. (2010)"), "Abstain");
+
+  // ── Hand back to the advocate ──────────────────────────────────────────────
+  await signOut(page);
+  await signIn(page, ADVOCATE_USERNAME);
 });

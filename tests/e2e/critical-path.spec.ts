@@ -438,6 +438,11 @@ test("advocate builds a debate and invites the challenger, who reviews and accep
   await expect(statementNode(page, "Humans are causing climate change")).toBeVisible();
   await expect(page.locator(".react-flow__node")).toHaveCount(5);
 
+  // Demo pacing only: frame the whole argument and hold ~3s so a viewer can read
+  // the advocate's graph before the challenger heads back to respond.
+  await fitAllNodes(page);
+  await page.waitForTimeout(3000);
+
   // Back to the inbox and accept — the card flips from a pending invite (View +
   // Accept/Decline) to an accepted one with an "Enter debate" link.
   await page.getByRole("link", { name: "My debates" }).click();

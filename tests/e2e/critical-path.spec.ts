@@ -495,10 +495,16 @@ test("advocate builds a debate; challenger accepts, rebuts in round 1, and submi
   // mirrors the advocate's own source→data move. Placed to the right of the
   // advocate's structure (same coordinate frame: root at origin). Frame the new
   // spots plus the two rebut targets so every click/drag lands on-screen.
+  // In the round phases each node is wired right after it's created (unlike the
+  // pre-exchange build, which adds every node first): frame once over the new
+  // column plus the two rebut targets, then add→connect each in turn.
   const naturalCyclesPos: FlowPoint = { x: 517, y: 100 };
   const thermoPos: FlowPoint = { x: 517, y: 450 };
   const challengerSourcePos: FlowPoint = { x: 520, y: 700 };
   await frameView(page, [rootPos, warrantPos, naturalCyclesPos, thermoPos, challengerSourcePos]);
+
+  const rootClaim = statementNode(page, "Humans are causing climate change");
+  const warrantClaim = statementNode(page, "CO₂ is a greenhouse gas");
 
   await addStatementNode(page, {
     role: "REBUTTAL",
@@ -506,6 +512,8 @@ test("advocate builds a debate; challenger accepts, rebuts in round 1, and submi
     title: "Natural cycles argument",
     body: "Climate shifted dramatically before humans existed — glacial cycles and the medieval warm period were driven by orbital and solar variation, so warming need not be anthropogenic.",
   });
+  const naturalCycles = statementNode(page, "Natural cycles argument");
+  await connect(page, { from: naturalCycles, to: rootClaim, kind: "rebuts" });
 
   await addStatementNode(page, {
     role: "REBUTTAL",
@@ -513,6 +521,8 @@ test("advocate builds a debate; challenger accepts, rebuts in round 1, and submi
     title: "Greenhouse effect breaks thermodynamics",
     body: "A cooler atmosphere cannot transfer net heat to the warmer surface, so CO₂ back-radiation cannot raise surface temperature without violating the Second Law of Thermodynamics.",
   });
+  const thermo = statementNode(page, "Greenhouse effect breaks thermodynamics");
+  await connect(page, { from: thermo, to: warrantClaim, kind: "rebuts" });
 
   await addStatementNode(page, {
     role: "SOURCE",
@@ -520,20 +530,7 @@ test("advocate builds a debate; challenger accepts, rebuts in round 1, and submi
     title: "Gerlich & Tscheuschner (2009)",
     url: "https://arxiv.org/abs/0707.1161",
   });
-
-  // Re-fit on the real (measured) nodes so every card + handle is reachable, then
-  // wire the challenger's rebuttals: natural-cycles → root (rebuts), thermo →
-  // warrant (rebuts), source → thermo (rephrases).
-  await fitAllNodes(page);
-
-  const naturalCycles = statementNode(page, "Natural cycles argument");
-  const thermo = statementNode(page, "Greenhouse effect breaks thermodynamics");
   const challengerSource = statementNode(page, "Gerlich & Tscheuschner (2009)");
-  const rootClaim = statementNode(page, "Humans are causing climate change");
-  const warrantClaim = statementNode(page, "CO₂ is a greenhouse gas");
-
-  await connect(page, { from: naturalCycles, to: rootClaim, kind: "rebuts" });
-  await connect(page, { from: thermo, to: warrantClaim, kind: "rebuts" });
   await connect(page, { from: challengerSource, to: thermo, kind: "rephrases" });
 
   await expect(page.locator(".react-flow__node")).toHaveCount(8);
@@ -566,4 +563,57 @@ test("advocate builds a debate; challenger accepts, rebuts in round 1, and submi
   await expect(statementNode(page, "Natural cycles argument")).toBeVisible();
   await expect(page.locator(".react-flow__node")).toHaveCount(8);
   await expect(page.getByText("My Turn")).toBeVisible();
+
+  // ── Advocate marks the challenger's statements (round 1 response) ──────────
+  // It's the advocate's turn, so the challenger's three statements now carry the
+  // mark bar. The advocate challenges all of them. Fit the whole graph first so
+  // every card + mark bar is on-screen.
+  await fitAllNodes(page);
+
+  await markStatement(page, naturalCycles, "Challenge");
+  await markStatement(page, thermo, "Challenge");
+  await markStatement(page, challengerSource, "Challenge");
+
+  // ── Advocate builds a counter-rebuttal structure (round 1 response) ────────
+  // One rebuttal against each of the challenger's rebuttals, plus a source that
+  // rephrases the thermodynamics rebuttal — Halpern et al. (2010) is the
+  // peer-reviewed refutation of Gerlich & Tscheuschner, so it both backs the
+  // advocate's rebuttal and undercuts the challenger's source in one move. Placed
+  // to the right of the challenger's column (same root-at-origin frame).
+  // Same round pattern: frame once over the new column plus the two rebut
+  // targets, then add→connect each node as it's created.
+  const fastWarmingPos: FlowPoint = { x: 950, y: 100 };
+  const secondLawPos: FlowPoint = { x: 950, y: 450 };
+  const halpernPos: FlowPoint = { x: 1000, y: 700 };
+  await frameView(page, [naturalCyclesPos, thermoPos, fastWarmingPos, secondLawPos, halpernPos]);
+
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: fastWarmingPos,
+    title: "Current warming is too fast for natural cycles",
+    body: "Orbital (Milankovitch) cycles act over tens of thousands of years; ~1.1 °C in 150 years is orders of magnitude faster, and solar output has been flat since 1980 — natural forcing cannot produce this.",
+  });
+  const fastWarming = statementNode(page, "Current warming is too fast for natural cycles");
+  await connect(page, { from: fastWarming, to: naturalCycles, kind: "rebuts" });
+
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: secondLawPos,
+    title: "Second Law governs net heat flow",
+    body: "The Second Law forbids only net cold-to-hot transfer. Greenhouse gases slow the surface's heat loss to space, raising its equilibrium temperature; net flow stays surface→space, so nothing is violated.",
+  });
+  const secondLaw = statementNode(page, "Second Law governs net heat flow");
+  await connect(page, { from: secondLaw, to: thermo, kind: "rebuts" });
+
+  await addStatementNode(page, {
+    role: "SOURCE",
+    flow: halpernPos,
+    title: "Halpern et al. (2010)",
+    url: "https://doi.org/10.1142/S021797921005555X",
+  });
+  const halpern = statementNode(page, "Halpern et al. (2010)");
+  await connect(page, { from: halpern, to: secondLaw, kind: "rephrases" });
+
+  await expect(page.locator(".react-flow__node")).toHaveCount(11);
+  await expect(page.locator(".react-flow__edge")).toHaveCount(10);
 });

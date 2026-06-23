@@ -9,11 +9,22 @@ declare global {
   }
 }
 
+/** Set E2E_FAST=1 to zero every cosmetic pacing delay (typing, demo pauses, slowMo lives in
+ *  the config) for quick verification runs. The defaults below are the demo-recording values. */
+const FAST = !!process.env.E2E_FAST;
+
 /** Per-character delay for demo typing — kept as one constant so every field types at the same pace. */
-const TYPE_DELAY = 30;
+const TYPE_DELAY = FAST ? 0 : 30;
 
 /** Demo-pacing pause (ms) after a node/edge action so a viewer can see it land. Not a sync wait. */
-const DEMO_PAUSE = 500;
+const DEMO_PAUSE = FAST ? 0 : 500;
+
+/** Longer demo-pacing hold (ms) used to linger on a state a viewer should read (a graph, a
+ *  blocking-reason popover, the final summary). Not a sync wait — assertions gate correctness. */
+const DEMO_HOLD = FAST ? 0 : 3000;
+
+/** Demo-pacing pause (ms) to review the whole graph (fit-to-view) just before a submit. */
+const DEMO_REVIEW = FAST ? 0 : 2000;
 
 /**
  * Waits until the Astro island controlling `locator` has hydrated — WITHOUT
@@ -476,7 +487,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   // Demo pacing only: frame the whole argument and hold ~3s so a viewer can read
   // the advocate's graph before the challenger heads back to respond.
   await fitAllNodes(page);
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(DEMO_HOLD);
 
   // Back to the inbox and accept — the card flips from a pending invite (View +
   // Accept/Decline) to an accepted one with an "Enter debate" link.
@@ -509,19 +520,19 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   // rebuttal against each, plus a source that rephrases the warrant rebuttal —
   // the cited paper IS the thermodynamics argument, so "rephrases" reads true and
   // mirrors the advocate's own source→data move. Placed to the right of the
-  // advocate's structure (same coordinate frame: root at origin). Frame the new
-  // spots plus the two rebut targets so every click/drag lands on-screen.
-  // In the round phases each node is wired right after it's created (unlike the
-  // pre-exchange build, which adds every node first): frame once over the new
-  // column plus the two rebut targets, then add→connect each in turn.
+  // advocate's structure (same coordinate frame: root at origin). In the round
+  // phases each node is wired right after it's created (unlike the pre-exchange
+  // build, which adds every node first); before each one we frame just the new
+  // spot plus the node it will link to, so both the add-click and the drag target
+  // are on-screen.
   const naturalCyclesPos: FlowPoint = { x: 517, y: 100 };
   const thermoPos: FlowPoint = { x: 517, y: 450 };
   const challengerSourcePos: FlowPoint = { x: 520, y: 700 };
-  await frameView(page, [rootPos, warrantPos, naturalCyclesPos, thermoPos, challengerSourcePos]);
 
   const rootClaim = statementNode(page, "Humans are causing climate change");
   const warrantClaim = statementNode(page, "CO₂ is a greenhouse gas");
 
+  await frameView(page, [rootPos, naturalCyclesPos]);
   await addStatementNode(page, {
     role: "REBUTTAL",
     flow: naturalCyclesPos,
@@ -531,6 +542,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   const naturalCycles = statementNode(page, "Natural cycles argument");
   await connect(page, { from: naturalCycles, to: rootClaim, kind: "rebuts" });
 
+  await frameView(page, [warrantPos, thermoPos]);
   await addStatementNode(page, {
     role: "REBUTTAL",
     flow: thermoPos,
@@ -540,6 +552,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   const thermo = statementNode(page, "Greenhouse effect breaks thermodynamics");
   await connect(page, { from: thermo, to: warrantClaim, kind: "rebuts" });
 
+  await frameView(page, [thermoPos, challengerSourcePos]);
   await addStatementNode(page, {
     role: "SOURCE",
     flow: challengerSourcePos,
@@ -557,6 +570,8 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   // connected, so the turn gate opens "Submit turn". Submitting flips the turn to
   // the advocate (2-round exchange, still round 1). Wait on the submit-turn
   // response, then confirm the bar flipped to the advocate's seat.
+  await fitAllNodes(page);
+  await page.waitForTimeout(DEMO_REVIEW); // demo pacing only — review the whole graph before submitting
   const submitTurn = page.getByRole("button", { name: /^Submit turn/ });
   await expect(submitTurn).toBeEnabled();
   await Promise.all([
@@ -595,14 +610,14 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   // rephrases the thermodynamics rebuttal — Halpern et al. (2010) is the
   // peer-reviewed refutation of Gerlich & Tscheuschner, so it both backs the
   // advocate's rebuttal and undercuts the challenger's source in one move. Placed
-  // to the right of the challenger's column (same root-at-origin frame).
-  // Same round pattern: frame once over the new column plus the two rebut
-  // targets, then add→connect each node as it's created.
+  // to the right of the challenger's column (same root-at-origin frame). Same
+  // round pattern: before each node, frame just the new spot plus the node it
+  // will link to, then add→connect.
   const fastWarmingPos: FlowPoint = { x: 950, y: 100 };
   const secondLawPos: FlowPoint = { x: 950, y: 450 };
   const halpernPos: FlowPoint = { x: 1000, y: 700 };
-  await frameView(page, [naturalCyclesPos, thermoPos, fastWarmingPos, secondLawPos, halpernPos]);
 
+  await frameView(page, [naturalCyclesPos, fastWarmingPos]);
   await addStatementNode(page, {
     role: "REBUTTAL",
     flow: fastWarmingPos,
@@ -612,6 +627,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   const fastWarming = statementNode(page, "Current warming is too fast for natural cycles");
   await connect(page, { from: fastWarming, to: naturalCycles, kind: "rebuts" });
 
+  await frameView(page, [thermoPos, secondLawPos]);
   await addStatementNode(page, {
     role: "REBUTTAL",
     flow: secondLawPos,
@@ -621,6 +637,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   const secondLaw = statementNode(page, "Second Law governs net heat flow");
   await connect(page, { from: secondLaw, to: thermo, kind: "rebuts" });
 
+  await frameView(page, [secondLawPos, halpernPos]);
   await addStatementNode(page, {
     role: "SOURCE",
     flow: halpernPos,
@@ -637,6 +654,8 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   // All three challenger statements are marked and the response is connected, so
   // the gate opens. A non-final-round submit advances the round: the turn flips
   // back to the challenger and the round ticks to 2.
+  await fitAllNodes(page);
+  await page.waitForTimeout(DEMO_REVIEW); // demo pacing only — review the whole graph before submitting
   const advocateSubmit = page.getByRole("button", { name: /^Submit turn/ });
   await expect(advocateSubmit).toBeEnabled();
   await Promise.all([
@@ -668,16 +687,17 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   await deleteStatementNode(page, statementNode(page, "Greenhouse effect breaks thermodynamics"));
   await expect(page.locator(".react-flow__node")).toHaveCount(9);
 
-  // New counter-nodes, wired as they're created (round pattern). Reuse the freed
-  // slot below the warrant for the new warrant rebuttal; open a fresh column to
-  // the right for the natural-cycles counter.
+  // New counter-nodes, wired as they're created (round pattern); before each,
+  // frame just the new spot plus the node it will link to. Reuse the freed slot
+  // below the warrant for the new warrant rebuttal; open a fresh column to the
+  // right for the natural-cycles counter.
   const logSaturationPos: FlowPoint = { x: 517, y: 450 };
   const abruptShiftsPos: FlowPoint = { x: 1380, y: 100 };
-  await frameView(page, [warrantPos, fastWarmingPos, logSaturationPos, abruptShiftsPos]);
 
   const warrantTarget = statementNode(page, "CO₂ is a greenhouse gas");
   const fastWarmingTarget = statementNode(page, "Current warming is too fast for natural cycles");
 
+  await frameView(page, [warrantPos, logSaturationPos]);
   await addStatementNode(page, {
     role: "REBUTTAL",
     flow: logSaturationPos,
@@ -687,6 +707,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   const logSaturation = statementNode(page, "CO₂ forcing is logarithmic and largely saturated");
   await connect(page, { from: logSaturation, to: warrantTarget, kind: "rebuts" });
 
+  await frameView(page, [fastWarmingPos, abruptShiftsPos]);
   await addStatementNode(page, {
     role: "REBUTTAL",
     flow: abruptShiftsPos,
@@ -709,7 +730,135 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   await markStatement(page, statementNode(page, "Second Law governs net heat flow"), "Abstain");
   await markStatement(page, statementNode(page, "Halpern et al. (2010)"), "Abstain");
 
+  // Submit round 2 so the turn passes to the advocate for the final round.
+  await fitAllNodes(page);
+  await page.waitForTimeout(DEMO_REVIEW); // demo pacing only — review the whole graph before submitting
+  const challengerR2Submit = page.getByRole("button", { name: /^Submit turn/ });
+  await expect(challengerR2Submit).toBeEnabled();
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/submit-turn") && r.request().method() === "POST" && r.ok()),
+    challengerR2Submit.click(),
+  ]);
+  await expect(page.getByText("Advocate's turn")).toBeVisible();
+
   // ── Hand back to the advocate ──────────────────────────────────────────────
   await signOut(page);
   await signIn(page, ADVOCATE_USERNAME);
+
+  // ── Advocate answers the final round (round 2) ─────────────────────────────
+  const advocateFinalCard = page.getByRole("listitem").filter({ hasText: DEBATE_TITLE });
+  await advocateFinalCard.getByRole("link", { name: "Open debate" }).click();
+  await page.waitForURL(/\/debates\/[0-9a-f-]+$/);
+  await expect(statementNode(page, "Humans are causing climate change")).toBeVisible();
+  await expect(page.getByText("My Turn")).toBeVisible();
+
+  // Mark the challenger's two round-2 rebuttals (Challenge) so that when we try to
+  // submit, the *only* thing left blocking is the orphan gate.
+  await fitAllNodes(page);
+  await markStatement(page, statementNode(page, "CO₂ forcing is logarithmic and largely saturated"), "Challenge");
+  await markStatement(page, statementNode(page, "Abrupt natural shifts have happened before"), "Challenge");
+
+  // Answer each — without yet deleting the two now-orphaned nodes (Second Law,
+  // Halpern) the challenger stranded when he removed the thermo node they rebutted.
+  // Emission-height refutes the saturation claim; regional-redistribution refutes
+  // the abrupt-shifts claim. Wired right after creation (round pattern).
+  const satAloftPos: FlowPoint = { x: 517, y: 820 };
+  const pastRegionalPos: FlowPoint = { x: 1380, y: 450 };
+
+  await frameView(page, [logSaturationPos, satAloftPos]);
+  const logSatTarget = statementNode(page, "CO₂ forcing is logarithmic and largely saturated");
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: satAloftPos,
+    title: "Saturation doesn't hold aloft — emission height rises",
+    body: "The band centre is saturated only near the surface; adding CO₂ raises the effective emission altitude into colder, thinner air, so Earth radiates less to space. Forcing keeps growing — about 3.7 W/m² per doubling, measured, not negligible.",
+  });
+  const satAloft = statementNode(page, "Saturation doesn't hold aloft — emission height rises");
+  await connect(page, { from: satAloft, to: logSatTarget, kind: "rebuts" });
+
+  await frameView(page, [abruptShiftsPos, pastRegionalPos]);
+  const abruptTarget = statementNode(page, "Abrupt natural shifts have happened before");
+  await addStatementNode(page, {
+    role: "REBUTTAL",
+    flow: pastRegionalPos,
+    title: "Past abrupt shifts were regional heat redistribution",
+    body: "Dansgaard–Oeschger events and the Younger Dryas were driven by ocean-circulation changes that moved heat around the North Atlantic; global mean temperature barely moved. Today's warming is global, synchronous, and tied to a measured forcing.",
+  });
+  const pastRegional = statementNode(page, "Past abrupt shifts were regional heat redistribution");
+  await connect(page, { from: pastRegional, to: abruptTarget, kind: "rebuts" });
+
+  // ── Orphan gate: try to submit and see why it's blocked ────────────────────
+  // The two thermodynamics-branch nodes no longer reach the root, so the submit
+  // stays disabled. Hover the (disabled) button to reveal the blocking-reason
+  // popover and hold 3s for the demo, confirming both orphans are named.
+  await fitAllNodes(page);
+  const submitWrapper = page.getByRole("button", { name: /^Submit turn/ }).locator("xpath=..");
+  await submitWrapper.hover();
+  const blockingReasons = page.getByRole("tooltip");
+  await expect(blockingReasons).toContainText("Second Law governs net heat flow");
+  await expect(blockingReasons).toContainText("Halpern et al. (2010)");
+  await page.waitForTimeout(DEMO_HOLD); // demo pacing only — hold the blocking reason on screen
+
+  // Delete the orphans, which clears the gate, then submit the final round. A
+  // final-round advocate submit opens the challenger's closing mini-turn.
+  await deleteStatementNode(page, statementNode(page, "Second Law governs net heat flow"));
+  await deleteStatementNode(page, statementNode(page, "Halpern et al. (2010)"));
+
+  await fitAllNodes(page);
+  await page.waitForTimeout(DEMO_REVIEW); // demo pacing only — review the whole graph before submitting
+  const finalSubmit = page.getByRole("button", { name: /^Submit turn/ });
+  await expect(finalSubmit).toBeEnabled();
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/submit-turn") && r.request().method() === "POST" && r.ok()),
+    finalSubmit.click(),
+  ]);
+  await expect(page.getByText("Challenger's mini-turn")).toBeVisible();
+
+  // ── Challenger closes the exchange (mini-turn: marking only) ───────────────
+  await signOut(page);
+  await signIn(page, CHALLENGER_USERNAME);
+  const challengerClosingCard = page.getByRole("listitem").filter({ hasText: DEBATE_TITLE });
+  await challengerClosingCard.getByRole("link", { name: "Enter debate" }).click();
+  await page.waitForURL(/\/debates\/[0-9a-f-]+$/);
+  await expect(page.getByText("My mini-turn")).toBeVisible();
+
+  // Closing judgement on the advocate's statements — mostly Challenge, some Abstain.
+  // The two new advocate rebuttals must be marked to close; data + source flip to
+  // Abstain as a closing "no contest".
+  await fitAllNodes(page);
+  await markStatement(page, statementNode(page, "Saturation doesn't hold aloft — emission height rises"), "Challenge");
+  await markStatement(page, statementNode(page, "Past abrupt shifts were regional heat redistribution"), "Abstain");
+
+  // Submit the closing mini-turn — the exchange completes.
+  await fitAllNodes(page);
+  await page.waitForTimeout(DEMO_REVIEW); // demo pacing only — review the whole graph before submitting
+  const miniSubmit = page.getByRole("button", { name: /^Submit turn/ });
+  await expect(miniSubmit).toBeEnabled();
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/submit-turn") && r.request().method() === "POST" && r.ok()),
+    miniSubmit.click(),
+  ]);
+  await expect(page.getByText("Exchange complete")).toBeVisible();
+
+  // ── Open the divergence summary — the closing view ─────────────────────────
+  await page.getByRole("button", { name: "View divergence summary" }).click();
+  const summaryHeading = page.getByRole("heading", { name: "Divergence summary" });
+  await expect(summaryHeading).toBeVisible();
+
+  // Demo pacing only: the panel is taller than its 70vh max-height, so slowly
+  // slide it top→bottom→top (driving the scroll container's scrollTop in steps,
+  // pausing between) to walk a viewer through Common ground → Open divergences →
+  // Unresolved before the curtain. Not a sync wait.
+  const slideTo = (fraction: number) =>
+    summaryHeading.evaluate((h, frac) => {
+      const panel = h.closest("[class*='overflow-y-auto']") ?? h.parentElement;
+      if (panel) panel.scrollTop = (panel.scrollHeight - panel.clientHeight) * frac;
+    }, fraction);
+
+  const slideStops = [0.2, 0.4, 0.6, 0.8, 1, 0.5, 0];
+  for (const stop of slideStops) {
+    await slideTo(stop);
+    await page.waitForTimeout(DEMO_PAUSE);
+  }
+  await page.waitForTimeout(DEMO_HOLD); // demo pacing only — hold the final summary on screen
 });

@@ -55,7 +55,8 @@ export default defineConfig({
         // Desktop Chrome sets deviceScaleFactor:1, which Playwright forbids with a null
         // viewport — clear it so the page can size itself to the window.
         deviceScaleFactor: undefined,
-        launchOptions: { slowMo: 100, args: ["--window-position=0,0", "--window-size=1536,864"] },
+        // slowMo paces actions for demo recording; E2E_FAST=1 zeroes it for quick verification.
+        launchOptions: { slowMo: process.env.E2E_FAST ? 0 : 100, args: ["--window-position=0,0", "--window-size=1536,864"] },
       },
     },
 

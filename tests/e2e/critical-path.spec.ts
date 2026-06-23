@@ -323,9 +323,30 @@ async function markStatement(page: Page, node: Locator, stance: "Accept" | "Chal
 async function deleteStatementNode(page: Page, node: Locator) {
   await node.scrollIntoViewIfNeeded();
   await node.click({ button: "right" });
+  await page.waitForTimeout(DEMO_HOLD); // demo pacing only — hold the open context menu so Delete is visible
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(node).toHaveCount(0);
   await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the removal settle
+}
+
+/**
+ * Edits a statement node's body via its right-click context menu ("Edit"), which
+ * opens the card in edit mode (title textarea, then body textarea — same shape as
+ * creation). Rewrites the body and commits with Ctrl+Enter. A real content change
+ * to your own node flips the counterpart's existing valid marks on it to stale
+ * (S-05 / patch_node_and_invalidate), forcing them to re-mark it before they can
+ * submit — which is exactly what this exercises.
+ */
+async function editStatementBody(page: Page, node: Locator, newBody: string) {
+  await node.scrollIntoViewIfNeeded();
+  await node.click({ button: "right" });
+  await page.waitForTimeout(DEMO_HOLD); // demo pacing only — hold the open context menu so Edit is visible
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const body = page.locator("textarea").nth(1);
+  await typeInto(body, newBody);
+  await body.press("Control+Enter");
+  await expect(page.locator("textarea")).toHaveCount(0); // edit committed, card back to read mode
+  await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the edit settle
 }
 
 /**
@@ -697,7 +718,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   const warrantTarget = statementNode(page, "CO₂ is a greenhouse gas");
   const fastWarmingTarget = statementNode(page, "Current warming is too fast for natural cycles");
 
-  await frameView(page, [warrantPos, logSaturationPos]);
+  await frameView(page, [warrantPos, logSaturationPos, secondLawPos, halpernPos]);
   await addStatementNode(page, {
     role: "REBUTTAL",
     flow: logSaturationPos,
@@ -758,12 +779,22 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   await markStatement(page, statementNode(page, "CO₂ forcing is logarithmic and largely saturated"), "Challenge");
   await markStatement(page, statementNode(page, "Abrupt natural shifts have happened before"), "Challenge");
 
+  // Tweak the warrant's wording. Editing one of his own statements invalidates the
+  // challenger's existing mark on it, so in the closing mini-turn the challenger
+  // must re-evaluate (re-mark) the warrant before he can submit.
+  await frameView(page, [warrantPos]);
+  await editStatementBody(
+    page,
+    statementNode(page, "CO₂ is a greenhouse gas"),
+    "Higher CO₂ concentrations trap outgoing infrared radiation, warming the surface — the core mechanism of the greenhouse effect.",
+  );
+
   // Answer each — without yet deleting the two now-orphaned nodes (Second Law,
   // Halpern) the challenger stranded when he removed the thermo node they rebutted.
   // Emission-height refutes the saturation claim; regional-redistribution refutes
   // the abrupt-shifts claim. Wired right after creation (round pattern).
-  const satAloftPos: FlowPoint = { x: 517, y: 820 };
-  const pastRegionalPos: FlowPoint = { x: 1380, y: 450 };
+  const satAloftPos: FlowPoint = { x: 550, y: 820 };
+  const pastRegionalPos: FlowPoint = { x: 1400, y: 450 };
 
   await frameView(page, [logSaturationPos, satAloftPos]);
   const logSatTarget = statementNode(page, "CO₂ forcing is logarithmic and largely saturated");
@@ -823,9 +854,13 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   await expect(page.getByText("My mini-turn")).toBeVisible();
 
   // Closing judgement on the advocate's statements — mostly Challenge, some Abstain.
-  // The two new advocate rebuttals must be marked to close; data + source flip to
-  // Abstain as a closing "no contest".
+  // The warrant's mark went stale when the advocate reworded it, so it must be
+  // re-evaluated; the two new advocate rebuttals must be marked to close the round.
   await fitAllNodes(page);
+  // The warrant card shows a "CHANGED: needs re-evaluation" flag on its stale mark —
+  // hold on it so a viewer registers why a re-mark is required, then re-mark it.
+  await page.waitForTimeout(DEMO_HOLD); // demo pacing only — let the stale-mark flag land before re-evaluating
+  await markStatement(page, statementNode(page, "CO₂ is a greenhouse gas"), "Challenge");
   await markStatement(page, statementNode(page, "Saturation doesn't hold aloft — emission height rises"), "Challenge");
   await markStatement(page, statementNode(page, "Past abrupt shifts were regional heat redistribution"), "Abstain");
 

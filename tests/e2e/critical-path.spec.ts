@@ -284,6 +284,24 @@ function connectiveNode(page: Page): Locator {
 }
 
 /**
+ * Marks an advocate statement with a stance from the challenger's seat. Each
+ * statement card carries an inline mark bar (Accept / Challenge / Abstain); the
+ * buttons are labelled by the stance word, so we match by role+name within the
+ * node. The click POSTs to `…/marks` — we wait on that response so the assertion
+ * rides the round-trip, not a fixed pause, then hold DEMO_PAUSE so a viewer sees
+ * the stance land before the next mark.
+ */
+async function markStatement(page: Page, node: Locator, stance: "Accept" | "Challenge" | "Abstain") {
+  const button = node.getByRole("button", { name: stance, exact: true });
+  await button.scrollIntoViewIfNeeded();
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/marks") && r.request().method() === "POST" && r.ok()),
+    button.click(),
+  ]);
+  await page.waitForTimeout(DEMO_PAUSE); // demo pacing only — let the stance tint settle
+}
+
+/**
  * Draws a relation edge by dragging from `from`'s source handle (top of the
  * node) onto `to`, then picking `kind` in the popup. The drag is done with raw
  * mouse events and intermediate steps: React Flow only arms the target node's
@@ -455,4 +473,16 @@ test("advocate builds a debate and invites the challenger, who reviews and accep
   await enterDebate.click();
   await page.waitForURL(/\/debates\/[0-9a-f-]+$/);
   await expect(statementNode(page, "Humans are causing climate change")).toBeVisible();
+
+  // ── Challenger marks the advocate's statements (round 1) ──────────────────
+  // It's the challenger's turn, so every advocate statement shows an inline
+  // Accept/Challenge/Abstain bar. The skeptic challenges the root claim and the
+  // warrant (the inferential leap), but accepts the raw data and its source.
+  // Fit the whole graph first so every card + its mark bar is on-screen.
+  await fitAllNodes(page);
+
+  await markStatement(page, statementNode(page, "Humans are causing climate change"), "Challenge");
+  await markStatement(page, statementNode(page, "CO₂ is a greenhouse gas"), "Challenge");
+  await markStatement(page, statementNode(page, "CO₂ levels at record highs"), "Accept");
+  await markStatement(page, statementNode(page, "NOAA Global Monitoring Laboratory"), "Accept");
 });

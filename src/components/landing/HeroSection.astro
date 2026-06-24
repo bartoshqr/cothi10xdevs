@@ -1,5 +1,6 @@
 ---
-import ArgumentMapMockup from "@/components/landing/ArgumentMapMockup.astro";
+import { DEMO_VIDEO_ID } from "astro:env/client";
+import VideoTeaser from "@/components/landing/VideoTeaser";
 ---
 
 <section id="hero" class="relative overflow-hidden py-16 sm:py-24 lg:py-32">
@@ -28,9 +29,14 @@ import ArgumentMapMockup from "@/components/landing/ArgumentMapMockup.astro";
         </div>
       </div>
 
-      <!-- Mockup -->
+      <!-- Video Teaser -->
       <div class="relative" id="mapa">
-        <ArgumentMapMockup />
+        <VideoTeaser
+          client:load
+          thumbnailSrc="/hero-demo-thumbnail.png"
+          thumbnailAlt="WVMap argument map interface showing a structured debate"
+          videoId={DEMO_VIDEO_ID}
+        />
       </div>
     </div>
   </div>

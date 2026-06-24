@@ -102,6 +102,7 @@ export default defineConfig({
     schema: {
       SUPABASE_URL: envField.string({ context: "server", access: "secret", optional: true }),
       SUPABASE_KEY: envField.string({ context: "server", access: "secret", optional: true }),
+      DEMO_VIDEO_ID: envField.string({ context: "client", access: "public", default: "MWDi3Zmlu1I" }),
     },
   },
 });

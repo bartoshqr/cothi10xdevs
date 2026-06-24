@@ -32,17 +32,45 @@ const SERVER_OPTIMIZE_DEPS = [
   "astro/env/runtime",
 ];
 
+// React and every React-consuming island, by bare package name. These must NOT be
+// externalized in the worker graph: an externalized copy (raw from node_modules) plus the
+// pre-bundled copy = two React instances. After a worker reload ("program reload" from HMR,
+// e.g. a CSS regen) react-dom/server re-runs and sets its dispatcher on the bundled copy,
+// while a still-externalized lucide-react reads the OTHER copy's null dispatcher → the
+// "Cannot read properties of null (reading 'useContext')" crash. noExternal forces one copy.
+const SERVER_NO_EXTERNAL = [
+  "react",
+  "react-dom",
+  "lucide-react",
+  "@radix-ui/react-slot",
+  "@xyflow/react",
+  "zustand",
+  "class-variance-authority",
+  "clsx",
+  "tailwind-merge",
+  "zod",
+];
+
 // Under @cloudflare/vite-plugin, SSR is its OWN Vite environment and the top-level
-// vite.optimizeDeps / vite.ssr.optimizeDeps never reach it. The configEnvironment hook
-// is the documented way to configure that environment's optimizer (name !== "client"
-// covers the workerd/SSR graph).
+// vite.optimizeDeps / vite.ssr.* / vite.resolve never reach it. The configEnvironment hook
+// is the documented way to configure that environment (name !== "client" = workerd/SSR).
+// We set all three knobs HERE so they actually apply to the worker graph:
+//   - optimizeDeps.include : pre-bundle everything in one pass (no lazy-discovery reloads)
+//   - resolve.noExternal   : bundle React + consumers instead of externalizing a 2nd copy
+//   - resolve.dedupe       : collapse react/react-dom to a single instance
 function optimizeServerDeps() {
   return {
     name: "optimize-server-deps",
     /** @param {string} name */
     configEnvironment(name) {
       if (name !== "client") {
-        return { optimizeDeps: { include: SERVER_OPTIMIZE_DEPS } };
+        return {
+          resolve: {
+            noExternal: SERVER_NO_EXTERNAL,
+            dedupe: ["react", "react-dom"],
+          },
+          optimizeDeps: { include: SERVER_OPTIMIZE_DEPS },
+        };
       }
     },
   };
@@ -51,6 +79,9 @@ function optimizeServerDeps() {
 // https://astro.build/config
 export default defineConfig({
   output: "server",
+  // Dev toolbar stays on for normal `npm run dev`; the e2e webServer starts the dev server
+  // with DISABLE_DEV_TOOLBAR=1 so the floating pill never appears in a demo recording.
+  devToolbar: { enabled: process.env.DISABLE_DEV_TOOLBAR !== "1" },
   integrations: [react(), sitemap()],
   vite: {
     plugins: [tailwindcss(), optimizeServerDeps()],
@@ -74,6 +105,7 @@ export default defineConfig({
     schema: {
       SUPABASE_URL: envField.string({ context: "server", access: "secret", optional: true }),
       SUPABASE_KEY: envField.string({ context: "server", access: "secret", optional: true }),
+      DEMO_VIDEO_ID: envField.string({ context: "client", access: "public", default: "TVcuwcGo0TA" }),
     },
   },
 });

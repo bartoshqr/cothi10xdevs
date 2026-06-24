@@ -527,7 +527,7 @@ nothing becomes public implicitly.
 - [x] 2.5 Owner of completed debate: publish reveals a "View" link to `/showcase/[id]` (deviation: was
       "copyable URL", see Phase 2 deviation notes) — 462d6f5
 - [x] 2.6 Owner of in-progress debate: toggle not rendered at all (deviation: was "disabled"), `PATCH
-  { public: true }` → 409 — 462d6f5
+{ public: true }` → 409 — 462d6f5
 - [x] 2.7 Unpublish flips back to private in one click — 462d6f5
 - [x] 2.8 Non-owner cannot publish another user's debate — 462d6f5
 
@@ -535,10 +535,10 @@ nothing becomes public implicitly.
 
 #### Automated
 
-- [ ] 3.1 Type checking passes (`npx astro check`)
-- [ ] 3.2 Linting passes (`npm run lint`)
-- [ ] 3.3 Build passes (`npm run build`)
-- [ ] 3.4 `/showcase` & `/showcase/[id]` reachable without auth (200 published / 404 unpublished)
+- [x] 3.1 Type checking passes (`npx astro check`)
+- [x] 3.2 Linting passes (`npm run lint`)
+- [x] 3.3 Build passes (`npm run build`)
+- [x] 3.4 `/showcase` & `/showcase/[id]` reachable without auth (200 published / 404 unpublished)
 
 #### Manual
 

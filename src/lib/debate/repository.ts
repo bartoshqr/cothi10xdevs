@@ -214,6 +214,15 @@ export async function getDebateGraph(supabase: DB, debateId: string): Promise<De
   };
 }
 
+// S-09: RLS lets an owner/challenger read their own debate via `getDebateGraph` regardless
+// of `public` — that policy exists for the authed `/debates/[id]` page, not the showcase.
+// The showcase detail page must re-check `public` explicitly, or visiting /showcase/[id] for
+// your own unpublished debate while logged in would leak it to you (and only you) ahead of
+// publishing. `graph is DebateGraph` narrows the caller's `graph | null` after the check.
+export function isPublishedGraph(graph: DebateGraph | null): graph is DebateGraph {
+  return graph?.debate.public ?? false;
+}
+
 export async function createStatementNode(
   supabase: DB,
   input: Extract<CreateNodeInput, { nodeKind: "statement" }>,

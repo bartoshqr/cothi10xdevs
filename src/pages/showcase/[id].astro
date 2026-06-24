@@ -1,0 +1,117 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import MapEditor from "@/components/debate/MapEditor";
+import DivergenceSummary from "@/components/debate/DivergenceSummary";
+import type { ViewerContext } from "@/components/debate/store";
+import { createClient } from "@/lib/supabase";
+import { getDebateGraph, isPublishedGraph } from "@/lib/debate/repository";
+import { getDebateExchange } from "@/lib/exchange/repository";
+import { getDebateMarks } from "@/lib/mark/repository";
+import { getDivergenceSummary } from "@/lib/summary/repository";
+
+const { id: debateId } = Astro.params;
+const supabase = createClient(Astro.request.headers, Astro.cookies);
+
+// Anon-reachable via the debates_select_anon RLS policy (public = true) — an unpublished
+// or unknown debate returns null here, never partial content (S-09 Risk #1).
+//
+// `isPublishedGraph` is a second, explicit gate on top of RLS: a logged-in owner/challenger
+// can read their OWN debate via the authenticated-role policy regardless of `public` (that
+// policy exists for the authed `/debates/[id]` page). Without this check, visiting
+// /showcase/[id] for your own unpublished debate while logged in would render it — the
+// showcase must 404 the same way for everyone until it's actually published.
+const rawGraph = supabase && debateId ? await getDebateGraph(supabase, debateId) : null;
+const graph = isPublishedGraph(rawGraph) ? rawGraph : null;
+
+if (!graph) {
+  Astro.response.status = 404;
+}
+
+// initialMarks must be loaded explicitly — the authed debate page only loads marks when
+// `viewer` is set, which is never true for an anon visitor here.
+const initialMarks = graph && supabase && debateId ? await getDebateMarks({ supabase, debateId }) : {};
+const exchange = graph && supabase && debateId ? await getDebateExchange(supabase, debateId) : null;
+const summary = graph && supabase && debateId ? await getDivergenceSummary({ supabase, debateId }) : null;
+
+// WORKAROUND: a synthetic, non-interactive viewer carrying just `advocateId` so the canvas
+// still tints challenger-authored statements red (StatementNode's `isChallenger` check needs
+// a non-null `viewer`). `isMyTurn: false` keeps every edit/mark control disabled — passing
+// this never re-enables interactivity, it only restores the advocate/challenger colour
+// coding that `viewer={null}` otherwise switches off. `exchangeId` is left `null` below so
+// the authed-only freshness poll (`/api/exchanges/[id]`) never fires for this anon page.
+// This abuses ViewerContext (a turn/identity type) purely for its colour-coding side effect.
+// A cleaner fix would give MapEditor/StatementNode an explicit `advocateId`-only coloring
+// prop independent of `viewer`, so frozen/anon views don't need a fake viewer at all —
+// worth doing if another read-only-but-colored surface shows up.
+const viewer: ViewerContext | null = exchange
+  ? {
+      viewerId: "showcase-anon",
+      viewerRole: "advocate",
+      advocateId: exchange.advocateId,
+      isMyTurn: false,
+      inMiniTurn: false,
+      isCompleted: exchange.status === "completed",
+      currentRound: exchange.currentRound,
+    }
+  : null;
+---
+
+{
+  graph ? (
+    <Layout title={`${graph.debate.title} — WVMap Showcase`}>
+      <div class="flex h-screen flex-col">
+        <header class="border-border bg-card grid grid-cols-[1fr_auto_1fr] items-center border-b px-4 py-3">
+          <div>
+            <a href="/showcase" class="text-muted-foreground text-xs hover:underline">
+              {" "}
+              ← Showcase{" "}
+            </a>
+            <h1 class="text-foreground text-lg font-semibold">{graph.debate.title}</h1>
+            {exchange && (
+              <p class="text-muted-foreground text-xs">
+                Advocate @{exchange.advocateUsername ?? "unknown"} · Challenger @
+                {exchange.challengerUsername ?? "unknown"}
+              </p>
+            )}
+          </div>
+          <div class="justify-self-center">
+            <DivergenceSummary
+              client:only="react"
+              debateId={graph.debate.id}
+              ownerId={graph.debate.owner_id}
+              isCompleted={exchange?.status === "completed"}
+              currentRound={exchange?.currentRound ?? 1}
+              initialSummary={summary}
+              advocateUsername={exchange?.advocateUsername}
+              challengerUsername={exchange?.challengerUsername}
+            />
+          </div>
+        </header>
+        <div class="min-h-0 flex-1">
+          <MapEditor
+            client:only="react"
+            debateId={graph.debate.id}
+            initialGraph={graph}
+            canEdit={false}
+            viewer={viewer}
+            exchangeId={null}
+            initialMarks={initialMarks}
+            userId={null}
+          />
+        </div>
+      </div>
+    </Layout>
+  ) : (
+    <Layout title="Debate not found — WVMap Showcase">
+      <div class="bg-background flex min-h-screen items-center justify-center p-4">
+        <div class="border-border bg-card w-full max-w-sm rounded-2xl border p-8 text-center shadow-sm">
+          <h1 class="text-foreground mb-2 text-xl font-bold">Debate not found</h1>
+          <p class="text-muted-foreground mb-6 text-sm">This debate isn't published, or doesn't exist.</p>
+          <a href="/showcase" class="text-primary text-sm underline-offset-4 hover:underline">
+            Back to showcase
+          </a>
+        </div>
+      </div>
+    </Layout>
+  )
+}

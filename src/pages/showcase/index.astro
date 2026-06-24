@@ -1,0 +1,41 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { createClient } from "@/lib/supabase";
+import { listPublicDebates } from "@/lib/debate/repository";
+
+const supabase = createClient(Astro.request.headers, Astro.cookies);
+const debates = supabase ? await listPublicDebates({ supabase }) : [];
+---
+
+<Layout title="Showcase — WVMap">
+  <div class="bg-background min-h-screen">
+    <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+      <a href="/" class="text-muted-foreground mb-6 inline-block text-xs hover:underline"> ← Back </a>
+      <h1 class="text-foreground mb-2 text-3xl font-bold tracking-tight">Showcase</h1>
+      <p class="text-muted-foreground mb-10 text-base">
+        Published debates — real structured exchanges, open for anyone to read.
+      </p>
+
+      {
+        debates.length === 0 ? (
+          <p class="text-muted-foreground text-sm">No published debates yet.</p>
+        ) : (
+          <ul class="space-y-4">
+            {debates.map((debate) => (
+              <li class="border-border bg-card rounded-xl border p-5">
+                <a href={`/showcase/${debate.id}`} class="text-primary text-lg font-semibold hover:underline">
+                  {debate.title}
+                </a>
+                {debate.published_at && (
+                  <p class="text-muted-foreground mt-1 text-xs">
+                    Published {new Date(debate.published_at).toLocaleDateString()}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+  </div>
+</Layout>

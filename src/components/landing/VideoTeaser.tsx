@@ -38,7 +38,7 @@ export default function VideoTeaser({ thumbnailSrc, thumbnailAlt, videoId }: Vid
         onClick={() => {
           setIsOpen(true);
         }}
-        aria-label="Watch the 3-minute demo video"
+        aria-label="Watch the 4-minute demo video"
         className="border-border bg-card group focus-visible:ring-primary relative block aspect-video w-full overflow-hidden rounded-xl border shadow-sm focus-visible:ring-2 focus-visible:outline-none"
       >
         <img src={thumbnailSrc} alt={thumbnailAlt} className="h-full w-full object-cover" loading="lazy" />
@@ -50,7 +50,7 @@ export default function VideoTeaser({ thumbnailSrc, thumbnailAlt, videoId }: Vid
           </span>
         </span>
         <span className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:bottom-4 sm:left-4 sm:text-sm">
-          ▶ Watch 3-min demo
+          ▶ Watch 4-min demo
         </span>
       </button>
 

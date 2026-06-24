@@ -783,15 +783,18 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   await markStatement(page, statementNode(page, "CO₂ forcing is logarithmic and largely saturated"), "Challenge");
   await markStatement(page, statementNode(page, "Abrupt natural shifts have happened before"), "Challenge");
 
-  // Tweak the warrant by appending a clause to its body. Editing one of his own
-  // statements invalidates the challenger's existing mark on it, so in the closing
-  // mini-turn the challenger must re-evaluate (re-mark) the warrant before he can
-  // submit.
+  // Tighten the warrant's physics. The challenger's thermodynamics rebuttal
+  // ("Second Law governs net heat flow") argued the greenhouse mechanism is
+  // *slowing surface heat loss to space*, not reversing the flow — a real
+  // refinement worth folding back into the warrant itself, not cosmetic
+  // wording. Editing one of his own statements invalidates the challenger's
+  // existing mark on it, so in the closing mini-turn the challenger must
+  // re-evaluate (re-mark) the warrant before he can submit.
   await frameView(page, [warrantPos]);
   await appendToStatementBody(
     page,
     statementNode(page, "CO₂ is a greenhouse gas"),
-    " This is the core mechanism of the greenhouse effect.",
+    " Specifically, it slows the rate at which the surface loses heat to space — it doesn't reverse the net direction of heat flow, so the Second Law isn't implicated.",
   );
 
   // Answer each — without yet deleting the two now-orphaned nodes (Second Law,
@@ -862,6 +865,7 @@ test("advocate and challenger argue a debate through two rounds: build, invite, 
   // The warrant's mark went stale when the advocate reworded it, so it must be
   // re-evaluated; the two new advocate rebuttals must be marked to close the round.
   await fitAllNodes(page);
+  await page.waitForTimeout(DEMO_REVIEW); // demo pacing only — review the whole graph before re-evaluating
   // The warrant card shows a "CHANGED: needs re-evaluation" flag on its stale mark —
   // hold on it so a viewer registers why a re-mark is required, then re-mark it.
   await page.waitForTimeout(DEMO_HOLD); // demo pacing only — let the stale-mark flag land before re-evaluating

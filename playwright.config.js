@@ -59,7 +59,7 @@ export default defineConfig({
         // slowMo paces actions for demo recording; E2E_FAST=1 zeroes it for quick verification.
         launchOptions: {
           slowMo: process.env.E2E_FAST ? 0 : 100,
-          args: ["--window-position=0,0", "--window-size=1580,995"],
+          args: ["--window-position=0,0", "--window-size=1920,1080"],
         },
       },
     },

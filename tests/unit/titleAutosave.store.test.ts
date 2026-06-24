@@ -52,7 +52,15 @@ describe("title autosave guard (empty title must not be persisted)", () => {
     useStore.getState().hydrate("deb-1", null); // reset module bookkeeping (timers/buffers)
     seedEditingNode("Original");
     mockedGetGraph.mockResolvedValue({
-      debate: { id: "deb-1", title: "D", owner_id: "u", root_node_id: null, created_at: "t" },
+      debate: {
+        id: "deb-1",
+        title: "D",
+        owner_id: "u",
+        root_node_id: null,
+        created_at: "t",
+        public: false,
+        published_at: null,
+      },
       nodes: [],
       relations: [],
     });

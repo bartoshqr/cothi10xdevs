@@ -473,8 +473,8 @@ nothing becomes public implicitly.
 
 #### Manual
 
-- [ ] 1.6 As `anon`, unpublished debate returns no rows on any of the five tables
-- [ ] 1.7 As `anon`, a `public = true` debate returns full graph + non-null summary
+- [x] 1.6 As `anon`, unpublished debate returns no rows on any of the five tables
+- [x] 1.7 As `anon`, a `public = true` debate returns full graph + non-null summary
 
 ### Phase 2: Publish primitive (advocate-facing)
 

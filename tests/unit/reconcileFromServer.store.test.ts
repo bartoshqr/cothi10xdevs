@@ -47,7 +47,15 @@ function deferred<T>() {
 }
 
 function debateRow(rootId: string | null = null): DebateRow {
-  return { id: "deb-1", title: "D", owner_id: "u", root_node_id: rootId, created_at: "t" };
+  return {
+    id: "deb-1",
+    title: "D",
+    owner_id: "u",
+    root_node_id: rootId,
+    created_at: "t",
+    public: false,
+    published_at: null,
+  };
 }
 function statementRow(id: string, title = id): NodeRow {
   return {

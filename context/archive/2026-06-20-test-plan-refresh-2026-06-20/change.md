@@ -1,10 +1,10 @@
 ---
 change_id: test-plan-refresh-2026-06-20
 title: Refresh test-plan.md - unblock gated phases, add critical-path e2e risk
-status: preparing
+status: archived
 created: 2026-06-20
-updated: 2026-06-20
-archived_at: null
+updated: 2026-06-24
+archived_at: 2026-06-24T12:25:43Z
 ---
 
 ## Notes

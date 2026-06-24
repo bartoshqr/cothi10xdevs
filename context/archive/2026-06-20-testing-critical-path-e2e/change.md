@@ -1,10 +1,10 @@
 ---
 change_id: testing-critical-path-e2e
 title: Critical-path e2e — full advocate↔challenger lifecycle (Test Plan Phase 5)
-status: preparing
+status: archived
 created: 2026-06-20
-updated: 2026-06-20
-archived_at: null
+updated: 2026-06-24
+archived_at: 2026-06-24T12:25:43Z
 ---
 
 ## Notes

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/db/database.types";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { isLegalRelationTarget } from "./relationRules";
+import { getDebateExchange } from "@/lib/exchange/repository";
 import type {
   CreateDebateInput,
   CreateNodeInput,
@@ -407,4 +408,68 @@ export async function deleteRelation(supabase: DB, relationId: string): Promise<
   const { data, error } = await supabase.from("relations").delete().eq("id", relationId).select("id");
   if (error) throw error;
   if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
+}
+
+interface SetDebatePublishedArgs {
+  supabase: DB;
+  debateId: string;
+  ownerId: string;
+  published: boolean;
+}
+
+// S-09: publish/unpublish is one atomic write so `public` and `published_at`
+// can never drift apart (e.g. public=true with a stale/null published_at).
+// `debates_update` RLS already scopes the row to its owner; the explicit
+// owner_id filter here is defense-in-depth, matching the function's contract.
+export async function setDebatePublished({
+  supabase,
+  debateId,
+  ownerId,
+  published,
+}: SetDebatePublishedArgs): Promise<DebateRow> {
+  const { data, error } = await supabase
+    .from("debates")
+    .update({ public: published, published_at: published ? new Date().toISOString() : null })
+    .eq("id", debateId)
+    .eq("owner_id", ownerId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new NotFoundError();
+  return data;
+}
+
+interface IsPublishableArgs {
+  supabase: DB;
+  debateId: string;
+}
+
+// S-09 deviation (approved during impl): a debate is publishable only once its
+// exchange is fully `completed` — NOT the broader divergence-summary gate, which
+// also opens mid-exchange at current_round >= 2 (intentionally, so participants
+// can see interim progress). Publishing must wait for closure.
+export async function isPublishable({ supabase, debateId }: IsPublishableArgs): Promise<boolean> {
+  const exchange = await getDebateExchange(supabase, debateId);
+  return exchange?.status === "completed";
+}
+
+export interface PublicDebateListItem {
+  id: string;
+  title: string;
+  published_at: string | null;
+}
+
+interface ListPublicDebatesArgs {
+  supabase: DB;
+}
+
+// Anon-reachable via the debates_select_anon RLS policy (public = true).
+export async function listPublicDebates({ supabase }: ListPublicDebatesArgs): Promise<PublicDebateListItem[]> {
+  const { data, error } = await supabase
+    .from("debates")
+    .select("id, title, published_at")
+    .eq("public", true)
+    .order("published_at", { ascending: false });
+  if (error) throw error;
+  return data;
 }

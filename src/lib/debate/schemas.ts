@@ -46,12 +46,14 @@ export const updateNodeSchema = z.object({
 });
 
 // D3-3c: PATCH /api/debates/:id whitelist. `.strict()` rejects any field not
-// listed, so the endpoint can never write an arbitrary debate column. Only
-// `rootNodeId` is persisted this phase (routes to setDebateRoot); future fields
-// (e.g. title) are added here explicitly when their handler path exists.
+// listed, so the endpoint can never write an arbitrary debate column.
+// `rootNodeId` routes to setDebateRoot; `public` (S-09) routes to the
+// publish/unpublish toggle. Future fields are added here explicitly when
+// their handler path exists.
 export const updateDebateSchema = z
   .object({
     rootNodeId: z.uuid().optional(),
+    public: z.boolean().optional(),
   })
   .strict();
 

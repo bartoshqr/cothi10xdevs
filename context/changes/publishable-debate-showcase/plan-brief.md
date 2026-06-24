@@ -20,33 +20,51 @@ nothing. The landing page has no live-debate embed yet.
 
 ## Desired End State
 
-Advocates get a Publish/Unpublish toggle on their completed debates that surfaces a copyable
-`/showcase/[id]` link. Anyone — logged out included — can browse `/showcase` (a list of published
+Advocates get a Publish/Unpublish toggle on their completed debates that surfaces a "View" link to
+`/showcase/[id]`. Anyone — logged out included — can browse `/showcase` (a list of published
 debates) and open `/showcase/[id]` to see the real map, frozen and interactive (pan/zoom only), with
 marks and the divergence summary. The landing page links to `/showcase`. An anonymous client can read
 **only** rows from `public = true` debates — proven leak-free at the DB layer.
 
 ## Key Decisions Made
 
-| Decision               | Choice                                                         | Why (1 sentence)                                                                                                      | Source   |
-| ---------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------- |
-| Column shape           | `public boolean` + `published_at timestamptz`                  | RLS reads the cheap boolean; `published_at` is audit/sort, written atomically together                                | Research |
-| Anon RLS predicate     | `is_public_debate(uuid)` SECURITY DEFINER granted to `anon`    | One predicate across four child tables → no copy-paste drift (drift = the IDOR)                                       | Research |
-| Publish lifecycle      | Toggle (publish + unpublish) via PATCH `{ public }`            | Publishing exposes the challenger's content with no consent in MVP, so pulling back must be possible                  | Research |
-| Summary delivery       | Server-fetch as `initialSummary` prop                          | Keeps the anon read surface to one path (the page) — fewer surfaces to leak-test                                      | Research |
-| Publishable gate       | Reuse `getDivergenceSummary(...) !== null`                     | Publishability and summary-availability can never drift                                                               | Research |
-| Landing demo           | Link to a new `/showcase` index listing published debates      | Scales to many topics; no MapEditor coupling on the landing page                                                      | Plan     |
-| Publish UX             | Toggle on the debate page that reveals a copyable showcase URL | Advocate publishes in-context and gets the shareable link immediately                                                 | Plan     |
-| Risk #1 test layer     | DB-level integration with an anon-scoped client                | Tests the RLS boundary where the IDOR actually lives, table by table                                                  | Plan     |
-| Unpublish friction     | One-click toggle, no confirm                                   | Unpublish removes exposure (the safe direction) and is instantly reversible                                           | Plan     |
-| Anon `profiles` access | Sixth anon policy gated on `is_public_debate_participant`      | `getDebateExchange` resolves usernames from `profiles`; anon needs them, so expose only published-debate participants | Impl     |
+| Decision               | Choice                                                                                         | Why (1 sentence)                                                                                                      | Source               |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Column shape           | `public boolean` + `published_at timestamptz`                                                  | RLS reads the cheap boolean; `published_at` is audit/sort, written atomically together                                | Research             |
+| Anon RLS predicate     | `is_public_debate(uuid)` SECURITY DEFINER granted to `anon`                                    | One predicate across four child tables → no copy-paste drift (drift = the IDOR)                                       | Research             |
+| Publish lifecycle      | Toggle (publish + unpublish) via PATCH `{ public }`                                            | Publishing exposes the challenger's content with no consent in MVP, so pulling back must be possible                  | Research             |
+| Summary delivery       | Server-fetch as `initialSummary` prop                                                          | Keeps the anon read surface to one path (the page) — fewer surfaces to leak-test                                      | Research             |
+| Publishable gate       | Exchange `status = 'completed'` only — **changed during impl, see note below**                 | A debate is publishable only once its exchange is fully closed, not mid-exchange at `current_round >= 2`              | Impl (was: Research) |
+| Landing demo           | Link to a new `/showcase` index listing published debates                                      | Scales to many topics; no MapEditor coupling on the landing page                                                      | Plan                 |
+| Publish UX             | Toggle on the debate page that reveals a "View" link — **changed during impl, see note below** | Advocate publishes in-context and jumps straight to the live showcase page                                            | Impl (was: Plan)     |
+| Risk #1 test layer     | DB-level integration with an anon-scoped client                                                | Tests the RLS boundary where the IDOR actually lives, table by table                                                  | Plan                 |
+| Unpublish friction     | One-click toggle, no confirm                                                                   | Unpublish removes exposure (the safe direction) and is instantly reversible                                           | Plan                 |
+| Anon `profiles` access | Sixth anon policy gated on `is_public_debate_participant`                                      | `getDebateExchange` resolves usernames from `profiles`; anon needs them, so expose only published-debate participants | Impl                 |
+
+> **Deviation note (approved during impl, 2026-06-24):** the plan originally reused
+> `getDivergenceSummary(...) !== null` verbatim for `isPublishable`, on the premise that publishability
+> and summary-availability should never drift. That gate also returns "available" mid-exchange once
+> `current_round >= 2` (so participants can see interim progress) — too early for a public showcase.
+> `isPublishable` now checks the exchange's `status === 'completed'` directly. The two gates
+> intentionally diverge: the summary panel can be visible to participants before a debate is
+> publishable. Relatedly, the publish toggle UI now renders **nothing** (not a disabled button) when
+> the debate isn't yet publishable and isn't already public — see `plan.md` Phase 2.
+>
+> **Deviation note (approved during impl, 2026-06-24):** the plan originally specified a copyable
+> `/showcase/[id]` URL input with a Copy button once published. Replaced with a plain "View" link/button
+> to `/showcase/[id]` — simpler UI; the advocate copies the address bar URL themselves once there.
+>
+> **Deviation note (approved during impl, 2026-06-24):** `supabase/seed.sql`'s fixture exchange
+> (`00000000-0000-4000-8000-000000000020`) was changed from `round_count=3, status='accepted'` to
+> `round_count=1, status='completed'`, so the seeded debate is publishable out of the box under the
+> tightened `isPublishable` gate above — no manual turn-driving needed to exercise Publish locally.
 
 ## Scope
 
 **In scope:** `public`/`published_at` columns; `is_public_debate` + `is_public_debate_participant`
 helpers; anon SELECT RLS on all five graph tables **plus `profiles`** (participants of published
 debates only); DB-level leak tests; `setDebatePublished`/`isPublishable`/`listPublicDebates` repository
-fns; PATCH `{ public }` branch; publish/unpublish toggle UI with copyable URL; `/showcase` index +
+fns; PATCH `{ public }` branch; publish/unpublish toggle UI with a "View" link; `/showcase` index +
 `/showcase/[id]` detail (frozen map + summary); `DivergenceSummary` `initialSummary` prop; landing CTA.
 
 **Out of scope:** challenger consent flow; recorded/video asset; admin/RBAC; new summary/statements

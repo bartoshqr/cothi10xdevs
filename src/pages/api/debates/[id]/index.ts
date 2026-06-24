@@ -1,8 +1,15 @@
 import { z } from "zod";
 import { withAuth } from "@/lib/api";
 import { debateIdParamSchema, updateDebateSchema } from "@/lib/debate/schemas";
-import { getDebateGraph, setDebateRoot, deleteDebate, getDebateDeletability } from "@/lib/debate/repository";
-import { ValidationError } from "@/lib/errors";
+import {
+  getDebateGraph,
+  setDebateRoot,
+  deleteDebate,
+  getDebateDeletability,
+  setDebatePublished,
+  isPublishable,
+} from "@/lib/debate/repository";
+import { ConflictError, ValidationError } from "@/lib/errors";
 
 export const GET = withAuth(async (context, supabase) => {
   const idParsed = debateIdParamSchema.safeParse(context.params.id);
@@ -39,9 +46,9 @@ export const DELETE = withAuth(async (context, supabase) => {
 });
 
 // D3-3c: re-designate the root claim. The body is whitelisted by updateDebateSchema
-// (`.strict()`), so only `rootNodeId` can be written. setDebateRoot maps an unknown
-// debate/node pair → 404 and a non-statement target → 422 via withAuth.
-export const PATCH = withAuth(async (context, supabase) => {
+// (`.strict()`), so only `rootNodeId`/`public` can be written. setDebateRoot maps an
+// unknown debate/node pair → 404 and a non-statement target → 422 via withAuth.
+export const PATCH = withAuth(async (context, supabase, user) => {
   const idParsed = debateIdParamSchema.safeParse(context.params.id);
   if (!idParsed.success) {
     return Response.json({ error: "Invalid debate id" }, { status: 400 });
@@ -61,6 +68,25 @@ export const PATCH = withAuth(async (context, supabase) => {
 
   if (parsed.data.rootNodeId !== undefined) {
     const debate = await setDebateRoot(supabase, idParsed.data, parsed.data.rootNodeId);
+    return Response.json(debate);
+  }
+
+  // S-09: publishing requires the divergence summary to already exist (round
+  // complete); unpublishing has no precondition — it's a one-click, instantly
+  // reversible toggle.
+  if (parsed.data.public !== undefined) {
+    if (parsed.data.public) {
+      const publishable = await isPublishable({ supabase, debateId: idParsed.data });
+      if (!publishable) {
+        throw new ConflictError("This debate isn't publishable yet — round not complete.");
+      }
+    }
+    const debate = await setDebatePublished({
+      supabase,
+      debateId: idParsed.data,
+      ownerId: user.id,
+      published: parsed.data.public,
+    });
     return Response.json(debate);
   }
 

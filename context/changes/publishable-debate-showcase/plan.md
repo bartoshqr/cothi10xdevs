@@ -49,9 +49,9 @@ its open questions are resolved into the Net design):
 ## Desired End State
 
 - An advocate viewing their own completed debate at `/debates/[id]` sees a **Publish** toggle. Clicking
-  it makes the debate public and reveals a copyable `/showcase/[id]` link; clicking again (Unpublish)
-  immediately makes it private. The toggle is disabled (with a reason) while the debate is not yet
-  publishable.
+  it makes the debate public and reveals a **View** link to `/showcase/[id]`; clicking again (Unpublish)
+  immediately makes it private. The toggle is not rendered at all while the debate is not yet
+  publishable (see Phase 2 deviation notes).
 - `/showcase` lists every published debate (anon-readable). `/showcase/[id]` renders that debate's real
   map, frozen and read-only, with marks displayed and the divergence summary shown — for anyone,
   logged in or not.
@@ -69,7 +69,10 @@ its open questions are resolved into the Net design):
 - Frozen board = configuration of existing props, no new code (`MapEditor.tsx:701-743`;
   `store.ts:806-818,820,827`; `StatementNode.tsx:78`).
 - Publishable precondition already encoded by `getDivergenceSummary(...) !== null`
-  (`src/lib/summary/repository.ts:38`).
+  (`src/lib/summary/repository.ts:38`). **Superseded during Phase 2 impl (2026-06-24, deviation
+  approved):** that gate also opens mid-exchange at `current_round >= 2`, which is too early to publish.
+  `isPublishable` now checks `getDebateExchange(...).status === 'completed'` directly instead — see the
+  Phase 2 deviation note.
 - `exchanges` **must** get an anon policy too, or the summary 404s for anon even on a published debate
   (`src/lib/summary/repository.ts:35-38`).
 - `is_public_debate` helper is the **exception** to the helper convention: it must
@@ -236,8 +239,8 @@ manual confirmation before proceeding to Phase 2.
 ### Overview
 
 Add the repository mutation + publishability check + published-debate listing, extend the PATCH
-endpoint to toggle `public`, and add the advocate-facing publish/unpublish toggle that surfaces the
-copyable showcase URL.
+endpoint to toggle `public`, and add the advocate-facing publish/unpublish toggle that surfaces a View
+link to the showcase page.
 
 ### Changes Required:
 
@@ -254,11 +257,23 @@ functions are positional):
 - `setDebatePublished({ supabase, debateId, ownerId, published }): Promise<Debate>` — writes `public`
   **and** `published_at` together (`published ? now() : null`); RLS already scopes the update to the
   owner. Never writes the two columns separately.
-- `isPublishable({ supabase, debateId }): Promise<boolean>` — delegates to
-  `getDivergenceSummary({ supabase, debateId }) !== null`.
+- `isPublishable({ supabase, debateId }): Promise<boolean>` — **(deviation, approved during impl,
+  2026-06-24 — see note below)** checks `getDebateExchange({ supabase, debateId }).status ===
+'completed'` directly, NOT `getDivergenceSummary(...) !== null`. The summary gate also returns
+  available once `current_round >= 2` mid-exchange; that's too early to publish — a debate is
+  publishable only once its exchange has fully closed.
 - `listPublicDebates({ supabase }): Promise<PublicDebateListItem[]>` — selects published debates
   (`public = true`) for the index; minimal fields (id, title, published_at). Anon-reachable via the
   Phase 1 `debates` policy.
+
+> **Deviation note (approved during impl, 2026-06-24):** the plan originally specified `isPublishable`
+> as a pure delegate to `getDivergenceSummary(...) !== null` (Key Discoveries, above: "Publishable
+> precondition already encoded by `getDivergenceSummary(...) !== null`") so publishability and
+> summary-availability could never drift. In practice the summary gate is intentionally permissive — it
+> opens at `current_round >= 2` so participants can see interim progress mid-exchange — and that's the
+> wrong threshold for a public showcase. Publishing must wait until the exchange is `status ===
+'completed'`. The two gates now intentionally diverge: the summary panel can be visible to
+> participants before a debate is publishable.
 
 #### 2. PATCH endpoint accepts `{ public }`
 
@@ -279,17 +294,31 @@ a debate that isn't round-complete.
 **File**: a new client component under `src/components/debate/` (e.g. `PublishControl.tsx`), embedded in
 `src/pages/debates/[id].astro`, shown only to the owner.
 
-**Intent**: Let the advocate publish/unpublish in-context and copy the shareable URL.
+**Intent**: Let the advocate publish/unpublish in-context and jump to the published showcase page.
 
 **Contract**:
 
-- Renders current state from the debate row's `public`. Disabled with a reason tooltip when not
-  publishable (round not complete).
+- Renders current state from the debate row's `public`. **(deviation, approved during impl,
+  2026-06-24)** When the debate is not yet publishable AND not already public, the component renders
+  **nothing** (`return null`) — not a disabled button. A not-yet-publishable debate's owner sees no
+  publish affordance at all until the round closes.
 - Publish/Unpublish calls `PATCH /api/debates/[id]` with `{ public: true|false }`. On 409, surface
   "round not complete." Unpublish is one-click, no confirm.
-- When published, shows a copyable `/showcase/[id]` absolute URL.
+- When published, shows a **(deviation, approved during impl, 2026-06-24)** "View" link/button to
+  `/showcase/[id]` — not a copyable URL input + Copy button. The advocate navigates straight to the
+  live page instead of copy-pasting a link; sharing the URL is left to the browser's own address bar /
+  share affordances.
 - Pass owner-only visibility and the `isPublishable` result from the Astro frontmatter (page already
   derives the viewer), so the control doesn't need its own auth fetch.
+
+> **Deviation note (approved during impl, 2026-06-24):** the plan originally specified a copyable
+> `/showcase/[id]` URL input with a Copy button. Replaced with a plain "View" link to `/showcase/[id]`
+> — simpler UI, and the advocate can copy the address bar URL themselves once there.
+>
+> **Deviation note (approved during impl, 2026-06-24):** the plan originally specified a disabled
+> button with a "round not complete" reason tooltip. Changed to fully hiding the control when not
+> publishable — a disabled-but-visible toggle implies the owner should wait/retry, when the real
+> precondition (round completion) isn't something a button click can resolve.
 
 ### Success Criteria:
 
@@ -303,10 +332,11 @@ a debate that isn't round-complete.
 
 #### Manual Verification:
 
-- [ ] As the owner of a completed debate, the Publish toggle is enabled; publishing reveals the
-      copyable `/showcase/[id]` URL
-- [ ] As the owner of an in-progress debate, the toggle is disabled with a "round not complete" reason;
-      `PATCH { public: true }` returns 409
+- [ ] As the owner of a debate with a `completed` exchange, the Publish toggle is visible and enabled;
+      publishing reveals a "View" link to `/showcase/[id]`
+- [ ] As the owner of an in-progress debate (no completed exchange, including mid-exchange at
+      `current_round >= 2`), the toggle is not rendered at all; `PATCH { public: true }` still returns
+      409 if attempted directly against the API
 - [ ] Unpublish immediately flips state back to private with one click
 - [ ] A non-owner cannot publish another user's debate (RLS/owner scoping holds)
 
@@ -448,6 +478,13 @@ change to existing authenticated policies. Reversible by dropping the anon polic
 anon `select` grants, and the two columns. Existing debates default to `public = false` (private), so
 nothing becomes public implicitly.
 
+> **Deviation note (approved during impl, 2026-06-24):** `supabase/seed.sql`'s fixture exchange
+> (`00000000-0000-4000-8000-000000000020`, on the seeded "Climate Change Debate") was not part of the
+> original Phase 1/2 contracts but was changed from `round_count=3, status='accepted'` to
+> `round_count=1, status='completed'` so the seeded debate satisfies the tightened `isPublishable` gate
+> (exchange `status === 'completed'`) immediately after `npx supabase db reset` — local dev/demo can
+> exercise Publish without first driving the turn machine by hand.
+
 ## References
 
 - Research: `context/changes/publishable-debate-showcase/research.md` (Net design, all 5 decisions)
@@ -480,17 +517,19 @@ nothing becomes public implicitly.
 
 #### Automated
 
-- [ ] 2.1 Type checking passes (`npx astro check`)
-- [ ] 2.2 Linting passes (`npm run lint`)
-- [ ] 2.3 Build passes (`npm run build`)
-- [ ] 2.4 Repository unit tests (`isPublishable`, `setDebatePublished`) pass
+- [x] 2.1 Type checking passes (`npx astro check`)
+- [x] 2.2 Linting passes (`npm run lint`)
+- [x] 2.3 Build passes (`npm run build`)
+- [x] 2.4 Repository unit tests (`isPublishable`, `setDebatePublished`) pass
 
 #### Manual
 
-- [ ] 2.5 Owner of completed debate: publish reveals copyable `/showcase/[id]` URL
-- [ ] 2.6 Owner of in-progress debate: toggle disabled, `PATCH { public: true }` → 409
-- [ ] 2.7 Unpublish flips back to private in one click
-- [ ] 2.8 Non-owner cannot publish another user's debate
+- [x] 2.5 Owner of completed debate: publish reveals a "View" link to `/showcase/[id]` (deviation: was
+      "copyable URL", see Phase 2 deviation notes)
+- [x] 2.6 Owner of in-progress debate: toggle not rendered at all (deviation: was "disabled"), `PATCH
+    { public: true }` → 409
+- [x] 2.7 Unpublish flips back to private in one click
+- [x] 2.8 Non-owner cannot publish another user's debate
 
 ### Phase 3: Public showcase read path (anon-facing)
 

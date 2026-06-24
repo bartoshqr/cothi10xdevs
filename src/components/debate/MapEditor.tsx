@@ -606,6 +606,15 @@ function MapEditorInner() {
           </div>
         )}
         <ReactFlow
+          // Dev-only test hook: expose the React Flow instance on `window` so
+          // Playwright can drive the viewport precisely (e.g. fitBounds/fitView
+          // to frame a chosen set of nodes). Guarded by import.meta.env.DEV, so
+          // it never ships to production builds.
+          onInit={(instance) => {
+            if (import.meta.env.DEV) {
+              (window as unknown as { __rfInstance?: typeof instance }).__rfInstance = instance;
+            }
+          }}
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}

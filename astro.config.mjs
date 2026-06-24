@@ -79,6 +79,9 @@ function optimizeServerDeps() {
 // https://astro.build/config
 export default defineConfig({
   output: "server",
+  // Dev toolbar stays on for normal `npm run dev`; the e2e webServer starts the dev server
+  // with DISABLE_DEV_TOOLBAR=1 so the floating pill never appears in a demo recording.
+  devToolbar: { enabled: process.env.DISABLE_DEV_TOOLBAR !== "1" },
   integrations: [react(), sitemap()],
   vite: {
     plugins: [tailwindcss(), optimizeServerDeps()],
@@ -102,7 +105,7 @@ export default defineConfig({
     schema: {
       SUPABASE_URL: envField.string({ context: "server", access: "secret", optional: true }),
       SUPABASE_KEY: envField.string({ context: "server", access: "secret", optional: true }),
-      DEMO_VIDEO_ID: envField.string({ context: "client", access: "public", default: "MWDi3Zmlu1I" }),
+      DEMO_VIDEO_ID: envField.string({ context: "client", access: "public", default: "TVcuwcGo0TA" }),
     },
   },
 });

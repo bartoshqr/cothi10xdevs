@@ -90,13 +90,21 @@ export default function TurnBar({
   const danglingCount = gate?.danglingCount ?? 0;
   const danglingTitles = gate?.danglingTitles ?? [];
   const incompleteConnectiveCount = gate?.incompleteConnectiveCount ?? 0;
+  // Until the first gate arrives we don't know the mark counts yet. Treat that as
+  // not-submittable: the null-gate fallback (marked=0,total=0) otherwise makes
+  // `marked === total` momentarily true, flashing the button ENABLED on a fresh
+  // turn for one frame before the real 0/N gate lands. Holding it disabled until
+  // `hasGate` removes that flicker (the gate handshake answers on mount, so the
+  // real state arrives a tick later).
+  const hasGate = gate !== null;
   // Three live gates block a submit: every counterpart statement marked, no own statement
   // orphaned (severed from root), and no own AND/OR connective missing an operand. The two
   // structural gates are suppressed upstream in the mini-turn.
-  const canSubmit = myTurn && marked === total && danglingCount === 0 && incompleteConnectiveCount === 0;
+  const canSubmit = hasGate && myTurn && marked === total && danglingCount === 0 && incompleteConnectiveCount === 0;
   // Off-turn (you've submitted, or are waiting for the other party): a muted, disabled
-  // "Submitted". On-turn: the live "Submit turn (marked/total)" gate.
-  const buttonLabel = myTurn ? `Submit turn (${marked}/${total})` : "Submitted";
+  // "Submitted". On-turn: the live "Submit turn (marked/total)" gate — but suppress the
+  // count until the gate lands so we never show a stale "0/0".
+  const buttonLabel = myTurn ? (hasGate ? `Submit turn (${marked}/${total})` : "Submit turn") : "Submitted";
 
   // Every reason the submit is blocked, as one list rendered in a single popover (the only
   // place blocking reasons are shown — no native tooltip, no inline text). Structural problems

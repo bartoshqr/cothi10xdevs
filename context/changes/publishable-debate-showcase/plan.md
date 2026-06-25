@@ -512,16 +512,16 @@ nothing becomes public implicitly.
 
 #### Automated
 
-- [x] 1.1 Migration applies cleanly (`npx supabase db reset`/`db push`)
-- [x] 1.2 Types regenerated, no further diff (`npm run db:types`)
-- [x] 1.3 Type checking passes (`npx astro check`)
-- [x] 1.4 Linting passes (`npm run lint`)
-- [x] 1.5 Anon leak integration tests pass (unpublished → 0 rows / published → own graph + summary)
+- [x] 1.1 Migration applies cleanly (`npx supabase db reset`/`db push`) — 5d7a8cd
+- [x] 1.2 Types regenerated, no further diff (`npm run db:types`) — 5d7a8cd
+- [x] 1.3 Type checking passes (`npx astro check`) — 5d7a8cd
+- [x] 1.4 Linting passes (`npm run lint`) — 5d7a8cd
+- [x] 1.5 Anon leak integration tests pass (unpublished → 0 rows / published → own graph + summary) — 5d7a8cd
 
 #### Manual
 
-- [x] 1.6 As `anon`, unpublished debate returns no rows on any of the five tables
-- [x] 1.7 As `anon`, a `public = true` debate returns full graph + non-null summary
+- [x] 1.6 As `anon`, unpublished debate returns no rows on any of the five tables — 5d7a8cd
+- [x] 1.7 As `anon`, a `public = true` debate returns full graph + non-null summary — 5d7a8cd
 
 ### Phase 2: Publish primitive (advocate-facing)
 
@@ -545,15 +545,15 @@ nothing becomes public implicitly.
 
 #### Automated
 
-- [x] 3.1 Type checking passes (`npx astro check`)
-- [x] 3.2 Linting passes (`npm run lint`)
-- [x] 3.3 Build passes (`npm run build`)
-- [x] 3.4 `/showcase` & `/showcase/[id]` reachable without auth (200 published / 404 unpublished)
+- [x] 3.1 Type checking passes (`npx astro check`) — 0532413
+- [x] 3.2 Linting passes (`npm run lint`) — 0532413
+- [x] 3.3 Build passes (`npm run build`) — 0532413
+- [x] 3.4 `/showcase` & `/showcase/[id]` reachable without auth (200 published / 404 unpublished) — 0532413
 
 #### Manual
 
-- [ ] 3.5 Logged-out: `/showcase` lists published debates with working links
-- [ ] 3.6 Logged-out: `/showcase/[id]` shows frozen map + read-only marks + summary
-- [ ] 3.7 Logged-out: unpublished/unknown id → 404 (no leak)
-- [ ] 3.8 Landing CTA navigates to `/showcase`
-- [ ] 3.9 Two team accounts author + publish a real climate debate; it appears on `/showcase`
+- [x] 3.5 Logged-out: `/showcase` lists published debates with working links — 0532413
+- [x] 3.6 Logged-out: `/showcase/[id]` shows frozen map + read-only marks + summary — 0532413
+- [x] 3.7 Logged-out: unpublished/unknown id → 404 (no leak) — 0532413
+- [x] 3.8 Landing CTA navigates to `/showcase` — 0532413
+- [x] 3.9 Two team accounts author + publish a real climate debate; it appears on `/showcase` — a5a8e4c

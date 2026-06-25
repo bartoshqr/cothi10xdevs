@@ -23,4 +23,13 @@ describe("updateDebateSchema (PATCH /api/debates/:id whitelist)", () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  it("accepts a public boolean (S-09 publish toggle)", () => {
+    expect(updateDebateSchema.safeParse({ public: true }).success).toBe(true);
+    expect(updateDebateSchema.safeParse({ public: false }).success).toBe(true);
+  });
+
+  it("rejects a non-boolean public value", () => {
+    expect(updateDebateSchema.safeParse({ public: "true" }).success).toBe(false);
+  });
 });

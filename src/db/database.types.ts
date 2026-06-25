@@ -62,6 +62,8 @@ export type Database = {
           created_at: string
           id: string
           owner_id: string
+          public: boolean
+          published_at: string | null
           root_node_id: string | null
           title: string
         }
@@ -69,6 +71,8 @@ export type Database = {
           created_at?: string
           id?: string
           owner_id: string
+          public?: boolean
+          published_at?: string | null
           root_node_id?: string | null
           title: string
         }
@@ -76,6 +80,8 @@ export type Database = {
           created_at?: string
           id?: string
           owner_id?: string
+          public?: boolean
+          published_at?: string | null
           root_node_id?: string | null
           title?: string
         }
@@ -321,6 +327,11 @@ export type Database = {
         Returns: boolean
       }
       is_debate_owner: { Args: { p_debate_id: string }; Returns: boolean }
+      is_public_debate: { Args: { p_debate_id: string }; Returns: boolean }
+      is_public_debate_participant: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       patch_node: {
         Args: {
           p_metadata_patch?: Json
@@ -375,6 +386,8 @@ export type Database = {
           created_at: string
           id: string
           owner_id: string
+          public: boolean
+          published_at: string | null
           root_node_id: string | null
           title: string
         }[]

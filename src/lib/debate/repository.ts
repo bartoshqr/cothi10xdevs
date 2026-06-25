@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/db/database.types";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { isLegalRelationTarget } from "./relationRules";
+import { getDebateExchange } from "@/lib/exchange/repository";
 import type {
   CreateDebateInput,
   CreateNodeInput,
@@ -213,6 +214,15 @@ export async function getDebateGraph(supabase: DB, debateId: string): Promise<De
   };
 }
 
+// S-09: RLS lets an owner/challenger read their own debate via `getDebateGraph` regardless
+// of `public` — that policy exists for the authed `/debates/[id]` page, not the showcase.
+// The showcase detail page must re-check `public` explicitly, or visiting /showcase/[id] for
+// your own unpublished debate while logged in would leak it to you (and only you) ahead of
+// publishing. `graph is DebateGraph` narrows the caller's `graph | null` after the check.
+export function isPublishedGraph(graph: DebateGraph | null): graph is DebateGraph {
+  return graph?.debate.public ?? false;
+}
+
 export async function createStatementNode(
   supabase: DB,
   input: Extract<CreateNodeInput, { nodeKind: "statement" }>,
@@ -407,4 +417,97 @@ export async function deleteRelation(supabase: DB, relationId: string): Promise<
   const { data, error } = await supabase.from("relations").delete().eq("id", relationId).select("id");
   if (error) throw error;
   if (data.length === 0) throw new NotFoundError(); // nothing deleted → 404 (F4)
+}
+
+interface SetDebatePublishedArgs {
+  supabase: DB;
+  debateId: string;
+  ownerId: string;
+  published: boolean;
+}
+
+// S-09: publish/unpublish is one atomic write so `public` and `published_at`
+// can never drift apart (e.g. public=true with a stale/null published_at).
+// `debates_update` RLS already scopes the row to its owner; the explicit
+// owner_id filter here is defense-in-depth, matching the function's contract.
+export async function setDebatePublished({
+  supabase,
+  debateId,
+  ownerId,
+  published,
+}: SetDebatePublishedArgs): Promise<DebateRow> {
+  const { data, error } = await supabase
+    .from("debates")
+    .update({ public: published, published_at: published ? new Date().toISOString() : null })
+    .eq("id", debateId)
+    .eq("owner_id", ownerId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new NotFoundError();
+  return data;
+}
+
+interface IsPublishableArgs {
+  supabase: DB;
+  debateId: string;
+}
+
+// S-09 deviation (approved during impl): a debate is publishable only once its
+// exchange is fully `completed` — NOT the broader divergence-summary gate, which
+// also opens mid-exchange at current_round >= 2 (intentionally, so participants
+// can see interim progress). Publishing must wait for closure.
+export async function isPublishable({ supabase, debateId }: IsPublishableArgs): Promise<boolean> {
+  const exchange = await getDebateExchange(supabase, debateId);
+  return exchange?.status === "completed";
+}
+
+export interface PublicDebateListItem {
+  id: string;
+  title: string;
+  published_at: string | null;
+}
+
+// Default showcase page size. One source of truth for the repository and the
+// `/showcase` page (re-exported, not re-declared in the page).
+export const SHOWCASE_PAGE_SIZE = 20;
+
+interface ListPublicDebatesArgs {
+  supabase: DB;
+  page?: number; // 1-based; defaults to the first page
+  pageSize?: number;
+}
+
+export interface PublicDebatesPage {
+  items: PublicDebateListItem[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean; // a further page exists
+}
+
+// Anon-reachable via the debates_select_anon RLS policy (public = true).
+// Paginated: fetches one extra row (`pageSize + 1`) to detect a next page
+// without a separate exact-count query.
+export async function listPublicDebates({
+  supabase,
+  page = 1,
+  pageSize = SHOWCASE_PAGE_SIZE,
+}: ListPublicDebatesArgs): Promise<PublicDebatesPage> {
+  const safePage = Math.max(1, Math.trunc(page));
+  const from = (safePage - 1) * pageSize;
+  // .range is inclusive on both ends, so (from, from + pageSize) yields pageSize + 1 rows.
+  const { data, error } = await supabase
+    .from("debates")
+    .select("id, title, published_at")
+    .eq("public", true)
+    .order("published_at", { ascending: false })
+    .range(from, from + pageSize);
+  if (error) throw error;
+  const hasMore = data.length > pageSize;
+  return {
+    items: hasMore ? data.slice(0, pageSize) : data,
+    page: safePage,
+    pageSize,
+    hasMore,
+  };
 }

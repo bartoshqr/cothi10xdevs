@@ -118,6 +118,21 @@ export function getClientAsUser(email: string, password: string): Promise<Supaba
   return promise;
 }
 
+/**
+ * A truly **anonymous** client — anon key, NO sign-in — so PostgREST runs every
+ * request as the `anon` Postgres role. This is the only client that proves the
+ * S-09 anon read path; `getClientAsUser` signs in and therefore authenticates as
+ * the `authenticated` role, which would silently exercise the pre-existing
+ * authenticated policies and void the leak assertion. Call inside
+ * `describeIntegration` blocks.
+ */
+export function anonClient(): SupabaseClient<Database> {
+  if (!env) throw new Error("integration env not configured");
+  return createClient<Database>(env.url, env.anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 async function getSeedingClient(): Promise<SupabaseClient<Database>> {
   const user = requireSeedingUser();
   return getClientAsUser(user.email, user.password);

@@ -5,11 +5,13 @@ import DebateHeader from "@/components/debate/DebateHeader.astro";
 import InviteChallenger from "@/components/debate/InviteChallenger";
 import TurnBar from "@/components/debate/TurnBar";
 import DivergenceSummary from "@/components/debate/DivergenceSummary";
+import PublishControl from "@/components/debate/PublishControl";
 import { createClient } from "@/lib/supabase";
-import { getDebateGraph } from "@/lib/debate/repository";
+import { getDebateGraph, isPublishable } from "@/lib/debate/repository";
 import { getDebateExchange } from "@/lib/exchange/repository";
 import { deriveViewer } from "@/lib/debate/viewer";
 import { getDebateMarks } from "@/lib/mark/repository";
+import { getUsernameById } from "@/lib/users";
 import type { MarkState } from "@/components/debate/mapVisualLanguage";
 
 const { id: debateId } = Astro.params;
@@ -21,8 +23,7 @@ const graph = supabase && debateId ? await getDebateGraph(supabase, debateId) : 
 
 let username: string | null = null;
 if (graph && supabase && user) {
-  const { data } = await supabase.from("profiles").select("username").eq("id", user.id).single();
-  username = data?.username ?? null;
+  username = await getUsernameById(supabase, user.id);
 }
 
 const isOwner = graph && user ? graph.debate.owner_id === user.id : false;
@@ -49,6 +50,10 @@ if (viewer && supabase && debateId) {
 // canEdit (the old pre-exchange flag): true only for the advocate before any exchange exists.
 const canEdit = isOwner && exchange === null;
 
+// S-09: only the owner needs to know publishability — the toggle is owner-only,
+// so skip this read entirely for the challenger view.
+const publishable = isOwner && supabase && graph ? await isPublishable({ supabase, debateId: graph.debate.id }) : false;
+
 if (!graph) {
   Astro.response.status = 404;
 }
@@ -68,6 +73,14 @@ if (!graph) {
               isCompleted={exchange?.status === "completed"}
               currentRound={exchange?.currentRound ?? 1}
             />
+            {isOwner && (
+              <PublishControl
+                client:load
+                debateId={graph.debate.id}
+                initialPublic={graph.debate.public}
+                isPublishable={publishable}
+              />
+            )}
             {isOwner && <InviteChallenger client:load debateId={graph.debate.id} existingExchange={exchange} />}
             {!isOwner &&
               exchange?.advocateUsername &&

@@ -27,6 +27,15 @@ export async function findUserByUsername(
   return data;
 }
 
+// Resolve a single user's username by id. Surfaces DB errors (if (error) throw)
+// instead of swallowing them — a failed read must not silently render as "no
+// username". maybeSingle: a genuinely missing profile is null, not an error.
+export async function getUsernameById(supabase: SupabaseClient<Database>, userId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("profiles").select("username").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data?.username ?? null;
+}
+
 // Substring user search for the FR-009 invite dropdown. Returns up to `limit`
 // users whose username contains `query` (case-insensitive), excluding `excludeUserId`.
 // Empty/whitespace query matches all (pre-populated dropdown on open).

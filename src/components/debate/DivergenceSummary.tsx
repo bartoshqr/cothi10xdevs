@@ -14,6 +14,15 @@ interface Props {
   isCompleted?: boolean;
   /** Server-initial round number — overridden live by the turn gate. */
   currentRound?: number;
+  /** Server-fetched summary for the public showcase page (S-09). When provided, the panel
+   * skips the authed fetch entirely — `/api/debates/[id]/summary` is `withAuth` and would
+   * 401 for an anon visitor. The trigger button then only toggles visibility, never calls
+   * `load()`. Starts closed like the authed page; the visitor still clicks to view it. */
+  initialSummary?: DivergenceSummary | null;
+  /** Advocate/challenger usernames — used to label statement groups by literal role
+   * ("Advocate (@name)") when there's no logged-in `viewerId` (the anon showcase page). */
+  advocateUsername?: string | null;
+  challengerUsername?: string | null;
 }
 
 // A small badge carrying the statement's Toulmin role (CLAIM, DATA, …), reusing the
@@ -76,24 +85,44 @@ function AuthorGroup({ heading, items }: { heading: string; items: SummaryItem[]
 
 // Split a bucket into the viewer's own statements and the counterpart's, each its own
 // subgroup. Empty subgroups render nothing; an empty bucket renders the `empty` line.
+//
+// Without a `viewerId` (the anon showcase page — no logged-in viewer to be "me") there's no
+// "my statements" to split out, so fall back to literal role labels ("Advocate"/"Challenger",
+// derived from `ownerId` — the debate owner is always the advocate) instead of hiding who
+// wrote what behind a generic "Counterpart" label.
 function AuthorGroups({
   items,
   viewerId,
-  counterpartLabel,
+  ownerId,
+  advocateLabel,
+  challengerLabel,
   empty,
 }: {
   items: SummaryItem[];
   viewerId?: string;
-  counterpartLabel: string;
+  ownerId: string;
+  advocateLabel: string;
+  challengerLabel: string;
   empty: string;
 }) {
   if (items.length === 0) return <p className="text-muted-foreground text-xs italic">{empty}</p>;
-  const mine = items.filter((i) => i.authorId === viewerId);
-  const theirs = items.filter((i) => i.authorId !== viewerId);
+  if (viewerId) {
+    const mine = items.filter((i) => i.authorId === viewerId);
+    const theirs = items.filter((i) => i.authorId !== viewerId);
+    const counterpartLabel = viewerId === ownerId ? challengerLabel : advocateLabel;
+    return (
+      <>
+        <AuthorGroup heading="My statements" items={mine} />
+        <AuthorGroup heading={`${counterpartLabel} statements`} items={theirs} />
+      </>
+    );
+  }
+  const advocateItems = items.filter((i) => i.authorId === ownerId);
+  const challengerItems = items.filter((i) => i.authorId !== ownerId);
   return (
     <>
-      <AuthorGroup heading="My statements" items={mine} />
-      <AuthorGroup heading={`${counterpartLabel} statements`} items={theirs} />
+      <AuthorGroup heading={advocateLabel} items={advocateItems} />
+      <AuthorGroup heading={challengerLabel} items={challengerItems} />
     </>
   );
 }
@@ -116,15 +145,16 @@ export default function DivergenceSummary({
   viewerId,
   isCompleted = false,
   currentRound = 1,
+  initialSummary,
+  advocateUsername,
+  challengerUsername,
 }: Props) {
-  const viewerRole: "advocate" | "challenger" | undefined = viewerId
-    ? viewerId === ownerId
-      ? "advocate"
-      : "challenger"
-    : undefined;
+  // S-09: the showcase page passes a server-fetched summary; the panel then never hits
+  // `/api/debates/[id]/summary` (which is `withAuth` → 401 for anon).
+  const isStatic = initialSummary !== undefined;
   const [gate, setGate] = useState<TurnGateDetail | null>(null);
   const [open, setOpen] = useState(false);
-  const [summary, setSummary] = useState<DivergenceSummary | null>(null);
+  const [summary, setSummary] = useState<DivergenceSummary | null>(initialSummary ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -134,7 +164,13 @@ export default function DivergenceSummary({
   // appears the instant a round closes for the counterpart (whose SSR props are stale —
   // their page was rendered before the advocate advanced the round). Request a re-send on
   // mount to survive a slow hydration order. Mirrors TurnBar's effect exactly.
+  //
+  // Skipped entirely in static (showcase) mode: MapEditor is mounted there too (frozen,
+  // `viewer={null}`), and it still broadcasts a neutral `{isCompleted:false,currentRound:1}`
+  // gate on mount — which would stomp the correct server-passed `isCompleted`/`currentRound`
+  // props and hide the button. The anon page has no real live turn gate to track anyway.
   useEffect(() => {
+    if (isStatic) return;
     function onGate(e: Event) {
       setGate((e as CustomEvent<TurnGateDetail>).detail);
     }
@@ -143,7 +179,7 @@ export default function DivergenceSummary({
     return () => {
       window.removeEventListener("wvmap:turn-gate", onGate);
     };
-  }, []);
+  }, [isStatic]);
 
   // Close the panel on a click anywhere outside it and its trigger button. Only listens
   // while open, so it's a no-op the rest of the time. Listen in the *capture* phase
@@ -184,10 +220,9 @@ export default function DivergenceSummary({
     }
   }
 
-  // The counterpart is the other role; its statements get their own labelled subgroup.
-  // TODO: this should be written in one place and reuse in different places (DRY)
-  const counterpartLabel =
-    viewerRole === "advocate" ? "Challenger" : viewerRole === "challenger" ? "Advocate" : "Counterpart";
+  // Labels for AuthorGroups' role-based fallback (no viewerId — the anon showcase page).
+  const advocateLabel = advocateUsername ? `Advocate (@${advocateUsername})` : "Advocate";
+  const challengerLabel = challengerUsername ? `Challenger (@${challengerUsername})` : "Challenger";
 
   // Open divergences split by gap (factual before premise). The gap shows once as a
   // subsection heading; each gap then splits by author.
@@ -207,6 +242,10 @@ export default function DivergenceSummary({
         }}
         disabled={loading}
         onClick={() => {
+          if (isStatic) {
+            setOpen((o) => !o);
+            return;
+          }
           if (open) {
             setOpen(false);
           } else {
@@ -241,7 +280,9 @@ export default function DivergenceSummary({
             <AuthorGroups
               items={summary.commonGround}
               viewerId={viewerId}
-              counterpartLabel={counterpartLabel}
+              ownerId={ownerId}
+              advocateLabel={advocateLabel}
+              challengerLabel={challengerLabel}
               empty="No accepted statements yet."
             />
           </section>
@@ -260,7 +301,9 @@ export default function DivergenceSummary({
                     <AuthorGroups
                       items={factualGaps}
                       viewerId={viewerId}
-                      counterpartLabel={counterpartLabel}
+                      ownerId={ownerId}
+                      advocateLabel={advocateLabel}
+                      challengerLabel={challengerLabel}
                       empty=""
                     />
                   </div>
@@ -273,7 +316,9 @@ export default function DivergenceSummary({
                     <AuthorGroups
                       items={premiseGaps}
                       viewerId={viewerId}
-                      counterpartLabel={counterpartLabel}
+                      ownerId={ownerId}
+                      advocateLabel={advocateLabel}
+                      challengerLabel={challengerLabel}
                       empty=""
                     />
                   </div>
@@ -287,7 +332,9 @@ export default function DivergenceSummary({
             <AuthorGroups
               items={summary.unresolved}
               viewerId={viewerId}
-              counterpartLabel={counterpartLabel}
+              ownerId={ownerId}
+              advocateLabel={advocateLabel}
+              challengerLabel={challengerLabel}
               empty="Nothing unresolved."
             />
           </section>

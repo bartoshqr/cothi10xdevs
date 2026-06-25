@@ -245,14 +245,15 @@ begin
 end;
 $$;
 
--- ─── Exchange (user01 advocate ⇄ user02 challenger, accepted) ─────────────────
--- The challenger has already RESPONDED and SUBMITTED round 1, so the turn has
--- flipped to the advocate: current_turn='advocate', current_round=1 (challenger
--- submit leaves the round unchanged). This sets up the S-04 advocate-turn flow:
--- sign in as user01, open debate …010, mark the challenger's statements, submit.
--- round_count=3 leaves room to exercise the multi-round path; responded_at is set
--- because user02 accepted. Fixed id keeps it idempotent; the partial unique index
--- (one open exchange per debate) is respected since this is the debate's only exchange.
+-- ─── Exchange (user01 advocate ⇄ user02 challenger, completed) ────────────────
+-- A single-round exchange that has already run its course: the challenger
+-- responded and submitted round 1, and that round is the whole exchange
+-- (round_count=1), so status='completed'. This is the S-09 publishable shape —
+-- isPublishable({debateId: …010}) is true out of the box, so the seeded debate
+-- can be published from the UI without driving the turn machine by hand.
+-- responded_at is set because user02 accepted. Fixed id keeps it idempotent;
+-- the partial unique index (one open exchange per debate) only applies to
+-- pending/accepted exchanges, so a completed row here is unaffected.
 insert into public.exchanges (
   id, debate_id, advocate_id, challenger_id,
   status, round_count, current_round, current_turn, responded_at
@@ -262,6 +263,6 @@ values (
   '00000000-0000-4000-8000-000000000010',  -- debate (owned by user01)
   '00000000-0000-4000-8000-000000000001',  -- advocate  = user01
   '00000000-0000-4000-8000-000000000002',  -- challenger = user02
-  'accepted', 3, 1, 'advocate', now()
+  'completed', 1, 1, 'advocate', now()
 )
 on conflict (id) do nothing;

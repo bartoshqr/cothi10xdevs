@@ -60,11 +60,6 @@ export default function PublishControl({ debateId, initialPublic, isPublishable 
       >
         {loading ? "Saving…" : isPublic ? "Unpublish" : "Publish"}
       </Button>
-      {isPublic && (
-        <Button type="button" variant="ghost" size="sm" asChild>
-          <a href={`/showcase/${debateId}`}>View</a>
-        </Button>
-      )}
       {error && <span className="text-xs text-red-500">{error}</span>}
     </div>
   );

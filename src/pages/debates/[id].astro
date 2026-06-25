@@ -11,6 +11,7 @@ import { getDebateGraph, isPublishable } from "@/lib/debate/repository";
 import { getDebateExchange } from "@/lib/exchange/repository";
 import { deriveViewer } from "@/lib/debate/viewer";
 import { getDebateMarks } from "@/lib/mark/repository";
+import { getUsernameById } from "@/lib/users";
 import type { MarkState } from "@/components/debate/mapVisualLanguage";
 
 const { id: debateId } = Astro.params;
@@ -22,8 +23,7 @@ const graph = supabase && debateId ? await getDebateGraph(supabase, debateId) : 
 
 let username: string | null = null;
 if (graph && supabase && user) {
-  const { data } = await supabase.from("profiles").select("username").eq("id", user.id).single();
-  username = data?.username ?? null;
+  username = await getUsernameById(supabase, user.id);
 }
 
 const isOwner = graph && user ? graph.debate.owner_id === user.id : false;

@@ -4,7 +4,13 @@ import { createClient } from "@/lib/supabase";
 import { listPublicDebates } from "@/lib/debate/repository";
 
 const supabase = createClient(Astro.request.headers, Astro.cookies);
-const debates = supabase ? await listPublicDebates({ supabase }) : [];
+const pageParam = Number(Astro.url.searchParams.get("page"));
+const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? Math.trunc(pageParam) : 1;
+const {
+  items: debates,
+  page,
+  hasMore,
+} = supabase ? await listPublicDebates({ supabase, page: requestedPage }) : { items: [], page: 1, hasMore: false };
 ---
 
 <Layout title="Showcase — WVMap">
@@ -34,6 +40,28 @@ const debates = supabase ? await listPublicDebates({ supabase }) : [];
               </li>
             ))}
           </ul>
+        )
+      }
+
+      {
+        (page > 1 || hasMore) && (
+          <nav class="mt-10 flex items-center justify-between" aria-label="Pagination">
+            {page > 1 ? (
+              <a href={`/showcase?page=${page - 1}`} class="text-primary text-sm hover:underline">
+                ← Previous
+              </a>
+            ) : (
+              <span class="text-muted-foreground/50 text-sm">← Previous</span>
+            )}
+            <span class="text-muted-foreground text-xs">Page {page}</span>
+            {hasMore ? (
+              <a href={`/showcase?page=${page + 1}`} class="text-primary text-sm hover:underline">
+                Next →
+              </a>
+            ) : (
+              <span class="text-muted-foreground/50 text-sm">Next →</span>
+            )}
+          </nav>
         )
       }
     </div>

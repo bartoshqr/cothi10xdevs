@@ -468,17 +468,46 @@ export interface PublicDebateListItem {
   published_at: string | null;
 }
 
+// Default showcase page size. One source of truth for the repository and the
+// `/showcase` page (re-exported, not re-declared in the page).
+export const SHOWCASE_PAGE_SIZE = 20;
+
 interface ListPublicDebatesArgs {
   supabase: DB;
+  page?: number; // 1-based; defaults to the first page
+  pageSize?: number;
+}
+
+export interface PublicDebatesPage {
+  items: PublicDebateListItem[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean; // a further page exists
 }
 
 // Anon-reachable via the debates_select_anon RLS policy (public = true).
-export async function listPublicDebates({ supabase }: ListPublicDebatesArgs): Promise<PublicDebateListItem[]> {
+// Paginated: fetches one extra row (`pageSize + 1`) to detect a next page
+// without a separate exact-count query.
+export async function listPublicDebates({
+  supabase,
+  page = 1,
+  pageSize = SHOWCASE_PAGE_SIZE,
+}: ListPublicDebatesArgs): Promise<PublicDebatesPage> {
+  const safePage = Math.max(1, Math.trunc(page));
+  const from = (safePage - 1) * pageSize;
+  // .range is inclusive on both ends, so (from, from + pageSize) yields pageSize + 1 rows.
   const { data, error } = await supabase
     .from("debates")
     .select("id, title, published_at")
     .eq("public", true)
-    .order("published_at", { ascending: false });
+    .order("published_at", { ascending: false })
+    .range(from, from + pageSize);
   if (error) throw error;
-  return data;
+  const hasMore = data.length > pageSize;
+  return {
+    items: hasMore ? data.slice(0, pageSize) : data,
+    page: safePage,
+    pageSize,
+    hasMore,
+  };
 }

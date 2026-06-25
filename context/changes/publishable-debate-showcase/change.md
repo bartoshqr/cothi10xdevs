@@ -1,7 +1,7 @@
 ---
 change_id: publishable-debate-showcase
 title: Publish a completed debate to a public read-only showcase URL
-status: implementing
+status: impl_reviewed
 created: 2026-06-20
 updated: 2026-06-24
 archived_at: null

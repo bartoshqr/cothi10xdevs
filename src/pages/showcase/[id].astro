@@ -27,11 +27,18 @@ if (!graph) {
   Astro.response.status = 404;
 }
 
-// initialMarks must be loaded explicitly — the authed debate page only loads marks when
-// `viewer` is set, which is never true for an anon visitor here.
-const initialMarks = graph && supabase && debateId ? await getDebateMarks({ supabase, debateId }) : {};
-const exchange = graph && supabase && debateId ? await getDebateExchange(supabase, debateId) : null;
-const summary = graph && supabase && debateId ? await getDivergenceSummary({ supabase, debateId }) : null;
+// marks, exchange, and summary are independent of each other (all keyed only by debateId),
+// so fetch them concurrently once the published-graph gate above has passed. initialMarks
+// must be loaded explicitly — the authed debate page only loads marks when `viewer` is set,
+// which is never true for an anon visitor here.
+const [initialMarks, exchange, summary] =
+  graph && supabase && debateId
+    ? await Promise.all([
+        getDebateMarks({ supabase, debateId }),
+        getDebateExchange(supabase, debateId),
+        getDivergenceSummary({ supabase, debateId }),
+      ])
+    : [{}, null, null];
 
 // WORKAROUND: a synthetic, non-interactive viewer carrying just `advocateId` so the canvas
 // still tints challenger-authored statements red (StatementNode's `isChallenger` check needs

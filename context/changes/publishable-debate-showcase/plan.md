@@ -485,6 +485,16 @@ nothing becomes public implicitly.
 > (exchange `status === 'completed'`) immediately after `npx supabase db reset` — local dev/demo can
 > exercise Publish without first driving the turn machine by hand.
 
+> **Addendum (approved during impl, 2026-06-24):** a **second migration**
+> `20260624000002_showcase_authenticated_visibility.sql` was added beyond the single Phase 1 migration
+> in the original contract. The existing `debates_select` (`to authenticated`) only matches owner/
+> challenger rows, so `listPublicDebates` silently returned nothing for a logged-in **non-participant**
+> viewing the showcase. The migration adds a second permissive `debates_select_authenticated_public`
+> policy (`to authenticated using (public = true)`), mirroring `debates_select_anon` — additive and
+> OR'd, existing policies untouched. Covered by the unplanned companion test
+> `tests/integration/showcaseVisibility.test.ts` (authenticated non-participant sees published / not
+> unpublished; `isPublishedGraph` rejects an owner's own unpublished graph at the page gate).
+
 ## References
 
 - Research: `context/changes/publishable-debate-showcase/research.md` (Net design, all 5 decisions)

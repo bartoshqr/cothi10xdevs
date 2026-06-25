@@ -34,6 +34,7 @@ describeIntegration("S-09 showcase visibility (authenticated viewers)", () => {
   let advocate: TestUser;
   let outsider: TestUser;
   let publishedId: string;
+  let publishedId2: string;
   let unpublishedId: string;
 
   const seededDebateIds: string[] = [];
@@ -45,13 +46,15 @@ describeIntegration("S-09 showcase visibility (authenticated viewers)", () => {
 
     ({ debateId: publishedId } = await seedDebate());
     seededDebateIds.push(publishedId);
+    ({ debateId: publishedId2 } = await seedDebate());
+    seededDebateIds.push(publishedId2);
     ({ debateId: unpublishedId } = await seedDebate());
     seededDebateIds.push(unpublishedId);
 
     const { error } = await service
       .from("debates")
       .update({ public: true, published_at: new Date().toISOString() })
-      .eq("id", publishedId);
+      .in("id", [publishedId, publishedId2]);
     if (error) throw error;
     // unpublishedId stays at its seeded default: public = false.
   });
@@ -64,13 +67,30 @@ describeIntegration("S-09 showcase visibility (authenticated viewers)", () => {
   it("an authenticated non-participant SEES a published debate via listPublicDebates", async () => {
     const outsiderClient = await getClientAsUser(outsider.email, outsider.password);
     const result = await listPublicDebates({ supabase: outsiderClient });
-    expect(result.map((d) => d.id)).toContain(publishedId);
+    expect(result.items.map((d) => d.id)).toContain(publishedId);
   });
 
   it("an authenticated non-participant does NOT see an unpublished debate via listPublicDebates", async () => {
     const outsiderClient = await getClientAsUser(outsider.email, outsider.password);
     const result = await listPublicDebates({ supabase: outsiderClient });
-    expect(result.map((d) => d.id)).not.toContain(unpublishedId);
+    expect(result.items.map((d) => d.id)).not.toContain(unpublishedId);
+  });
+
+  it("paginates: pageSize caps the page, hasMore signals a next page, and pages don't overlap", async () => {
+    const outsiderClient = await getClientAsUser(outsider.email, outsider.password);
+    // Two published debates exist (publishedId, publishedId2), so pageSize 1 must
+    // return exactly one row and report a further page.
+    const first = await listPublicDebates({ supabase: outsiderClient, page: 1, pageSize: 1 });
+    expect(first.items).toHaveLength(1);
+    expect(first.page).toBe(1);
+    expect(first.pageSize).toBe(1);
+    expect(first.hasMore).toBe(true);
+
+    const second = await listPublicDebates({ supabase: outsiderClient, page: 2, pageSize: 1 });
+    expect(second.page).toBe(2);
+    expect(second.items).toHaveLength(1);
+    // No overlap between consecutive pages.
+    expect(second.items[0].id).not.toBe(first.items[0].id);
   });
 
   it("RLS lets the owner read their own unpublished debate's raw graph — why the showcase page needs an explicit public check", async () => {

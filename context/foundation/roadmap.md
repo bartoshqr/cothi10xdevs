@@ -3,7 +3,7 @@ project: WVMap
 version: 1
 status: draft
 created: 2026-05-25
-updated: 2026-06-20
+updated: 2026-06-25
 prd_version: 1
 main_goal: market-feedback
 top_blocker: capacity
@@ -55,7 +55,7 @@ surfaces the crux), so it is sequenced as early as its prerequisites allow.
 | S-06 | debate-list-and-inbox        | see all own debates with state, and an inbox of invites/exchanges                                         | S-02          | FR-024, FR-025                                        | done     |
 | S-07 | parent-debate-linking        | link a new debate to a parent statement and navigate between them                                         | S-01          | FR-022, FR-023                                        | proposed |
 | S-08 | advocate-close-and-timeout   | advocate closes an exchange explicitly or after 7-day challenger inactivity                               | S-05          | FR-019, FR-027                                        | proposed |
-| S-09 | publishable-debate-showcase  | publish a completed debate to a public read-only URL; newcomers view a real map + summary unauthenticated | S-04          | — (new; opt-in reopen of parked "public maps")        | proposed |
+| S-09 | publishable-debate-showcase  | publish a completed debate to a public read-only URL; newcomers view a real map + summary unauthenticated | S-04          | — (new; opt-in reopen of parked "public maps")        | done     |
 | T-01 | polling-hook-unification     | (cleanup) no user-visible change — dedupe the visibility-gated polling boilerplate into one hook          | S-06          | — (tech-debt)                                         | proposed |
 
 ## Streams
@@ -230,7 +230,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
   - Public route shape and middleware: a new route (e.g. `/showcase/[id]`) deliberately kept **out** of `PROTECTED_ROUTES` (inverse of the usual auth rule). Owner: implementation. Block: no.
   - Anon read RLS: `SELECT` policies gated on `debates.public = true`, joined through **every** graph table (debates, statements, relations, marks, exchange, summary). This is the integrity-critical surface. Owner: implementation. Block: no (resolve in `/10x-plan`).
 - **Risk:** **Intersects the top project risk** (test-plan Risk #1 — private pair content leaking / IDOR / RLS gap). A publish flag that over-exposes is exactly that failure class: the anon read path must expose **only** rows reachable from a `public = true` debate and nothing else. Requires integration tests proving an **un**published debate is not anon-readable through any table. Otherwise low product risk — additive, opt-in, no change to the private exchange flow.
-- **Status:** proposed
+- **Status:** done
 
 ### T-01: Visibility-gated polling hook unification (cleanup / tech-debt)
 
@@ -328,3 +328,4 @@ are recorded in the "Done" section below. Updated 2026-06-20.
 - **S-04: respond, complete round 1, and view the divergence summary** — Archived 2026-06-12 → `context/archive/2026-06-10-first-divergence-summary/`. Lesson: —.
 - **S-05: across rounds 2+, each party can edit/delete only their own statements during their active turn; an edit invalidates the other party's mark on that statement (flag flip, re-mark required by turn-end — not ordered within the turn); a delete cascades the deleted node's own marks but **preserves** counterpart statements and their marks, recomputing only orphan status; orphaned statements (no path to the root claim) are highlighted in the canvas and labelled in the divergence summary; the final-round mini-turn (always opens; challenger may also revise valid marks) runs with content controls frozen in the UI. Close paths are **not** in this slice — see S-08.** — Archived 2026-06-13 → `context/archive/2026-06-12-s05/`. Lesson: —.
 - **S-06: see all own debates with state, and an inbox of invites/exchanges** — Archived 2026-06-14 → `context/archive/2026-06-12-s06/`. Lesson: —.
+- **S-09: publish a completed debate to a public read-only URL; newcomers view a real map + summary unauthenticated** — Archived 2026-06-25 → `context/archive/2026-06-20-publishable-debate-showcase/`. Lesson: —.

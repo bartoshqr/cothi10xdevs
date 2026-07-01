@@ -31,7 +31,13 @@ export interface MyDebate {
 }
 
 export async function listMyDebates(supabase: DB, viewerId: string): Promise<MyDebate[]> {
-  // Step 1: all debates visible to this viewer via RLS (owns OR is challenger of open/completed exchange)
+  // Step 1: all debates visible to this viewer via RLS. This used to mean "owns OR is
+  // challenger of an open/completed exchange", so "not owner" once safely implied
+  // "challenger" (see step 6). Since `debates_select_authenticated_public` (migration
+  // 20260624000002) also grants read on any *published* debate to every authenticated
+  // user, RLS visibility no longer implies participation — a published debate the
+  // viewer has no exchange on now shows up here too, so step 6 must re-check
+  // participation explicitly instead of inferring it from "not owner".
   const { data: debates, error: debatesError } = await supabase
     .from("debates")
     .select("id, title, root_node_id, owner_id, created_at");
@@ -70,14 +76,14 @@ export async function listMyDebates(supabase: DB, viewerId: string): Promise<MyD
     }
   }
 
-  // Step 4: collect other-party ids for username resolution
+  // Step 4: collect other-party ids for username resolution — only for debates the
+  // viewer actually participates in (owner, or the exchange's real challenger).
   const otherPartyIds = new Set<string>();
   for (const debate of debates) {
     const isAdvocate = debate.owner_id === viewerId;
     const ex = exchangeByDebate.get(debate.id);
-    if (ex) {
-      otherPartyIds.add(isAdvocate ? ex.challenger_id : ex.advocate_id);
-    }
+    if (!ex || !(isAdvocate || ex.challenger_id === viewerId)) continue;
+    otherPartyIds.add(isAdvocate ? ex.challenger_id : ex.advocate_id);
   }
   const usernameById = new Map<string, string>();
   if (otherPartyIds.size > 0) {
@@ -106,10 +112,17 @@ export async function listMyDebates(supabase: DB, viewerId: string): Promise<MyD
     }
   }
 
-  // Step 6: derive role + state per debate and shape into MyDebate[]
-  return debates.map((debate) => {
-    const role: DebateRole = debate.owner_id === viewerId ? "advocate" : "challenger";
+  // Step 6: derive role + state per debate and shape into MyDebate[]. A debate visible
+  // only through the "published" RLS branch — the viewer is neither the owner nor the
+  // exchange's challenger — is public read-access, not participation, so it's excluded
+  // here rather than mislabeled "challenger" (that mislabel is the bug this guards).
+  const result: MyDebate[] = [];
+  for (const debate of debates) {
     const ex = exchangeByDebate.get(debate.id) ?? null;
+    const isAdvocate = debate.owner_id === viewerId;
+    const isChallenger = ex !== null && ex.challenger_id === viewerId;
+    if (!isAdvocate && !isChallenger) continue;
+    const role: DebateRole = isAdvocate ? "advocate" : "challenger";
 
     let state: DebateListState;
     if (!ex) {
@@ -125,7 +138,7 @@ export async function listMyDebates(supabase: DB, viewerId: string): Promise<MyD
     const otherPartyId = ex ? (role === "advocate" ? ex.challenger_id : ex.advocate_id) : null;
     const rootNodeId = debate.root_node_id;
 
-    return {
+    result.push({
       id: debate.id,
       title: debate.title,
       root_node_id: rootNodeId,
@@ -137,8 +150,9 @@ export async function listMyDebates(supabase: DB, viewerId: string): Promise<MyD
       round_count: ex?.round_count ?? null,
       current_round: ex?.current_round ?? null,
       created_at: debate.created_at,
-    };
-  });
+    });
+  }
+  return result;
 }
 
 export type DebateDeletability = "not_found" | "drafting" | "has_exchange";
